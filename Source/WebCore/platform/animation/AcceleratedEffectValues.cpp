@@ -31,6 +31,7 @@
 #include "IntSize.h"
 #include "LengthFunctions.h"
 #include "Path.h"
+#include "PathTraversalState.h"
 #include "RenderStyleInlines.h"
 #include "TransformOperationData.h"
 
@@ -177,6 +178,93 @@ AcceleratedEffectValues::AcceleratedEffectValues(const RenderStyle& style, const
         return operation.copyRef();
     }));
 #endif
+}
+
+static PathTraversalState getTraversalStateAtDistance(const Path& path, const Length& distance)
+{
+    auto pathLength = path.length();
+    auto distanceValue = floatValueForLength(distance, pathLength);
+
+    float resolvedLength = 0;
+    if (path.isClosed()) {
+        if (pathLength) {
+            resolvedLength = fmod(distanceValue, pathLength);
+            if (resolvedLength < 0)
+                resolvedLength += pathLength;
+        }
+    } else
+        resolvedLength = clampTo<float>(distanceValue, 0, pathLength);
+
+    ASSERT(resolvedLength >= 0);
+    return path.traversalStateAtLength(resolvedLength);
+}
+
+// FIXME: Adapted from RenderStyle::applyCSSTransform() et al. We need to refactor this so this code is shared.
+TransformationMatrix AcceleratedEffectValues::computedTransformationMatrix(const FloatRect& boundingBox) const
+{
+    // https://www.w3.org/TR/css-transforms-2/#ctm
+    // The transformation matrix is computed from the transform, transform-origin, translate, rotate, scale, and offset properties as follows:
+    // 1. Start with the identity matrix.
+    TransformationMatrix matrix;
+
+    // 2. Translate by the computed X, Y, and Z values of transform-origin.
+    // (not needed, the GraphicsLayer will handle that)
+
+    // 3. Translate by the computed X, Y, and Z values of translate.
+    if (translate)
+        translate->apply(matrix, boundingBox.size());
+
+    // 4. Rotate by the computed <angle> about the specified axis of rotate.
+    if (rotate)
+        rotate->apply(matrix, boundingBox.size());
+
+    // 5. Scale by the computed X, Y, and Z values of scale.
+    if (scale)
+        scale->apply(matrix, boundingBox.size());
+
+    // 6. Translate and rotate by the transform specified by offset.
+    // FIXME: copied from applyMotionPathTransform() in RenderStyle,
+    // we need to refactor so this code is shared.
+    [&]() {
+        if (!offsetPath)
+            return;
+
+        FloatPoint floatTransformOrigin = boundingBox.location() + floatPointForLengthPoint(transformOrigin, boundingBox.size());
+        auto anchor = floatTransformOrigin;
+        if (!offsetAnchor.x().isAuto())
+            anchor = floatPointForLengthPoint(offsetAnchor, boundingBox.size()) + boundingBox.location();
+
+        // Shift element to the point on path specified by offset-path and offset-distance.
+        auto path = offsetPath->getPath(TransformOperationData(boundingBox));
+        if (!path)
+            return;
+
+        auto traversalState = getTraversalStateAtDistance(*path, offsetDistance);
+        matrix.translate(traversalState.current().x(), traversalState.current().y());
+
+        // Shift element to the anchor specified by offset-anchor.
+        matrix.translate(-anchor.x(), -anchor.y());
+
+        auto shiftToOrigin = anchor - floatTransformOrigin;
+        matrix.translate(shiftToOrigin.width(), shiftToOrigin.height());
+
+        // Apply rotation.
+        if (offsetRotate.hasAuto())
+            matrix.rotate(traversalState.normalAngle() + offsetRotate.angle());
+        else
+            matrix.rotate(offsetRotate.angle());
+
+        matrix.translate(-shiftToOrigin.width(), -shiftToOrigin.height());
+    }();
+
+    // 7. Multiply by each of the transform functions in transform from left to right.
+    for (auto& transformOperation : transform.operations())
+        transformOperation->apply(matrix, boundingBox.size());
+
+    // 8. Translate by the negated computed X, Y and Z values of transform-origin.
+    // (not needed, the GraphicsLayer will handle that)
+
+    return matrix;
 }
 
 } // namespace WebCore

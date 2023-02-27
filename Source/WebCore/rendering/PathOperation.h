@@ -61,7 +61,7 @@ public:
     virtual bool operator==(const PathOperation&) const = 0;
 
     virtual bool canBlend(const PathOperation&) const { return false; }
-    virtual RefPtr<PathOperation> blend(const PathOperation*, const BlendingContext&) const { return nullptr; }
+    WEBCORE_EXPORT virtual RefPtr<PathOperation> blend(const PathOperation*, const BlendingContext&) const { return nullptr; }
 
     void setReferenceBox(CSSBoxType type) { m_referenceBox = type; }
     CSSBoxType referenceBox() const { return m_referenceBox; }

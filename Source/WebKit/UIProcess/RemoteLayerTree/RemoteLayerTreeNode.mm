@@ -38,6 +38,11 @@
 #import <pal/spi/cocoa/QuartzCoreSPI.h>
 #endif
 
+#if ENABLE(THREADED_ANIMATION_RESOLUTION)
+#import <WebCore/AcceleratedEffectStack.h>
+#import <WebCore/ScrollingThread.h>
+#endif
+
 namespace WebKit {
 
 static NSString *const WKRemoteLayerTreeNodePropertyKey = @"WKRemoteLayerTreeNode";
@@ -67,6 +72,10 @@ RemoteLayerTreeNode::RemoteLayerTreeNode(WebCore::PlatformLayerIdentifier layerI
 
 RemoteLayerTreeNode::~RemoteLayerTreeNode()
 {
+#if ENABLE(THREADED_ANIMATION_RESOLUTION)
+    if (m_effectStack)
+        m_effectStack->clear(layer());
+#endif
     [layer() setValue:nil forKey:WKRemoteLayerTreeNodePropertyKey];
 #if ENABLE(INTERACTION_REGIONS_IN_EVENT_REGION)
     removeInteractionRegionsContainer();
@@ -237,5 +246,53 @@ NSString *RemoteLayerTreeNode::appendLayerDescription(NSString *description, CAL
     NSString *layerDescription = [NSString stringWithFormat:@" layerID = %llu \"%@\"", WebKit::RemoteLayerTreeNode::layerID(layer).object().toUInt64(), layer.name ? layer.name : @""];
     return [description stringByAppendingString:layerDescription];
 }
+
+#if ENABLE(THREADED_ANIMATION_RESOLUTION)
+void RemoteLayerTreeNode::setAcceleratedEffectsAndBaseValues(const WebCore::AcceleratedEffects& effects, const WebCore::AcceleratedEffectValues& baseValues)
+{
+    ASSERT(isUIThread());
+
+    WebCore::AcceleratedEffects clonedEffects;
+    clonedEffects.reserveCapacity(effects.size());
+    for (auto& effect : effects)
+        clonedEffects.append(effect->clone());
+
+    auto clonedBaseValues = baseValues.clone();
+
+    // FIXME: need to keep the node alive.
+    WebCore::ScrollingThread::dispatch([this, clonedEffects = WTFMove(clonedEffects), clonedBaseValues = WTFMove(clonedBaseValues)] {
+        if (!m_effectStack)
+            m_effectStack = makeUnique<WebCore::AcceleratedEffectStack>();
+
+        m_effectStack->setEffects(WTFMove(clonedEffects));
+        m_effectStack->setBaseValues(WTFMove(clonedBaseValues));
+    });
+}
+
+bool RemoteLayerTreeNode::hasAnimationEffects() const
+{
+    ASSERT(!isUIThread());
+    return m_effectStack && m_effectStack->hasEffects();
+}
+
+void RemoteLayerTreeNode::applyAnimatedEffectStack(Seconds currentTime)
+{
+    ASSERT(!isUIThread());
+
+    if (!m_effectStack)
+        return;
+
+    // The effect stack will have either primary layer effects or
+    // backdrop layer effects. We call both application methods.
+    m_effectStack->applyPrimaryLayerEffects(layer(), currentTime);
+    m_effectStack->applyBackdropLayerEffects(layer(), currentTime);
+
+    // We can clear the effect stack if it's empty, but the previous
+    // call to applyEffects() is important so that the base values
+    // were re-applied.
+    if (!m_effectStack->hasEffects())
+        m_effectStack = nullptr;
+}
+#endif
 
 }

@@ -51,6 +51,10 @@
 #import <wtf/MachSendRight.h>
 #import <wtf/SystemTracing.h>
 
+#if ENABLE(THREADED_ANIMATION_RESOLUTION)
+#import <WebCore/ScrollingThread.h>
+#endif
+
 namespace WebKit {
 using namespace IPC;
 using namespace WebCore;
@@ -268,6 +272,11 @@ void RemoteLayerTreeDrawingAreaProxy::commitLayerTreeTransaction(IPC::Connection
     webPageProxy->scrollingCoordinatorProxy()->didCommitLayerAndScrollingTrees();
 
     webPageProxy->didCommitLayerTree(layerTreeTransaction);
+
+#if ENABLE(THREADED_ANIMATION_RESOLUTION)
+    m_acceleratedTimelineTimeOrigin = layerTreeTransaction.acceleratedTimelineTimeOrigin();
+#endif
+
     didCommitLayerTree(connection, layerTreeTransaction, scrollingTreeTransaction);
 
 #if ENABLE(ASYNC_SCROLLING)
@@ -609,5 +618,33 @@ void RemoteLayerTreeDrawingAreaProxy::sizeToContentAutoSizeMaximumSizeDidChange(
 
     sendUpdateGeometry();
 }
+
+#if ENABLE(THREADED_ANIMATION_RESOLUTION)
+bool RemoteLayerTreeDrawingAreaProxy::hasAnimatedNodes() const
+{
+    return !m_animatedNodes.isEmpty();
+}
+
+void RemoteLayerTreeDrawingAreaProxy::animationsDidChangeOnNode(RemoteLayerTreeNode& node)
+{
+    m_animatedNodes.add(&node);
+    LOG_WITH_STREAM(Animations, stream << "RemoteLayerTreeDrawingAreaProxy::animationsDidChangeOnNode() with " << m_animatedNodes.size() << "animated nodes");
+}
+
+void RemoteLayerTreeDrawingAreaProxy::updateAnimations()
+{
+    ASSERT(WebCore::ScrollingThread::isCurrentThread());
+
+    auto animatedNodes = std::exchange(m_animatedNodes, { });
+
+    LOG_WITH_STREAM(Animations, stream << "RemoteLayerTreeDrawingAreaProxy::updateAnimations() with " << animatedNodes.size() << "animated nodes");
+    auto currentTime = MonotonicTime::now().secondsSinceEpoch() - m_acceleratedTimelineTimeOrigin;
+    for (auto* node : animatedNodes) {
+        node->applyAnimatedEffectStack(currentTime);
+        if (node->hasAnimationEffects())
+            m_animatedNodes.add(node);
+    }
+}
+#endif // ENABLE(THREADED_ANIMATION_RESOLUTION)
 
 } // namespace WebKit

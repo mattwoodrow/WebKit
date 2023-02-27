@@ -29,6 +29,10 @@
 #if ENABLE(THREADED_ANIMATION_RESOLUTION)
 
 #include "AcceleratedEffect.h"
+#include "GraphicsLayer.h"
+#include "PlatformCAFilters.h"
+#include "PlatformLayer.h"
+#import <pal/spi/cocoa/QuartzCoreSPI.h>
 
 namespace WebCore {
 
@@ -45,12 +49,12 @@ bool AcceleratedEffectStack::hasEffects() const
     return !m_primaryLayerEffects.isEmpty() || !m_backdropLayerEffects.isEmpty();
 }
 
-void AcceleratedEffectStack::setEffects(AcceleratedEffects&& effects)
+void AcceleratedEffectStack::setEffects(const AcceleratedEffects&& effects)
 {
     m_primaryLayerEffects.clear();
     m_backdropLayerEffects.clear();
 
-    for (auto effect : effects) {
+    for (auto& effect : effects) {
         auto& animatedProperties = effect->animatedProperties();
 
         // If we don't have a keyframe targeting backdrop-filter, we can add the effect
@@ -77,9 +81,88 @@ void AcceleratedEffectStack::setEffects(AcceleratedEffects&& effects)
     }
 }
 
-void AcceleratedEffectStack::setBaseValues(AcceleratedEffectValues&& values)
+void AcceleratedEffectStack::setBaseValues(const AcceleratedEffectValues&& values)
 {
     m_baseValues = WTFMove(values);
+}
+
+AcceleratedEffectValues AcceleratedEffectStack::computeValues(const AcceleratedEffects& effects, Seconds currentTime, const FloatRect& bounds) const
+{
+    auto values = m_baseValues;
+    for (auto& effect : effects)
+        effect->apply(currentTime, values, bounds);
+    return values;
+}
+
+void AcceleratedEffectStack::clear(PlatformLayer *layer)
+{
+    if (!m_presentationModifierGroup) {
+        ASSERT(!m_opacityPresentationModifier);
+        ASSERT(!m_transformPresentationModifier);
+        return;
+    }
+
+    ASSERT(m_opacityPresentationModifier);
+    ASSERT(m_transformPresentationModifier);
+
+    [layer removePresentationModifier:m_opacityPresentationModifier.get()];
+    [layer removePresentationModifier:m_transformPresentationModifier.get()];
+    [m_presentationModifierGroup flush];
+
+    m_opacityPresentationModifier = nil;
+    m_transformPresentationModifier = nil;
+    m_presentationModifierGroup = nil;
+}
+
+void AcceleratedEffectStack::applyPrimaryLayerEffects(PlatformLayer *layer, Seconds currentTime)
+{
+    if (m_primaryLayerEffects.isEmpty()) {
+        clear(layer);
+        return;
+    }
+
+    if (!m_presentationModifierGroup) {
+        ASSERT(!m_opacityPresentationModifier);
+        ASSERT(!m_transformPresentationModifier);
+
+        m_presentationModifierGroup = [CAPresentationModifierGroup groupWithCapacity:2];
+        m_opacityPresentationModifier = adoptNS([[CAPresentationModifier alloc] initWithKeyPath:@"opacity" initialValue:@1.0 additive:NO group:m_presentationModifierGroup.get()]);
+        m_transformPresentationModifier = adoptNS([[CAPresentationModifier alloc] initWithKeyPath:@"transform" initialValue:[NSValue valueWithCATransform3D:CATransform3DIdentity] additive:NO group:m_presentationModifierGroup.get()]);
+
+        [layer addPresentationModifier:m_opacityPresentationModifier.get()];
+        [layer addPresentationModifier:m_transformPresentationModifier.get()];
+    } else {
+        ASSERT(m_opacityPresentationModifier);
+        ASSERT(m_transformPresentationModifier);
+    }
+
+    auto bounds = FloatRect(layer.bounds);
+    auto computedValues = computeValues(m_primaryLayerEffects, currentTime, bounds);
+    auto computedTransform = computedValues.computedTransformationMatrix(bounds);
+
+    auto *opacity = @(computedValues.opacity);
+    auto *transform = [NSValue valueWithCATransform3D:computedTransform];
+
+    [m_opacityPresentationModifier setValue:opacity];
+    [m_transformPresentationModifier setValue:transform];
+    [m_presentationModifierGroup flush];
+
+    // FIXME: set filters with a modifier as well.
+    PlatformCAFilters::setFiltersOnLayer(layer, computedValues.filter);
+}
+
+void AcceleratedEffectStack::applyBackdropLayerEffects(PlatformLayer *layer, Seconds currentTime) const
+{
+    if (m_backdropLayerEffects.isEmpty())
+        return;
+
+#if ENABLE(FILTERS_LEVEL_2)
+    auto computedValues = computeValues(m_backdropLayerEffects, currentTime, { });
+    PlatformCAFilters::setFiltersOnLayer(layer, computedValues.backdropFilter);
+#else
+    UNUSED_PARAM(layer);
+    UNUSED_PARAM(currentTime);
+#endif
 }
 
 } // namespace WebCore

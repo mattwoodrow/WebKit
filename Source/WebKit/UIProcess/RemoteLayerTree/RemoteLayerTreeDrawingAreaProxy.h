@@ -61,6 +61,11 @@ public:
     TransactionID nextLayerTreeTransactionID() const { return m_webPageProxyProcessState.pendingLayerTreeTransactionID.next(); }
     TransactionID lastCommittedLayerTreeTransactionID() const { return m_webPageProxyProcessState.transactionIDForPendingCACommit; }
 
+#if ENABLE(THREADED_ANIMATION_RESOLUTION)
+    virtual void animationsDidChangeOnNode(RemoteLayerTreeNode&) = 0;
+    virtual void updateAnimations() = 0;
+#endif
+
     virtual void didRefreshDisplay();
     virtual void setDisplayLinkWantsFullSpeedUpdates(bool) { }
     
@@ -82,6 +87,10 @@ protected:
     void updateDebugIndicatorPosition();
 
     bool shouldCoalesceVisualEditorStateUpdates() const override { return true; }
+
+#if ENABLE(THREADED_ANIMATION_RESOLUTION)
+    bool hasAnimatedNodes() const;
+#endif
 
 private:
 
@@ -175,6 +184,11 @@ private:
     IPC::AsyncReplyID m_replyForUnhidingContent;
 
     unsigned m_countOfTransactionsWithNonEmptyLayerChanges { 0 };
+
+#if ENABLE(THREADED_ANIMATION_RESOLUTION)
+    HashSet<RemoteLayerTreeNode*> m_animatedNodes;
+    Seconds m_acceleratedTimelineTimeOrigin;
+#endif
 };
 
 } // namespace WebKit

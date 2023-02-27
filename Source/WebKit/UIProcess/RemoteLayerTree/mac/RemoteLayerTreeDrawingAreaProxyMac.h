@@ -84,6 +84,12 @@ private:
 
     WTF::MachSendRight createFence() override;
 
+#if ENABLE(THREADED_ANIMATION_RESOLUTION)
+    void animationsDidChangeOnNode(RemoteLayerTreeNode&) final;
+    void updateAnimations() final;
+    void scheduleAnimationUpdatesIfNecessary();
+#endif
+
     std::optional<WebCore::PlatformDisplayID> m_displayID; // Would be nice to make this non-optional, and ensure we always get one on creation.
     std::optional<WebCore::FramesPerSecond> m_displayNominalFramesPerSecond;
     WebCore::FramesPerSecond m_clientPreferredFramesPerSecond { WebCore::FullSpeedFramesPerSecond };
@@ -97,6 +103,10 @@ private:
     std::optional<TransactionID> m_transactionIDAfterEndingTransientZoom;
     std::optional<double> m_transientZoomScale;
     std::optional<WebCore::FloatPoint> m_transientZoomOrigin;
+
+#if ENABLE(THREADED_ANIMATION_RESOLUTION)
+    bool m_shouldUpdateAnimationsWhenDisplayLinkFires { false };
+#endif
 };
 
 } // namespace WebKit

@@ -40,6 +40,12 @@ OBJC_CLASS NSString;
 OBJC_CLASS UIView;
 #endif
 
+#if ENABLE(THREADED_ANIMATION_RESOLUTION)
+#include <WebCore/AcceleratedEffect.h>
+#include <WebCore/AcceleratedEffectStack.h>
+#include <WebCore/AcceleratedEffectValues.h>
+#endif
+
 namespace WebKit {
 
 class RemoteLayerTreeScrollbars;
@@ -131,6 +137,12 @@ public:
         m_asyncContentsIdentifier = identifier;
     }
 
+#if ENABLE(THREADED_ANIMATION_RESOLUTION)
+    void setAcceleratedEffectsAndBaseValues(const WebCore::AcceleratedEffects&, const WebCore::AcceleratedEffectValues&);
+    bool hasAnimationEffects() const;
+    void applyAnimatedEffectStack(Seconds);
+#endif
+
 private:
     void initializeLayer();
 
@@ -168,6 +180,10 @@ private:
 
     Vector<CachedContentsBuffer> m_cachedContentsBuffers;
     std::optional<WebCore::RenderingResourceIdentifier> m_asyncContentsIdentifier;
+
+#if ENABLE(THREADED_ANIMATION_RESOLUTION)
+    std::unique_ptr<WebCore::AcceleratedEffectStack> m_effectStack;
+#endif
 };
 
 }

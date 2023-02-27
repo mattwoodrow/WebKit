@@ -35,13 +35,16 @@ promise_test(async () => {
     await renderingFrames(2);
 
     const suspendedAnimations = internals.acceleratedAnimationsForElement(target);
-    assert_equals(suspendedAnimations.length, 1, "There should be a single accelerated animation after suspension.");
-    assert_object_equals(suspendedAnimations[0], { property: "transform", speed: 0 },
-                         'The single accelerated animation after suspension should be paused and targeting the "transform" property.');
+    assert_equals(suspendedAnimations.length, 0, "There should not be any accelerated animation after suspension.");
     internals.resumeAnimations();
 
-    await new Promise(setTimeout);
-}, "Suspending animations should pause running accelerated animations.");
+    await renderingFrames(2);
+
+    const resumedAnimations = internals.acceleratedAnimationsForElement(target);
+    assert_equals(resumedAnimations.length, 1, "There should be a single accelerated animation after resuming animations.");
+    assert_object_equals(resumedAnimations[0], { property: "transform", speed: 1 },
+                         'The single accelerated animation after resuming should be running and targeting the "transform" property.');
+}, "Suspending animations should remove running accelerated animations and resuming animation should add them back.");
 
 </script>
 </body>

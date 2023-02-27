@@ -93,6 +93,8 @@ struct AcceleratedEffectValues {
     WEBCORE_EXPORT AcceleratedEffectValues(const AcceleratedEffectValues&);
     AcceleratedEffectValues(const RenderStyle&, const IntRect&);
     AcceleratedEffectValues& operator=(const AcceleratedEffectValues&) = default;
+
+    TransformationMatrix computedTransformationMatrix(const FloatRect&) const;
 };
 
 } // namespace WebCore

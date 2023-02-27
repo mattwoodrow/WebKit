@@ -28,10 +28,20 @@
 #if ENABLE(THREADED_ANIMATION_RESOLUTION)
 
 #include "AcceleratedEffectValues.h"
+#include "PlatformLayer.h"
+#import <wtf/RetainPtr.h>
+
+namespace WTF {
+class Seconds;
+}
+
+OBJC_CLASS CAPresentationModifierGroup;
+OBJC_CLASS CAPresentationModifier;
 
 namespace WebCore {
 
 class AcceleratedEffect;
+class FloatRect;
 
 using AcceleratedEffects = Vector<Ref<AcceleratedEffect>>;
 
@@ -44,15 +54,25 @@ public:
     WEBCORE_EXPORT bool hasEffects() const;
     const AcceleratedEffects& primaryLayerEffects() const { return m_primaryLayerEffects; }
     const AcceleratedEffects& backdropLayerEffects() const { return m_backdropLayerEffects; }
-    WEBCORE_EXPORT void setEffects(AcceleratedEffects&&);
+    WEBCORE_EXPORT void setEffects(const AcceleratedEffects&&);
 
     const AcceleratedEffectValues& baseValues() { return m_baseValues; }
-    WEBCORE_EXPORT void setBaseValues(AcceleratedEffectValues&&);
+    WEBCORE_EXPORT void setBaseValues(const AcceleratedEffectValues&&);
+    
+    WEBCORE_EXPORT void applyPrimaryLayerEffects(PlatformLayer *, Seconds);
+    WEBCORE_EXPORT void applyBackdropLayerEffects(PlatformLayer *, Seconds) const;
+    WEBCORE_EXPORT void clear(PlatformLayer *);
 
 private:
+    AcceleratedEffectValues computeValues(const AcceleratedEffects&, Seconds, const FloatRect&) const;
+
     AcceleratedEffectValues m_baseValues;
     AcceleratedEffects m_primaryLayerEffects;
     AcceleratedEffects m_backdropLayerEffects;
+    
+    RetainPtr<CAPresentationModifierGroup> m_presentationModifierGroup;
+    RetainPtr<CAPresentationModifier> m_opacityPresentationModifier;
+    RetainPtr<CAPresentationModifier> m_transformPresentationModifier;
 };
 
 } // namespace WebCore

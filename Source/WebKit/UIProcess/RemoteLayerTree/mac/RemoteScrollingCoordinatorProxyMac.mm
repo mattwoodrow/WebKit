@@ -113,6 +113,7 @@ void RemoteScrollingCoordinatorProxyMac::hasNodeWithAnimatedScrollChanged(bool h
     if (!drawingArea)
         return;
 
+    // FIXME: we also want to do this when animations are happening.
     drawingArea->setDisplayLinkWantsFullSpeedUpdates(hasAnimatedScrolls);
 #endif
 }

@@ -1,0 +1,23 @@
+<script src="../resources/testharness.js"></script>
+<script src="../resources/testharnessreport.js"></script>
+<div style="position: absolute; top: 0; left: 0; width: 100px; height: 100px; background-color: black;"></div>
+<script>
+
+promise_test(async t => {
+
+    const target = document.querySelector("div");
+    const animation = target.animate([
+        { transform: "translateY(0px)", easing: "step-start" },
+        { transform: "translateY(100px)", easing: "step-start" },
+        { transform: "translateY(0px)" }
+    ], 60 * 1000);
+
+    // We wait for two frames to ensure an accelerated animation would have been committed.
+    await animation.ready;
+    await new Promise(requestAnimationFrame);
+    await new Promise(requestAnimationFrame);
+
+    assert_equals(internals.acceleratedAnimationsForElement(target).length, 1, "The animation's target has one accelerated animation.");
+}, "An animation targeting an accelerated property should be accelerated if it uses a steps timing function in one of its keyframes.");
+
+</script>

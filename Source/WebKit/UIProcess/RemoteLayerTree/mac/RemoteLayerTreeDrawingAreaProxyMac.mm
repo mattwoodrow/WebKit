@@ -49,6 +49,10 @@
 #import <pal/spi/mac/NSScrollerImpSPI.h>
 #import <wtf/BlockObjCExceptions.h>
 
+#if ENABLE(THREADED_ANIMATION_RESOLUTION)
+#import <WebCore/ScrollingThread.h>
+#endif
+
 namespace WebKit {
 using namespace WebCore;
 
@@ -91,8 +95,10 @@ RemoteLayerTreeDrawingAreaProxyMac::RemoteLayerTreeDrawingAreaProxyMac(WebPagePr
 RemoteLayerTreeDrawingAreaProxyMac::~RemoteLayerTreeDrawingAreaProxyMac()
 {
     if (auto* displayLink = existingDisplayLink()) {
-        if (m_fullSpeedUpdateObserverID)
+        if (m_fullSpeedUpdateObserverID) {
+            displayLink->decrementFullSpeedRequestClientCount(*m_displayLinkClient);
             displayLink->removeObserver(*m_displayLinkClient, *m_fullSpeedUpdateObserverID);
+        }
         if (m_displayRefreshObserverID)
             displayLink->removeObserver(*m_displayLinkClient, *m_displayRefreshObserverID);
     }
@@ -373,8 +379,12 @@ void RemoteLayerTreeDrawingAreaProxyMac::setDisplayLinkWantsFullSpeedUpdates(boo
 
         m_fullSpeedUpdateObserverID = DisplayLinkObserverID::generate();
         displayLink.addObserver(*m_displayLinkClient, *m_fullSpeedUpdateObserverID, displayLink.nominalFramesPerSecond());
-    } else if (m_fullSpeedUpdateObserverID)
+        displayLink.incrementFullSpeedRequestClientCount(*m_displayLinkClient);
+    } else if (m_fullSpeedUpdateObserverID) {
+        displayLink.decrementFullSpeedRequestClientCount(*m_displayLinkClient);
         removeObserver(m_fullSpeedUpdateObserverID);
+        m_fullSpeedUpdateObserverID = std::nullopt;
+    }
 }
 
 void RemoteLayerTreeDrawingAreaProxyMac::windowScreenDidChange(PlatformDisplayID displayID)
@@ -383,6 +393,7 @@ void RemoteLayerTreeDrawingAreaProxyMac::windowScreenDidChange(PlatformDisplayID
         return;
 
     bool hadFullSpeedOberver = m_fullSpeedUpdateObserverID.has_value();
+    // FIXME: should we call decrementFullSpeedRequestClientCount() here?
     if (hadFullSpeedOberver)
         removeObserver(m_fullSpeedUpdateObserverID);
 
@@ -398,6 +409,7 @@ void RemoteLayerTreeDrawingAreaProxyMac::windowScreenDidChange(PlatformDisplayID
 
     scheduleDisplayRefreshCallbacks();
     if (hadFullSpeedOberver) {
+        // FIXME: should we call incrementFullSpeedRequestClientCount() here?
         m_fullSpeedUpdateObserverID = DisplayLinkObserverID::generate();
         if (auto* displayLink = existingDisplayLink())
             displayLink->addObserver(*m_displayLinkClient, *m_fullSpeedUpdateObserverID, displayLink->nominalFramesPerSecond());
@@ -413,6 +425,14 @@ void RemoteLayerTreeDrawingAreaProxyMac::didRefreshDisplay()
 {
     // FIXME: Need to pass WebCore::DisplayUpdate here and filter out non-relevant displays.
     m_webPageProxy->scrollingCoordinatorProxy()->displayDidRefresh(m_displayID.value_or(0));
+#if ENABLE(THREADED_ANIMATION_RESOLUTION)
+    if (m_shouldUpdateAnimationsWhenDisplayLinkFires) {
+        ScrollingThread::dispatch([this, retainedPageProxy = CheckedRef { m_webPageProxy }] {
+            if (retainedPageProxy->drawingArea())
+                updateAnimations();
+        });
+    }
+#endif
     RemoteLayerTreeDrawingAreaProxy::didRefreshDisplay();
 }
 
@@ -470,6 +490,34 @@ void RemoteLayerTreeDrawingAreaProxyMac::updateZoomTransactionID()
     m_transactionIDAfterEndingTransientZoom = nextLayerTreeTransactionID();
 }
 
+#if ENABLE(THREADED_ANIMATION_RESOLUTION)
+void RemoteLayerTreeDrawingAreaProxyMac::animationsDidChangeOnNode(RemoteLayerTreeNode& node)
+{
+    ASSERT(isUIThread());
+    RemoteLayerTreeDrawingAreaProxy::animationsDidChangeOnNode(node);
+    scheduleAnimationUpdatesIfNecessary();
+}
+
+void RemoteLayerTreeDrawingAreaProxyMac::updateAnimations()
+{
+    RemoteLayerTreeDrawingAreaProxy::updateAnimations();
+    if (hasAnimatedNodes())
+        return;
+    ScrollingThread::dispatchBarrier([this, retainedPageProxy = CheckedRef { m_webPageProxy }] {
+        if (retainedPageProxy->drawingArea())
+            scheduleAnimationUpdatesIfNecessary();
+    });
+}
+
+void RemoteLayerTreeDrawingAreaProxyMac::scheduleAnimationUpdatesIfNecessary()
+{
+    ASSERT(isUIThread());
+    if (hasAnimatedNodes() == m_shouldUpdateAnimationsWhenDisplayLinkFires)
+        return;
+    m_shouldUpdateAnimationsWhenDisplayLinkFires = !m_shouldUpdateAnimationsWhenDisplayLinkFires;
+    setDisplayLinkWantsFullSpeedUpdates(m_shouldUpdateAnimationsWhenDisplayLinkFires);
+}
+#endif // ENABLE(THREADED_ANIMATION_RESOLUTION)
 
 } // namespace WebKit
 

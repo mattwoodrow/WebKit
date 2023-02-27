@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!DOCTYPE html><!-- webkit-test-runner [ ThreadedAnimationResolutionEnabled=false ] -->
 <body>
 <script src="../resources/testharness.js"></script>
 <script src="../resources/testharnessreport.js"></script>
@@ -37,14 +37,14 @@ promise_test(async test => {
     // Set offset on the underlying style.
     target.style.offset = "path('M10,10 H10')";
 
-    // Add a transform animation that can be accelerated.
+    // Add a transform animation that could be accelerated by itself.
     const animation = target.animate(
         { transform: "translateX(100px)" },
         { duration }
     );
     await animationReadyToAnimateAccelerated(animation);
-    assert_equals(internals.acceleratedAnimationsForElement(target).length, 1);
-}, "Setting 'offset' on the underlying style allows a 'transform' animation to be accelerated.");
+    assert_equals(internals.acceleratedAnimationsForElement(target).length, 0);
+}, "Setting 'offset' on the underlying style prevents a 'transform' animation from being accelerated.");
 
 promise_test(async test => {
     const target = createDiv(test);
@@ -60,24 +60,24 @@ promise_test(async test => {
     // Set offset on the underlying style.
     target.style.offset = "path('M10,10 H10')";
     await animationReadyToAnimateAccelerated(animation);
-    assert_equals(internals.acceleratedAnimationsForElement(target).length, 1);
+    assert_equals(internals.acceleratedAnimationsForElement(target).length, 0);
 
     // Remove offset on the underlying style.
     target.style.removeProperty("offset");
     await animationReadyToAnimateAccelerated(animation);
     assert_equals(internals.acceleratedAnimationsForElement(target).length, 1);
-}, "Toggling 'offset' dynamically on the underlying style does not affect the ability for a 'transform' animation to be accelerated.");
+}, "Toggling 'offset' dynamically on the underlying style toggles the ability for a 'transform' animation to be accelerated.");
 
 promise_test(async test => {
     const target = createDiv(test);
 
     const animation = target.animate(
-        { transform: "translateX(100px)", offsetPath: ["path('M10,10 H10')", "path('M10,10 H20')"] },
+        { transform: "translateX(100px)", cssOffset: ["path('M10,10 H10')", "path('M10,10 H20')"] },
         { duration }
     );
     await animationReadyToAnimateAccelerated(animation);
-    assert_equals(internals.acceleratedAnimationsForElement(target).length, 2);
-}, "Animating both 'offset' and 'transform' on the same animation allows acceleration.");
+    assert_equals(internals.acceleratedAnimationsForElement(target).length, 0);
+}, "Animating both 'offset' and 'transform' on the same animation prevents acceleration.");
 
 promise_test(async test => {
     const target = createDiv(test);
@@ -91,19 +91,19 @@ promise_test(async test => {
     await Promise.all(animations.map(animation => animationReadyToAnimateAccelerated(animation)));
     assert_equals(internals.acceleratedAnimationsForElement(target).length, 1);
 
-    // Then, add an offset animation.
+    // Then, add an offset animation that prevents the whole stack from being accelerated.
     animations.push(target.animate(
-        { offsetPath: ["path('M10,10 H10')", "path('M10,10 H20')"] },
+        { cssOffset: ["path('M10,10 H10')", "path('M10,10 H20')"] },
         { duration }
     ));
     await Promise.all(animations.map(animation => animationReadyToAnimateAccelerated(animation)));
-    assert_equals(internals.acceleratedAnimationsForElement(target).length, 2);
+    assert_equals(internals.acceleratedAnimationsForElement(target).length, 0);
 
-    // Cancel the offset animation. 
+    // Canceling the offset animation will no longer prevent the stack from being accelerated. 
     animations.at(-1).cancel();
     await Promise.all(animations.map(animation => animationReadyToAnimateAccelerated(animation)));
     assert_equals(internals.acceleratedAnimationsForElement(target).length, 1);
-}, "Animating both 'offset' and 'transform' on different animations allows acceleration.");
+}, "Animating both 'offset' and 'transform' on different animations prevents acceleration.");
 
 promise_test(async test => {
     const target = createDiv(test);
@@ -116,11 +116,11 @@ promise_test(async test => {
     assert_equals(internals.acceleratedAnimationsForElement(target).length, 1);
 
     animation.effect.setKeyframes(
-        { transform: "translateX(100px)", offsetPath: ["path('M10,10 H10')", "path('M10,10 H20')"] }
+        { transform: "translateX(100px)", cssOffset: ["path('M10,10 H10')", "path('M10,10 H20')"] }
     );
     await animationReadyToAnimateAccelerated(animation);
-    assert_equals(internals.acceleratedAnimationsForElement(target).length, 2);
-}, "Setting keyframes on an animation to include 'offset' on top of 'transform' allows acceleration.");
+    assert_equals(internals.acceleratedAnimationsForElement(target).length, 0);
+}, "Setting keyframes on an animation to include 'offset' on top of 'transform' prevents acceleration.");
 
 </script>
 </body>

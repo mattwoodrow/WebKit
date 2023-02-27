@@ -40,6 +40,7 @@
 
 namespace WebCore {
 
+class FloatRect;
 class IntRect;
 class KeyframeEffect;
 
@@ -82,6 +83,8 @@ public:
     WEBCORE_EXPORT Ref<AcceleratedEffect> clone() const;
     WEBCORE_EXPORT Ref<AcceleratedEffect> copyWithProperties(OptionSet<AcceleratedEffectProperty>&) const;
 
+    void apply(Seconds, AcceleratedEffectValues&, const FloatRect&);
+
     // Encoding and decoding support
     const Vector<AcceleratedEffectKeyframe>& keyframes() const { return m_keyframes; }
     WebAnimationType animationType() const { return m_animationType; }
@@ -109,6 +112,10 @@ private:
     AcceleratedEffect(const KeyframeEffect&, const IntRect&);
     explicit AcceleratedEffect(Vector<AcceleratedEffectKeyframe>&&, WebAnimationType, FillMode, PlaybackDirection, CompositeOperation, RefPtr<TimingFunction>&& timingFunction, RefPtr<TimingFunction>&& defaultKeyframeTimingFunction, OptionSet<AcceleratedEffectProperty>&&, bool paused, double iterationStart, double iterations, double playbackRate, WTF::Seconds delay, WTF::Seconds endDelay, WTF::Seconds iterationDuration, WTF::Seconds activeDuration, WTF::Seconds endTime, std::optional<WTF::Seconds> startTime, std::optional<WTF::Seconds> holdTime);
     explicit AcceleratedEffect(const AcceleratedEffect&, OptionSet<AcceleratedEffectProperty>&);
+
+    std::optional<double> computeIterationProgress(Seconds) const;
+    std::optional<std::tuple<const AcceleratedEffectValues, const AcceleratedEffectValues, double>> keyframeValuesAndTransformedProgress(double, AcceleratedEffectProperty, const AcceleratedEffectKeyframe& propertySpecificKeyframeWithZeroOffset, const AcceleratedEffectKeyframe& propertySpecificKeyframeWithOneOffset, const FloatRect&) const;
+    const TimingFunction* timingFunctionForKeyframe(const AcceleratedEffectKeyframe&) const;
 
     Vector<AcceleratedEffectKeyframe> m_keyframes;
     WebAnimationType m_animationType { WebAnimationType::WebAnimation };

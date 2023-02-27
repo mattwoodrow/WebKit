@@ -430,6 +430,10 @@
 #include "PlatformXRSystemProxy.h"
 #endif
 
+#if ENABLE(THREADED_ANIMATION_RESOLUTION)
+#import <WebCore/AcceleratedTimeline.h>
+#endif
+
 namespace WebKit {
 using namespace JSC;
 using namespace WebCore;
@@ -4667,6 +4671,13 @@ void WebPage::willCommitLayerTree(RemoteLayerTreeTransaction& layerTransaction, 
     RefPtr frameView = localRootFrame->view();
     if (!frameView)
         return;
+
+#if ENABLE(THREADED_ANIMATION_RESOLUTION)
+    if (auto* document = localRootFrame->document()) {
+        if (auto* acceleratedTimeline = document->existingAcceleratedTimeline())
+            layerTransaction.setAcceleratedTimelineTimeOrigin(acceleratedTimeline->timeOrigin());
+    }
+#endif
 
     layerTransaction.setContentsSize(frameView->contentsSize());
     layerTransaction.setScrollOrigin(frameView->scrollOrigin());

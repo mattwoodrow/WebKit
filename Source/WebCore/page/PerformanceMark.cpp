@@ -36,6 +36,7 @@
 #include "SerializedScriptValue.h"
 #include "WorkerGlobalScope.h"
 #include <JavaScriptCore/JSCJSValueInlines.h>
+#include <wtf/SystemTracing.h>
 
 namespace WebCore {
 
@@ -55,6 +56,11 @@ static double performanceNow(ScriptExecutionContext& scriptExecutionContext)
 
     return 0;
 }
+
+bool didRender = false;
+bool inAsyncTime = false;
+uint32_t testCount = 0;
+uint32_t renderedInTestCount = 0;
 
 ExceptionOr<Ref<PerformanceMark>> PerformanceMark::create(JSC::JSGlobalObject& globalObject, ScriptExecutionContext& scriptExecutionContext, const String& name, std::optional<PerformanceMarkOptions>&& markOptions)
 {
@@ -79,6 +85,20 @@ ExceptionOr<Ref<PerformanceMark>> PerformanceMark::create(JSC::JSGlobalObject& g
         startTime = performanceNow(scriptExecutionContext);
         detail = JSC::jsNull();
     }
+
+    WTFEmitSignpost(&globalObject, "UserTiming signpost", "%" PUBLIC_LOG_STRING, name.ascii().data());
+
+    if (name.endsWith("-sync-end"_s)) {
+        inAsyncTime = true;
+        didRender = false;
+    } else if (name.endsWith("-async-end"_s)) {
+        inAsyncTime = false;
+        testCount++;
+        if (didRender)
+            renderedInTestCount++;
+        WTFLogAlways("Rendered %d, totals: %d/%d", didRender, renderedInTestCount, testCount);
+    }
+
 
     Vector<RefPtr<MessagePort>> ignoredMessagePorts;
     auto serializedDetail = SerializedScriptValue::create(globalObject, detail, { }, ignoredMessagePorts);

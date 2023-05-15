@@ -1717,6 +1717,8 @@ unsigned Page::renderingUpdateCount() const
     return m_renderingUpdateCount;
 }
 
+extern bool didRender;
+
 // https://html.spec.whatwg.org/multipage/webappapis.html#update-the-rendering
 void Page::updateRendering()
 {
@@ -1738,8 +1740,10 @@ void Page::updateRendering()
     m_lastRenderingUpdateTimestamp = MonotonicTime::now();
 
     bool isSVGImagePage = chrome().client().isSVGImageChromeClient();
-    if (!isSVGImagePage)
+    if (!isSVGImagePage) {
         tracePoint(RenderingUpdateStart);
+        didRender = true;
+    }
 
     layoutIfNeeded();
 

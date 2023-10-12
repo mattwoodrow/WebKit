@@ -306,9 +306,24 @@ void RemoteLayerTreeHost::animationDidEnd(WebCore::PlatformLayerIdentifier layer
 }
 
 #if ENABLE(THREADED_ANIMATION_RESOLUTION)
-void RemoteLayerTreeHost::animationsDidChangeOnNode(RemoteLayerTreeNode& node)
+void RemoteLayerTreeHost::animationEffectStackAdded(Ref<RemoteAcceleratedEffectStack> effects)
 {
-    m_drawingArea->animationsDidChangeOnNode(node);
+    m_drawingArea->animationEffectStackAdded(WTFMove(effects));
+}
+
+void RemoteLayerTreeHost::animationEffectStackRemoved(Ref<RemoteAcceleratedEffectStack> effects)
+{
+    m_drawingArea->animationEffectStackRemoved(WTFMove(effects));
+}
+
+Seconds RemoteLayerTreeHost::acceleratedTimelineTimeOrigin() const
+{
+    return m_drawingArea->acceleratedTimelineTimeOrigin();
+}
+
+Seconds RemoteLayerTreeHost::animationCurrentTime() const
+{
+    return m_drawingArea->animationCurrentTime();
 }
 #endif
 

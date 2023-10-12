@@ -361,6 +361,12 @@ void RemoteLayerTreeEventDispatcher::startOrStopDisplayLinkOnMainThread()
         if (m_wheelEventActivityHysteresis.state() == PAL::HysteresisState::Started)
             return true;
 
+        {
+            Locker lock { m_animationsLock };
+            if (!m_effects.isEmpty())
+                return true;
+        }
+
         auto scrollingTree = this->scrollingTree();
         return scrollingTree && scrollingTree->hasNodeWithActiveScrollAnimations();
     }();
@@ -439,8 +445,10 @@ void RemoteLayerTreeEventDispatcher::didRefreshDisplay(PlatformDisplayID display
 
     scrollingTree->displayDidRefresh(displayID);
 
-    if (m_state != SynchronizationState::Idle)
+    if (m_state != SynchronizationState::Idle) {
         scrollingTree->tryToApplyLayerPositions();
+        updateAnimations();
+    }
 
     switch (m_state) {
     case SynchronizationState::Idle: {
@@ -472,6 +480,7 @@ void RemoteLayerTreeEventDispatcher::delayedRenderingUpdateDetectionTimerFired()
 
     if (auto scrollingTree = this->scrollingTree())
         scrollingTree->tryToApplyLayerPositions();
+    updateAnimations();
 }
 
 void RemoteLayerTreeEventDispatcher::waitForRenderingUpdateCompletionOrTimeout()
@@ -509,6 +518,7 @@ void RemoteLayerTreeEventDispatcher::waitForRenderingUpdateCompletionOrTimeout()
         ScrollingThread::dispatch([protectedThis = Ref { *this }]() {
             if (auto scrollingTree = protectedThis->scrollingTree())
                 scrollingTree->tryToApplyLayerPositions();
+            protectedThis->updateAnimations();
         });
         tracePoint(ScrollingThreadRenderUpdateSyncEnd, 1);
     } else
@@ -521,7 +531,11 @@ bool RemoteLayerTreeEventDispatcher::scrollingTreeWasRecentlyActive()
     if (!scrollingTree)
         return false;
 
-    return scrollingTree->hasRecentActivity();
+    if (scrollingTree->hasRecentActivity())
+        return true;
+
+    Locker lock { m_animationsLock };
+    return !m_effects.isEmpty();
 }
 
 void RemoteLayerTreeEventDispatcher::mainThreadDisplayDidRefresh(PlatformDisplayID)
@@ -554,6 +568,53 @@ void RemoteLayerTreeEventDispatcher::renderingUpdateComplete()
         m_stateCondition.notifyOne();
 
     m_state = SynchronizationState::Idle;
+}
+
+void RemoteLayerTreeEventDispatcher::lockForAnimationChanges()
+{
+    ASSERT(isMainRunLoop());
+    m_animationsLock.lock();
+}
+void RemoteLayerTreeEventDispatcher::unlockForAnimationChanges()
+{
+    ASSERT(isMainRunLoop());
+    m_animationsLock.unlock();
+    startOrStopDisplayLink();
+}
+
+void RemoteLayerTreeEventDispatcher::animationEffectStackAdded(Ref<RemoteAcceleratedEffectStack> effects)
+{
+    ASSERT(isMainRunLoop());
+    assertIsHeld(m_animationsLock);
+    m_effects.add(effects);
+}
+
+void RemoteLayerTreeEventDispatcher::animationEffectStackRemoved(Ref<RemoteAcceleratedEffectStack> effects)
+{
+    ASSERT(isMainRunLoop());
+    assertIsHeld(m_animationsLock);
+    m_effects.remove(effects);
+}
+
+void RemoteLayerTreeEventDispatcher::updateAnimations()
+{
+    ASSERT(!isMainRunLoop());
+    Locker lock { m_animationsLock };
+
+    auto effects = std::exchange(m_effects, { });
+    // FIXME: Rather than using 'now' at the point this is called, we
+    // should probably be using the timestamp of the (next?) display
+    // link update or vblank refresh.
+    auto secondsSinceEpoch = MonotonicTime::now().secondsSinceEpoch();
+    for (auto effect: effects) {
+        effect->applyEffectsAsync(secondsSinceEpoch);
+
+        // We can clear the effect stack if it's empty, but the previous
+        // call to applyEffects() is important so that the base values
+        // were re-applied.
+        if (effect->hasEffects())
+            m_effects.add(effect);
+    }
 }
 
 void RemoteLayerTreeEventDispatcher::windowScreenWillChange()

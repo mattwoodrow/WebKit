@@ -36,20 +36,20 @@
 
 namespace WebCore {
 
-AcceleratedEffectStack::AcceleratedEffectStack()
+AcceleratedEffectStackBase::AcceleratedEffectStackBase()
 {
 }
 
-AcceleratedEffectStack::~AcceleratedEffectStack()
+AcceleratedEffectStackBase::~AcceleratedEffectStackBase()
 {
 }
 
-bool AcceleratedEffectStack::hasEffects() const
+bool AcceleratedEffectStackBase::hasEffects() const
 {
     return !m_primaryLayerEffects.isEmpty() || !m_backdropLayerEffects.isEmpty();
 }
 
-void AcceleratedEffectStack::setEffects(const AcceleratedEffects&& effects)
+void AcceleratedEffectStackBase::setEffects(const AcceleratedEffects&& effects)
 {
     m_primaryLayerEffects.clear();
     m_backdropLayerEffects.clear();
@@ -81,12 +81,12 @@ void AcceleratedEffectStack::setEffects(const AcceleratedEffects&& effects)
     }
 }
 
-void AcceleratedEffectStack::setBaseValues(const AcceleratedEffectValues&& values)
+void AcceleratedEffectStackBase::setBaseValues(const AcceleratedEffectValues&& values)
 {
     m_baseValues = WTFMove(values);
 }
 
-AcceleratedEffectValues AcceleratedEffectStack::computeValues(const AcceleratedEffects& effects, Seconds currentTime, const FloatRect& bounds) const
+AcceleratedEffectValues AcceleratedEffectStackBase::computeValues(const AcceleratedEffects& effects, Seconds currentTime, const FloatRect& bounds) const
 {
     auto values = m_baseValues;
     for (auto& effect : effects)
@@ -94,7 +94,7 @@ AcceleratedEffectValues AcceleratedEffectStack::computeValues(const AcceleratedE
     return values;
 }
 
-void AcceleratedEffectStack::clear(PlatformLayer *layer)
+void AcceleratedEffectStackBase::clear(PlatformLayer *layer)
 {
     if (!m_presentationModifierGroup) {
         ASSERT(!m_opacityPresentationModifier);
@@ -107,20 +107,15 @@ void AcceleratedEffectStack::clear(PlatformLayer *layer)
 
     [layer removePresentationModifier:m_opacityPresentationModifier.get()];
     [layer removePresentationModifier:m_transformPresentationModifier.get()];
-    [m_presentationModifierGroup flush];
+    [m_presentationModifierGroup flushWithTransaction];
 
     m_opacityPresentationModifier = nil;
     m_transformPresentationModifier = nil;
     m_presentationModifierGroup = nil;
 }
 
-void AcceleratedEffectStack::applyPrimaryLayerEffects(PlatformLayer *layer, Seconds currentTime)
+void AcceleratedEffectStackBase::initAsyncEffects(PlatformLayer *layer, Seconds currentTime)
 {
-    if (m_primaryLayerEffects.isEmpty()) {
-        clear(layer);
-        return;
-    }
-
     if (!m_presentationModifierGroup) {
         ASSERT(!m_opacityPresentationModifier);
         ASSERT(!m_transformPresentationModifier);
@@ -145,13 +140,26 @@ void AcceleratedEffectStack::applyPrimaryLayerEffects(PlatformLayer *layer, Seco
 
     [m_opacityPresentationModifier setValue:opacity];
     [m_transformPresentationModifier setValue:transform];
-    [m_presentationModifierGroup flush];
+    [m_presentationModifierGroup flushWithTransaction];
 
     // FIXME: set filters with a modifier as well.
     PlatformCAFilters::setFiltersOnLayer(layer, computedValues.filter);
 }
 
-void AcceleratedEffectStack::applyBackdropLayerEffects(PlatformLayer *layer, Seconds currentTime) const
+void AcceleratedEffectStackBase::applyEffectsAsync(const FloatRect& bounds, Seconds currentTime) const
+{
+    auto computedValues = computeValues(m_primaryLayerEffects, currentTime, bounds);
+    auto computedTransform = computedValues.computedTransformationMatrix(bounds);
+
+    auto *opacity = @(computedValues.opacity);
+    auto *transform = [NSValue valueWithCATransform3D:computedTransform];
+
+    [m_opacityPresentationModifier setValue:opacity];
+    [m_transformPresentationModifier setValue:transform];
+    [m_presentationModifierGroup flush];
+}
+
+void AcceleratedEffectStackBase::applyBackdropLayerEffects(PlatformLayer *layer, Seconds currentTime) const
 {
     if (m_backdropLayerEffects.isEmpty())
         return;

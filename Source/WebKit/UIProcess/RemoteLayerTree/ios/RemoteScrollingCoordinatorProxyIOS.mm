@@ -48,6 +48,75 @@
 #import <WebCore/ScrollingTreePositionedNode.h>
 #import <tuple>
 
+// FIXME: refactor this to have a single display link handler.
+@interface WKAnimationDisplayLinkHandler : NSObject {
+    RefPtr<WebKit::ThreadedAnimationData> _animationData;
+    CADisplayLink *_displayLink;
+}
+
+- (id)initWithAnimationData:(WebKit::ThreadedAnimationData*)animationData;
+- (void)displayLinkFired:(CADisplayLink *)sender;
+- (void)invalidate;
+- (void)schedule;
+
+@end
+
+@implementation WKAnimationDisplayLinkHandler
+
+- (id)initWithAnimationData:(WebKit::ThreadedAnimationData*)animationData
+{
+    assertIsMainRunLoop();
+    if (self = [super init]) {
+        _animationData = animationData;
+        // Note that CADisplayLink retains its target (self), so a call to -invalidate is needed on teardown.
+        _displayLink = [CADisplayLink displayLinkWithTarget:self selector:@selector(displayLinkFired:)];
+        WebCore::ScrollingThread::dispatch([displayLink = retainPtr(_displayLink)] {
+            [displayLink addToRunLoop:[NSRunLoop currentRunLoop] forMode:NSRunLoopCommonModes];
+        });
+        _displayLink.paused = YES;
+        _displayLink.preferredFramesPerSecond = (1.0 / _displayLink.maximumRefreshRate);
+    }
+    return self;
+}
+
+- (void)dealloc
+{
+    ASSERT(!_displayLink);
+    [super dealloc];
+}
+
+- (void)displayLinkFired:(CADisplayLink *)sender
+{
+    ASSERT(WebCore::ScrollingThread::isCurrentThread());
+    _animationData->updateAnimations();
+}
+
+- (void)invalidate
+{
+    ASSERT(isUIThread());
+    [_displayLink invalidate];
+    WebCore::ScrollingThread::dispatch([displayLink = retainPtr(_displayLink)] {
+        [displayLink invalidate];
+    });
+    _displayLink = nullptr;
+}
+
+- (void)schedule
+{
+    WebCore::ScrollingThread::dispatch([displayLink = retainPtr(_displayLink)] {
+        displayLink.get().paused = NO;
+    });
+}
+
+- (void)pause
+{
+    WebCore::ScrollingThread::dispatch([displayLink = retainPtr(_displayLink)] {
+        displayLink.get().paused = YES;
+    });
+}
+
+@end
+
 namespace WebKit {
 using namespace WebCore;
 
@@ -351,6 +420,45 @@ CGPoint RemoteScrollingCoordinatorProxyIOS::nearestActiveContentInsetAdjustedSna
 
     return activePoint;
 }
+
+
+#if ENABLE(THREADED_ANIMATION_RESOLUTION)
+void RemoteScrollingCoordinatorProxyIOS::willCommitLayerAndScrollingTrees()
+{
+    if (m_animationData)
+        m_animationData->m_lock.lock();
+}
+    
+void RemoteScrollingCoordinatorProxyIOS::animationEffectStackAdded(Ref<RemoteAcceleratedEffectStack> effects)
+{
+    if (!m_animationData) {
+        m_animationData = new ThreadedAnimationData;
+        m_animationDisplayLinkHandler = adoptNS([[WKAnimationDisplayLinkHandler alloc] initWithAnimationData:m_animationData.get()]);
+        m_animationData->m_lock.lock();
+    }
+    assertIsHeld(m_animationData->m_lock);
+
+    m_animationData->m_effects.add(effects);
+}
+
+void RemoteScrollingCoordinatorProxyIOS::animationEffectStackRemoved(Ref<RemoteAcceleratedEffectStack> effects)
+{
+    ASSERT(m_animationData);
+    m_animationData->m_effects.remove(effects);
+}
+
+void RemoteScrollingCoordinatorProxyIOS::didCommitLayerAndScrollingTrees()
+{
+    if (m_animationData) {
+        if (m_animationData->m_effects.isEmpty())
+            [m_animationDisplayLinkHandler pause];
+        else
+            [m_animationDisplayLinkHandler schedule];
+
+        m_animationData->m_lock.unlock();
+    }
+}
+#endif
 
 } // namespace WebKit
 

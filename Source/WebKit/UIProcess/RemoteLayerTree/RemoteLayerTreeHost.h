@@ -68,7 +68,8 @@ public:
     void animationDidEnd(WebCore::PlatformLayerIdentifier, CAAnimation *);
 
 #if ENABLE(THREADED_ANIMATION_RESOLUTION)
-    void animationsDidChangeOnNode(RemoteLayerTreeNode&);
+    void animationEffectStackAdded(Ref<RemoteAcceleratedEffectStack>);
+    void animationEffectStackRemoved(Ref<RemoteAcceleratedEffectStack>);
 #endif
 
     void detachFromDrawingArea();
@@ -89,6 +90,9 @@ public:
     const HashSet<WebCore::PlatformLayerIdentifier>& overlayRegionIDs() const { return m_overlayRegionIDs; }
     void updateOverlayRegionIDs(const HashSet<WebCore::PlatformLayerIdentifier> &overlayRegionNodes) { m_overlayRegionIDs = overlayRegionNodes; }
 #endif
+
+    Seconds acceleratedTimelineTimeOrigin() const;
+    Seconds animationCurrentTime() const;
 private:
     void createLayer(const RemoteLayerTreeTransaction::LayerCreationProperties&);
     std::unique_ptr<RemoteLayerTreeNode> makeNode(const RemoteLayerTreeTransaction::LayerCreationProperties&);

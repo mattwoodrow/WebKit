@@ -62,8 +62,16 @@ public:
     TransactionID lastCommittedLayerTreeTransactionID() const { return m_webPageProxyProcessState.transactionIDForPendingCACommit; }
 
 #if ENABLE(THREADED_ANIMATION_RESOLUTION)
-    virtual void animationsDidChangeOnNode(RemoteLayerTreeNode&) = 0;
-    virtual void updateAnimations() = 0;
+    void animationEffectStackAdded(Ref<RemoteAcceleratedEffectStack> effects);
+    void animationEffectStackRemoved(Ref<RemoteAcceleratedEffectStack> effects);
+    Seconds acceleratedTimelineTimeOrigin() const
+    {
+        return m_acceleratedTimelineTimeOrigin;
+    }
+    Seconds animationCurrentTime() const
+    {
+        return m_animationCurrentTime;
+    }
 #endif
 
     virtual void didRefreshDisplay();
@@ -87,10 +95,6 @@ protected:
     void updateDebugIndicatorPosition();
 
     bool shouldCoalesceVisualEditorStateUpdates() const override { return true; }
-
-#if ENABLE(THREADED_ANIMATION_RESOLUTION)
-    bool hasAnimatedNodes() const;
-#endif
 
 private:
 
@@ -186,8 +190,8 @@ private:
     unsigned m_countOfTransactionsWithNonEmptyLayerChanges { 0 };
 
 #if ENABLE(THREADED_ANIMATION_RESOLUTION)
-    HashSet<RemoteLayerTreeNode*> m_animatedNodes;
     Seconds m_acceleratedTimelineTimeOrigin;
+    Seconds m_animationCurrentTime;
 #endif
 };
 

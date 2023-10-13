@@ -88,6 +88,12 @@ public:
 
     void renderingUpdateComplete();
 
+    void lockForAnimationChanges() WTF_ACQUIRES_LOCK(m_animationsLock);
+    void unlockForAnimationChanges() WTF_RELEASES_LOCK(m_animationsLock);
+    void animationEffectStackAdded(Ref<RemoteAcceleratedEffectStack>);
+    void animationEffectStackRemoved(Ref<RemoteAcceleratedEffectStack>);
+    void updateAnimations();
+
 private:
     OptionSet<WebCore::WheelEventProcessingSteps> determineWheelEventProcessing(const WebCore::PlatformWheelEvent&, WebCore::RectEdges<bool> rubberBandableEdges);
 
@@ -159,6 +165,9 @@ private:
     MonotonicTime m_lastDisplayDidRefreshTime;
 
     std::unique_ptr<RunLoop::Timer> m_delayedRenderingUpdateDetectionTimer;
+
+    Lock m_animationsLock;
+    HashSet<Ref<RemoteAcceleratedEffectStack>> m_effects WTF_GUARDED_BY_LOCK(m_animationsLock);
 
 #if ENABLE(MOMENTUM_EVENT_DISPATCHER)
     std::unique_ptr<MomentumEventDispatcher> m_momentumEventDispatcher;

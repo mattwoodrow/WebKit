@@ -65,8 +65,10 @@ private:
     void windowScreenWillChange() override;
     void windowScreenDidChange(WebCore::PlatformDisplayID, std::optional<WebCore::FramesPerSecond>) override;
 
-    void willCommitLayerAndScrollingTrees() override;
-    void didCommitLayerAndScrollingTrees() override;
+    void willCommitLayerAndScrollingTrees() override WTF_IGNORES_THREAD_SAFETY_ANALYSIS;
+    void didCommitLayerAndScrollingTrees() override WTF_IGNORES_THREAD_SAFETY_ANALYSIS;
+    void animationEffectStackAdded(Ref<RemoteAcceleratedEffectStack>) override;
+    void animationEffectStackRemoved(Ref<RemoteAcceleratedEffectStack>) override;
     void applyScrollingTreeLayerPositionsAfterCommit() override;
 
 #if ENABLE(SCROLLING_THREAD)

@@ -39,6 +39,7 @@
 #endif
 
 #if ENABLE(THREADED_ANIMATION_RESOLUTION)
+#import "RemoteLayerTreeHost.h"
 #import <WebCore/AcceleratedEffectStack.h>
 #import <WebCore/ScrollingThread.h>
 #endif
@@ -73,8 +74,8 @@ RemoteLayerTreeNode::RemoteLayerTreeNode(WebCore::PlatformLayerIdentifier layerI
 RemoteLayerTreeNode::~RemoteLayerTreeNode()
 {
 #if ENABLE(THREADED_ANIMATION_RESOLUTION)
-    if (m_effectStack)
-        m_effectStack->clear(layer());
+    if (m_effects)
+        m_effects->clear(layer());
 #endif
     [layer() setValue:nil forKey:WKRemoteLayerTreeNodePropertyKey];
 #if ENABLE(INTERACTION_REGIONS_IN_EVENT_REGION)
@@ -248,9 +249,30 @@ NSString *RemoteLayerTreeNode::appendLayerDescription(NSString *description, CAL
 }
 
 #if ENABLE(THREADED_ANIMATION_RESOLUTION)
-void RemoteLayerTreeNode::setAcceleratedEffectsAndBaseValues(const WebCore::AcceleratedEffects& effects, const WebCore::AcceleratedEffectValues& baseValues)
+void RemoteLayerTreeNode::setAcceleratedEffectsAndBaseValues(const WebCore::AcceleratedEffects& effects, const WebCore::AcceleratedEffectValues& baseValues, RemoteLayerTreeHost* host)
 {
     ASSERT(isUIThread());
+    ASSERT(host);
+
+    if (m_effects) {
+        m_effects->clear(layer());
+        host->animationEffectStackRemoved(*m_effects);
+    }
+
+    if (effects.isEmpty())
+        return;
+
+    // We always recreate the effects stack to get a new CA
+    // presentation modifiers. Otherwise it's possible for the animation
+    // thread to tick and push values from the new animation onto the
+    // existing presentation modifier and have it applied before the rest
+    // of this transaction.
+    // Does that actually matter in practice?
+    // It does simplify things since these objects are effectively const,
+    // created here (and applied to the layer), and then we only ever recompute
+    // values and write those to the presentation modifiers async.
+    // Can we codify that 'constness' better?
+    m_effects = new RemoteAcceleratedEffectStack(layer().bounds, host->acceleratedTimelineTimeOrigin());
 
     WebCore::AcceleratedEffects clonedEffects;
     clonedEffects.reserveCapacity(effects.size());
@@ -259,39 +281,15 @@ void RemoteLayerTreeNode::setAcceleratedEffectsAndBaseValues(const WebCore::Acce
 
     auto clonedBaseValues = baseValues.clone();
 
-    // FIXME: need to keep the node alive.
-    WebCore::ScrollingThread::dispatch([this, clonedEffects = WTFMove(clonedEffects), clonedBaseValues = WTFMove(clonedBaseValues)] {
-        if (!m_effectStack)
-            m_effectStack = makeUnique<WebCore::AcceleratedEffectStack>();
+    m_effects->setEffects(WTFMove(clonedEffects));
+    m_effects->setBaseValues(WTFMove(clonedBaseValues));
 
-        m_effectStack->setEffects(WTFMove(clonedEffects));
-        m_effectStack->setBaseValues(WTFMove(clonedBaseValues));
-    });
-}
+    m_effects->initAsyncEffects(layer(), host->animationCurrentTime());
 
-bool RemoteLayerTreeNode::hasAnimationEffects() const
-{
-    ASSERT(!isUIThread());
-    return m_effectStack && m_effectStack->hasEffects();
-}
+    // FIXME: This doesn't really work yet.
+    m_effects->applyBackdropLayerEffects(layer(), host->animationCurrentTime());
 
-void RemoteLayerTreeNode::applyAnimatedEffectStack(Seconds currentTime)
-{
-    ASSERT(!isUIThread());
-
-    if (!m_effectStack)
-        return;
-
-    // The effect stack will have either primary layer effects or
-    // backdrop layer effects. We call both application methods.
-    m_effectStack->applyPrimaryLayerEffects(layer(), currentTime);
-    m_effectStack->applyBackdropLayerEffects(layer(), currentTime);
-
-    // We can clear the effect stack if it's empty, but the previous
-    // call to applyEffects() is important so that the base values
-    // were re-applied.
-    if (!m_effectStack->hasEffects())
-        m_effectStack = nullptr;
+    host->animationEffectStackAdded(*m_effects);
 }
 #endif
 

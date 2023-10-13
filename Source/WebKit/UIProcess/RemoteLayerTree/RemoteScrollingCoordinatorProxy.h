@@ -48,6 +48,7 @@ class PlatformWheelEvent;
 namespace WebKit {
 
 class NativeWebWheelEvent;
+class RemoteAcceleratedEffectStack;
 class RemoteLayerTreeHost;
 class RemoteScrollingCoordinatorTransaction;
 class RemoteScrollingTree;
@@ -129,6 +130,8 @@ public:
     virtual void scrollingTreeNodeDidEndScrollSnapping(WebCore::ScrollingNodeID) { }
     
     virtual void willCommitLayerAndScrollingTrees() { }
+    virtual void animationEffectStackAdded(Ref<RemoteAcceleratedEffectStack>) { }
+    virtual void animationEffectStackRemoved(Ref<RemoteAcceleratedEffectStack>) { }
     virtual void didCommitLayerAndScrollingTrees() { }
 
     String scrollingTreeAsText() const;

@@ -48,6 +48,27 @@ OBJC_CLASS UIView;
 
 namespace WebKit {
 
+#if ENABLE(THREADED_ANIMATION_RESOLUTION)
+class RemoteAcceleratedEffectStack : public ThreadSafeRefCounted<RemoteAcceleratedEffectStack>, public WebCore::AcceleratedEffectStackBase
+{
+public:
+    RemoteAcceleratedEffectStack(const WebCore::FloatRect& bounds, Seconds acceleratedTimelineTimeOrigin)
+        : m_bounds(bounds)
+        , m_acceleratedTimelineTimeOrigin(acceleratedTimelineTimeOrigin)
+    { }
+
+    void applyEffectsAsync(Seconds secondsSinceEpoch) const
+    {
+        WebCore::AcceleratedEffectStackBase::applyEffectsAsync(m_bounds, secondsSinceEpoch - m_acceleratedTimelineTimeOrigin);
+    }
+
+private:
+    WebCore::FloatRect m_bounds;
+    Seconds m_acceleratedTimelineTimeOrigin;
+};
+#endif
+
+class RemoteLayerTreeHost;
 class RemoteLayerTreeScrollbars;
 
 class RemoteLayerTreeNode : public CanMakeWeakPtr<RemoteLayerTreeNode> {
@@ -138,9 +159,7 @@ public:
     }
 
 #if ENABLE(THREADED_ANIMATION_RESOLUTION)
-    void setAcceleratedEffectsAndBaseValues(const WebCore::AcceleratedEffects&, const WebCore::AcceleratedEffectValues&);
-    bool hasAnimationEffects() const;
-    void applyAnimatedEffectStack(Seconds);
+    void setAcceleratedEffectsAndBaseValues(const WebCore::AcceleratedEffects&, const WebCore::AcceleratedEffectValues&, RemoteLayerTreeHost*);
 #endif
 
 private:
@@ -182,7 +201,7 @@ private:
     std::optional<WebCore::RenderingResourceIdentifier> m_asyncContentsIdentifier;
 
 #if ENABLE(THREADED_ANIMATION_RESOLUTION)
-    std::unique_ptr<WebCore::AcceleratedEffectStack> m_effectStack;
+    RefPtr<RemoteAcceleratedEffectStack> m_effects;
 #endif
 };
 

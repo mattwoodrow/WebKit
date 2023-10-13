@@ -113,7 +113,6 @@ void RemoteScrollingCoordinatorProxyMac::hasNodeWithAnimatedScrollChanged(bool h
     if (!drawingArea)
         return;
 
-    // FIXME: we also want to do this when animations are happening.
     drawingArea->setDisplayLinkWantsFullSpeedUpdates(hasAnimatedScrolls);
 #endif
 }
@@ -170,7 +169,6 @@ void RemoteScrollingCoordinatorProxyMac::connectStateNodeLayers(ScrollingStateTr
         case ScrollingNodeType::MainFrame:
         case ScrollingNodeType::Subframe: {
             ScrollingStateFrameScrollingNode& scrollingStateNode = downcast<ScrollingStateFrameScrollingNode>(currNode);
-            
             if (scrollingStateNode.hasChangedProperty(ScrollingStateNode::Property::ScrollContainerLayer))
                 scrollingStateNode.setScrollContainerLayer(layerTreeHost.layerForID(PlatformLayerID { scrollingStateNode.scrollContainerLayer() }));
 
@@ -256,11 +254,23 @@ void RemoteScrollingCoordinatorProxyMac::windowScreenWillChange()
 void RemoteScrollingCoordinatorProxyMac::willCommitLayerAndScrollingTrees()
 {
     scrollingTree()->lockLayersForHitTesting();
+    m_wheelEventDispatcher->lockForAnimationChanges();
 }
 
 void RemoteScrollingCoordinatorProxyMac::didCommitLayerAndScrollingTrees()
 {
     scrollingTree()->unlockLayersForHitTesting();
+    m_wheelEventDispatcher->unlockForAnimationChanges();
+}
+
+void RemoteScrollingCoordinatorProxyMac::animationEffectStackAdded(Ref<RemoteAcceleratedEffectStack> effects)
+{
+    m_wheelEventDispatcher->animationEffectStackAdded(WTFMove(effects));
+}
+
+void RemoteScrollingCoordinatorProxyMac::animationEffectStackRemoved(Ref<RemoteAcceleratedEffectStack> effects)
+{
+    m_wheelEventDispatcher->animationEffectStackRemoved(WTFMove(effects));
 }
 
 void RemoteScrollingCoordinatorProxyMac::applyScrollingTreeLayerPositionsAfterCommit()

@@ -25,6 +25,7 @@
 
 #pragma once
 
+#include "RemoteAcceleratedEffectStack.h"
 #include "RemoteLayerBackingStore.h"
 #include <WebCore/EventRegion.h>
 #include <WebCore/LayerHostingContextIdentifier.h>
@@ -40,33 +41,7 @@ OBJC_CLASS NSString;
 OBJC_CLASS UIView;
 #endif
 
-#if ENABLE(THREADED_ANIMATION_RESOLUTION)
-#include <WebCore/AcceleratedEffect.h>
-#include <WebCore/AcceleratedEffectStack.h>
-#include <WebCore/AcceleratedEffectValues.h>
-#endif
-
 namespace WebKit {
-
-#if ENABLE(THREADED_ANIMATION_RESOLUTION)
-class RemoteAcceleratedEffectStack : public ThreadSafeRefCounted<RemoteAcceleratedEffectStack>, public WebCore::AcceleratedEffectStackBase
-{
-public:
-    RemoteAcceleratedEffectStack(const WebCore::FloatRect& bounds, Seconds acceleratedTimelineTimeOrigin)
-        : m_bounds(bounds)
-        , m_acceleratedTimelineTimeOrigin(acceleratedTimelineTimeOrigin)
-    { }
-
-    void applyEffectsAsync(Seconds secondsSinceEpoch) const
-    {
-        WebCore::AcceleratedEffectStackBase::applyEffectsAsync(m_bounds, secondsSinceEpoch - m_acceleratedTimelineTimeOrigin);
-    }
-
-private:
-    WebCore::FloatRect m_bounds;
-    Seconds m_acceleratedTimelineTimeOrigin;
-};
-#endif
 
 class RemoteLayerTreeHost;
 class RemoteLayerTreeScrollbars;

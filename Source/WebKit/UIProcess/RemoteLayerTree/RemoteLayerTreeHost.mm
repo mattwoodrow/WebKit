@@ -101,6 +101,11 @@ bool RemoteLayerTreeHost::css3DTransformInteroperabilityEnabled() const
     return m_drawingArea->page().preferences().css3DTransformInteroperabilityEnabled();
 }
 
+bool RemoteLayerTreeHost::threadedAnimationResolutionEnabled() const
+{
+    return m_drawingArea->page().preferences().threadedAnimationResolutionEnabled();
+}
+
 #if PLATFORM(MAC)
 bool RemoteLayerTreeHost::updateBannerLayers(const RemoteLayerTreeTransaction& transaction)
 {
@@ -306,14 +311,14 @@ void RemoteLayerTreeHost::animationDidEnd(WebCore::PlatformLayerIdentifier layer
 }
 
 #if ENABLE(THREADED_ANIMATION_RESOLUTION)
-void RemoteLayerTreeHost::animationEffectStackAdded(Ref<RemoteAcceleratedEffectStack> effects)
+void RemoteLayerTreeHost::animationEffectStackWasAdded(Ref<RemoteAcceleratedEffectStack> effects)
 {
-    m_drawingArea->animationEffectStackAdded(WTFMove(effects));
+    m_drawingArea->animationEffectStackWasAdded(WTFMove(effects));
 }
 
-void RemoteLayerTreeHost::animationEffectStackRemoved(Ref<RemoteAcceleratedEffectStack> effects)
+void RemoteLayerTreeHost::animationEffectStackWasRemoved(Ref<RemoteAcceleratedEffectStack> effects)
 {
-    m_drawingArea->animationEffectStackRemoved(WTFMove(effects));
+    m_drawingArea->animationEffectStackWasRemoved(WTFMove(effects));
 }
 
 Seconds RemoteLayerTreeHost::acceleratedTimelineTimeOrigin() const

@@ -582,14 +582,14 @@ void RemoteLayerTreeEventDispatcher::unlockForAnimationChanges()
     startOrStopDisplayLink();
 }
 
-void RemoteLayerTreeEventDispatcher::animationEffectStackAdded(Ref<RemoteAcceleratedEffectStack> effects)
+void RemoteLayerTreeEventDispatcher::animationEffectStackWasAdded(Ref<RemoteAcceleratedEffectStack> effects)
 {
     ASSERT(isMainRunLoop());
     assertIsHeld(m_animationsLock);
     m_effects.add(effects);
 }
 
-void RemoteLayerTreeEventDispatcher::animationEffectStackRemoved(Ref<RemoteAcceleratedEffectStack> effects)
+void RemoteLayerTreeEventDispatcher::animationEffectStackWasRemoved(Ref<RemoteAcceleratedEffectStack> effects)
 {
     ASSERT(isMainRunLoop());
     assertIsHeld(m_animationsLock);
@@ -607,7 +607,7 @@ void RemoteLayerTreeEventDispatcher::updateAnimations()
     // link update or vblank refresh.
     auto secondsSinceEpoch = MonotonicTime::now().secondsSinceEpoch();
     for (auto effect: effects) {
-        effect->applyEffectsAsync(secondsSinceEpoch);
+        effect->applyEffectsFromScrollingThread(secondsSinceEpoch);
 
         // We can clear the effect stack if it's empty, but the previous
         // call to applyEffects() is important so that the base values

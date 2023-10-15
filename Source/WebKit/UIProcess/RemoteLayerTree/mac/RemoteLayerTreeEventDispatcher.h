@@ -90,8 +90,8 @@ public:
 
     void lockForAnimationChanges() WTF_ACQUIRES_LOCK(m_animationsLock);
     void unlockForAnimationChanges() WTF_RELEASES_LOCK(m_animationsLock);
-    void animationEffectStackAdded(Ref<RemoteAcceleratedEffectStack>);
-    void animationEffectStackRemoved(Ref<RemoteAcceleratedEffectStack>);
+    void animationEffectStackWasAdded(Ref<RemoteAcceleratedEffectStack>);
+    void animationEffectStackWasRemoved(Ref<RemoteAcceleratedEffectStack>);
     void updateAnimations();
 
 private:

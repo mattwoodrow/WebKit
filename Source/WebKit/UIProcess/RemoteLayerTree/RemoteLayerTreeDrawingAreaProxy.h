@@ -62,8 +62,8 @@ public:
     TransactionID lastCommittedLayerTreeTransactionID() const { return m_webPageProxyProcessState.transactionIDForPendingCACommit; }
 
 #if ENABLE(THREADED_ANIMATION_RESOLUTION)
-    void animationEffectStackAdded(Ref<RemoteAcceleratedEffectStack> effects);
-    void animationEffectStackRemoved(Ref<RemoteAcceleratedEffectStack> effects);
+    void animationEffectStackWasAdded(Ref<RemoteAcceleratedEffectStack> effects);
+    void animationEffectStackWasRemoved(Ref<RemoteAcceleratedEffectStack> effects);
     Seconds acceleratedTimelineTimeOrigin() const
     {
         return m_acceleratedTimelineTimeOrigin;

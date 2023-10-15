@@ -68,8 +68,8 @@ public:
     void animationDidEnd(WebCore::PlatformLayerIdentifier, CAAnimation *);
 
 #if ENABLE(THREADED_ANIMATION_RESOLUTION)
-    void animationEffectStackAdded(Ref<RemoteAcceleratedEffectStack>);
-    void animationEffectStackRemoved(Ref<RemoteAcceleratedEffectStack>);
+    void animationEffectStackWasAdded(Ref<RemoteAcceleratedEffectStack>);
+    void animationEffectStackWasRemoved(Ref<RemoteAcceleratedEffectStack>);
 #endif
 
     void detachFromDrawingArea();
@@ -86,6 +86,7 @@ public:
 
     bool replayDynamicContentScalingDisplayListsIntoBackingStore() const;
     bool css3DTransformInteroperabilityEnabled() const;
+    bool threadedAnimationResolutionEnabled() const;
 #if ENABLE(OVERLAY_REGIONS_IN_EVENT_REGION)
     const HashSet<WebCore::PlatformLayerIdentifier>& overlayRegionIDs() const { return m_overlayRegionIDs; }
     void updateOverlayRegionIDs(const HashSet<WebCore::PlatformLayerIdentifier> &overlayRegionNodes) { m_overlayRegionIDs = overlayRegionNodes; }

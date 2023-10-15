@@ -255,7 +255,7 @@ void RemoteLayerTreeNode::setAcceleratedEffectsAndBaseValues(const WebCore::Acce
 
     if (m_effects) {
         m_effects->clear(layer());
-        host->animationEffectStackRemoved(*m_effects);
+        host->animationEffectStackWasRemoved(*m_effects);
     }
 
     if (effects.isEmpty())
@@ -288,7 +288,7 @@ void RemoteLayerTreeNode::setAcceleratedEffectsAndBaseValues(const WebCore::Acce
     // FIXME: This doesn't really work yet.
     m_effects->applyBackdropLayerEffects(layer(), host->animationCurrentTime());
 
-    host->animationEffectStackAdded(*m_effects);
+    host->animationEffectStackWasAdded(*m_effects);
 }
 #endif
 

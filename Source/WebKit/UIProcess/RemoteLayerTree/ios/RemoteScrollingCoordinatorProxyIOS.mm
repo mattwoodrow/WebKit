@@ -429,7 +429,7 @@ void RemoteScrollingCoordinatorProxyIOS::willCommitLayerAndScrollingTrees()
         m_animationData->m_lock.lock();
 }
     
-void RemoteScrollingCoordinatorProxyIOS::animationEffectStackAdded(Ref<RemoteAcceleratedEffectStack> effects)
+void RemoteScrollingCoordinatorProxyIOS::animationEffectStackWasAdded(Ref<RemoteAcceleratedEffectStack> effects)
 {
     if (!m_animationData) {
         m_animationData = new ThreadedAnimationData;
@@ -441,7 +441,7 @@ void RemoteScrollingCoordinatorProxyIOS::animationEffectStackAdded(Ref<RemoteAcc
     m_animationData->m_effects.add(effects);
 }
 
-void RemoteScrollingCoordinatorProxyIOS::animationEffectStackRemoved(Ref<RemoteAcceleratedEffectStack> effects)
+void RemoteScrollingCoordinatorProxyIOS::animationEffectStackWasRemoved(Ref<RemoteAcceleratedEffectStack> effects)
 {
     ASSERT(m_animationData);
     m_animationData->m_effects.remove(effects);

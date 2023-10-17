@@ -67,8 +67,8 @@ private:
 
     void willCommitLayerAndScrollingTrees() override WTF_IGNORES_THREAD_SAFETY_ANALYSIS;
     void didCommitLayerAndScrollingTrees() override WTF_IGNORES_THREAD_SAFETY_ANALYSIS;
-    void animationEffectStackAdded(Ref<RemoteAcceleratedEffectStack>) override;
-    void animationEffectStackRemoved(Ref<RemoteAcceleratedEffectStack>) override;
+    void animationEffectStackWasAdded(Ref<RemoteAcceleratedEffectStack>) override;
+    void animationEffectStackWasRemoved(Ref<RemoteAcceleratedEffectStack>) override;
     void applyScrollingTreeLayerPositionsAfterCommit() override;
 
 #if ENABLE(SCROLLING_THREAD)

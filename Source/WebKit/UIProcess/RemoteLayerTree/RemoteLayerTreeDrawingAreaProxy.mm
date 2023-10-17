@@ -621,14 +621,14 @@ void RemoteLayerTreeDrawingAreaProxy::sizeToContentAutoSizeMaximumSizeDidChange(
 }
 
 #if ENABLE(THREADED_ANIMATION_RESOLUTION)
-void RemoteLayerTreeDrawingAreaProxy::animationEffectStackAdded(Ref<RemoteAcceleratedEffectStack> effects)
+void RemoteLayerTreeDrawingAreaProxy::animationEffectStackWasAdded(Ref<RemoteAcceleratedEffectStack> effects)
 {
-    protectedWebPageProxy()->scrollingCoordinatorProxy()->animationEffectStackAdded(WTFMove(effects));
+    protectedWebPageProxy()->scrollingCoordinatorProxy()->animationEffectStackWasAdded(WTFMove(effects));
 }
 
-void RemoteLayerTreeDrawingAreaProxy::animationEffectStackRemoved(Ref<RemoteAcceleratedEffectStack> effects)
+void RemoteLayerTreeDrawingAreaProxy::animationEffectStackWasRemoved(Ref<RemoteAcceleratedEffectStack> effects)
 {
-    protectedWebPageProxy()->scrollingCoordinatorProxy()->animationEffectStackRemoved(WTFMove(effects));
+    protectedWebPageProxy()->scrollingCoordinatorProxy()->animationEffectStackWasRemoved(WTFMove(effects));
 }
 #endif // ENABLE(THREADED_ANIMATION_RESOLUTION)
 

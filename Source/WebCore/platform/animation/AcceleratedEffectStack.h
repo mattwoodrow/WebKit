@@ -45,10 +45,10 @@ class FloatRect;
 
 using AcceleratedEffects = Vector<Ref<AcceleratedEffect>>;
 
-class AcceleratedEffectStackBase {
+class AcceleratedEffectStack : public ThreadSafeRefCounted<AcceleratedEffectStack> {
 public:
-    WEBCORE_EXPORT explicit AcceleratedEffectStackBase();
-    WEBCORE_EXPORT ~AcceleratedEffectStackBase();
+    WEBCORE_EXPORT explicit AcceleratedEffectStack();
+    WEBCORE_EXPORT ~AcceleratedEffectStack();
 
     WEBCORE_EXPORT bool hasEffects() const;
     const AcceleratedEffects& primaryLayerEffects() const { return m_primaryLayerEffects; }
@@ -60,12 +60,10 @@ public:
     
     WEBCORE_EXPORT void initAsyncEffects(PlatformLayer *, Seconds);
     WEBCORE_EXPORT void applyBackdropLayerEffects(PlatformLayer *, Seconds) const;
-    WEBCORE_EXPORT void applyEffectsAsync(const FloatRect&, Seconds) const;
     WEBCORE_EXPORT void clear(PlatformLayer *);
 
-private:
-    AcceleratedEffectValues computeValues(const AcceleratedEffects&, Seconds, const FloatRect&) const;
-
+protected:
+    WEBCORE_EXPORT AcceleratedEffectValues computeValues(const AcceleratedEffects&, Seconds, const FloatRect&) const;
 
     AcceleratedEffectValues m_baseValues;
     AcceleratedEffects m_primaryLayerEffects;
@@ -74,10 +72,6 @@ private:
     RetainPtr<CAPresentationModifierGroup> m_presentationModifierGroup;
     RetainPtr<CAPresentationModifier> m_opacityPresentationModifier;
     RetainPtr<CAPresentationModifier> m_transformPresentationModifier;
-};
-
-class AcceleratedEffectStack : public AcceleratedEffectStackBase {
-    WTF_MAKE_FAST_ALLOCATED;
 };
 
 } // namespace WebCore

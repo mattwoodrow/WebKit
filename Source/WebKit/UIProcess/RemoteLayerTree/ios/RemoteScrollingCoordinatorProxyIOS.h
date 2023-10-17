@@ -66,8 +66,8 @@ public:
 
 #if ENABLE(THREADED_ANIMATION_RESOLUTION)
     void willCommitLayerAndScrollingTrees() override WTF_IGNORES_THREAD_SAFETY_ANALYSIS;
-    void animationEffectStackAdded(Ref<RemoteAcceleratedEffectStack>) override WTF_IGNORES_THREAD_SAFETY_ANALYSIS;
-    void animationEffectStackRemoved(Ref<RemoteAcceleratedEffectStack>) override;
+    void animationEffectStackWasAdded(Ref<RemoteAcceleratedEffectStack>) override WTF_IGNORES_THREAD_SAFETY_ANALYSIS;
+    void animationEffectStackWasRemoved(Ref<RemoteAcceleratedEffectStack>) override;
     void didCommitLayerAndScrollingTrees() override WTF_IGNORES_THREAD_SAFETY_ANALYSIS;
 #endif
 

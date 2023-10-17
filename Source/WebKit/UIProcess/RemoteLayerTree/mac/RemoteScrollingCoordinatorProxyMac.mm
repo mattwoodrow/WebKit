@@ -263,14 +263,14 @@ void RemoteScrollingCoordinatorProxyMac::didCommitLayerAndScrollingTrees()
     m_wheelEventDispatcher->unlockForAnimationChanges();
 }
 
-void RemoteScrollingCoordinatorProxyMac::animationEffectStackAdded(Ref<RemoteAcceleratedEffectStack> effects)
+void RemoteScrollingCoordinatorProxyMac::animationEffectStackWasAdded(Ref<RemoteAcceleratedEffectStack> effects)
 {
-    m_wheelEventDispatcher->animationEffectStackAdded(WTFMove(effects));
+    m_wheelEventDispatcher->animationEffectStackWasAdded(WTFMove(effects));
 }
 
-void RemoteScrollingCoordinatorProxyMac::animationEffectStackRemoved(Ref<RemoteAcceleratedEffectStack> effects)
+void RemoteScrollingCoordinatorProxyMac::animationEffectStackWasRemoved(Ref<RemoteAcceleratedEffectStack> effects)
 {
-    m_wheelEventDispatcher->animationEffectStackRemoved(WTFMove(effects));
+    m_wheelEventDispatcher->animationEffectStackWasRemoved(WTFMove(effects));
 }
 
 void RemoteScrollingCoordinatorProxyMac::applyScrollingTreeLayerPositionsAfterCommit()

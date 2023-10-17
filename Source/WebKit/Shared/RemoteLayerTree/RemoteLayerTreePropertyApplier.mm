@@ -266,11 +266,12 @@ void RemoteLayerTreePropertyApplier::applyPropertiesToLayer(CALayer *layer, Remo
 
     if (properties.changedProperties & LayerChange::AnimationsChanged) {
 #if ENABLE(THREADED_ANIMATION_RESOLUTION)
-        LOG_WITH_STREAM(Animations, stream << "RemoteLayerTreePropertyApplier::applyProperties() found " << properties.animationChanges.effects.size() << " effects");
-        layerTreeNode->setAcceleratedEffectsAndBaseValues(properties.animationChanges.effects, properties.animationChanges.baseValues, layerTreeHost);
-#else
-        PlatformCAAnimationRemote::updateLayerAnimations(layer, layerTreeHost, properties.animationChanges.addedAnimations, properties.animationChanges.keysOfAnimationsToRemove);
+        if (layerTreeHost->threadedAnimationResolutionEnabled()) {
+            LOG_WITH_STREAM(Animations, stream << "RemoteLayerTreePropertyApplier::applyProperties() found " << properties.animationChanges.effects.size() << " effects");
+            layerTreeNode->setAcceleratedEffectsAndBaseValues(properties.animationChanges.effects, properties.animationChanges.baseValues, layerTreeHost);
+        } else
 #endif
+        PlatformCAAnimationRemote::updateLayerAnimations(layer, layerTreeHost, properties.animationChanges.addedAnimations, properties.animationChanges.keysOfAnimationsToRemove);
     }
 
     if (properties.changedProperties & LayerChange::AntialiasesEdgesChanged)

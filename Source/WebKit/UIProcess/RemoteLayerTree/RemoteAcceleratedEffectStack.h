@@ -43,10 +43,22 @@ public:
     { }
     
     void applyEffectsFromScrollingThread(Seconds secondsSinceEpoch) const;
+    void initEffectsFromMainThread(PlatformLayer *layer, Seconds currentTime);
+
+    void clear(PlatformLayer *);
     
 private:
+    WebCore::AcceleratedEffectValues computeValues(Seconds, const WebCore::FloatRect&) const;
+
     WebCore::FloatRect m_bounds;
     Seconds m_acceleratedTimelineTimeOrigin;
+
+    RetainPtr<CAPresentationModifierGroup> m_presentationModifierGroup;
+    RetainPtr<CAPresentationModifier> m_opacityPresentationModifier;
+    RetainPtr<CAPresentationModifier> m_transformPresentationModifier;
+
+    RetainPtr<CAPresentationModifierGroup> m_filterPresentationModifierGroup;
+    Vector<RetainPtr<CAPresentationModifier>> m_filterPresentationModifiers;
 };
 #endif
 

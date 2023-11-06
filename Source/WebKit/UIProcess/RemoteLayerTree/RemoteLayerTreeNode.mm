@@ -284,10 +284,7 @@ void RemoteLayerTreeNode::setAcceleratedEffectsAndBaseValues(const WebCore::Acce
     m_effects->setEffects(WTFMove(clonedEffects));
     m_effects->setBaseValues(WTFMove(clonedBaseValues));
 
-    m_effects->initAsyncEffects(layer(), host->animationCurrentTime());
-
-    // FIXME: This doesn't really work yet.
-    m_effects->applyBackdropLayerEffects(layer(), host->animationCurrentTime());
+    m_effects->initEffectsFromMainThread(layer(), host->animationCurrentTime());
 
     host->animationEffectStackWasAdded(*m_effects);
 }

@@ -57,21 +57,12 @@ public:
 
     const AcceleratedEffectValues& baseValues() { return m_baseValues; }
     WEBCORE_EXPORT void setBaseValues(const AcceleratedEffectValues&&);
-    
-    WEBCORE_EXPORT void initAsyncEffects(PlatformLayer *, Seconds);
-    WEBCORE_EXPORT void applyBackdropLayerEffects(PlatformLayer *, Seconds) const;
-    WEBCORE_EXPORT void clear(PlatformLayer *);
 
 protected:
-    WEBCORE_EXPORT AcceleratedEffectValues computeValues(const AcceleratedEffects&, Seconds, const FloatRect&) const;
-
     AcceleratedEffectValues m_baseValues;
     AcceleratedEffects m_primaryLayerEffects;
     AcceleratedEffects m_backdropLayerEffects;
 
-    RetainPtr<CAPresentationModifierGroup> m_presentationModifierGroup;
-    RetainPtr<CAPresentationModifier> m_opacityPresentationModifier;
-    RetainPtr<CAPresentationModifier> m_transformPresentationModifier;
 };
 
 } // namespace WebCore

@@ -82,6 +82,18 @@ void RemoteAcceleratedEffectStack::initEffectsFromMainThread(PlatformLayer *laye
         [m_filterPresentationModifierGroup flushWithTransaction];
 }
 
+void RemoteAcceleratedEffectStack::applyEffectsFromMainThread(PlatformLayer *layer, Seconds currentTime)
+{
+    auto bounds = FloatRect(layer.bounds);
+    auto computedValues = computeValues(currentTime, bounds);
+    auto computedTransform = computedValues.computedTransformationMatrix(bounds);
+
+    [layer setOpacity:computedValues.opacity];
+    [layer setTransform:computedTransform];
+
+    PlatformCAFilters::setFiltersOnLayer(layer, computedValues.filter);
+}
+
 AcceleratedEffectValues RemoteAcceleratedEffectStack::computeValues(Seconds currentTime, const FloatRect& bounds) const
 {
     auto values = m_baseValues;

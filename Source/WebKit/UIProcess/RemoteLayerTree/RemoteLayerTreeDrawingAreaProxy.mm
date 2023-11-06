@@ -621,9 +621,9 @@ void RemoteLayerTreeDrawingAreaProxy::sizeToContentAutoSizeMaximumSizeDidChange(
 }
 
 #if ENABLE(THREADED_ANIMATION_RESOLUTION)
-void RemoteLayerTreeDrawingAreaProxy::animationEffectStackWasAdded(Ref<RemoteAcceleratedEffectStack> effects)
+void RemoteLayerTreeDrawingAreaProxy::animationEffectStackWasAdded(PlatformLayer* layer, Ref<RemoteAcceleratedEffectStack> effects)
 {
-    protectedWebPageProxy()->scrollingCoordinatorProxy()->animationEffectStackWasAdded(WTFMove(effects));
+    protectedWebPageProxy()->scrollingCoordinatorProxy()->animationEffectStackWasAdded(layer, WTFMove(effects));
 }
 
 void RemoteLayerTreeDrawingAreaProxy::animationEffectStackWasRemoved(Ref<RemoteAcceleratedEffectStack> effects)

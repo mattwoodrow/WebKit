@@ -48,13 +48,12 @@
 #import <WebCore/ScrollingTreePositionedNode.h>
 #import <tuple>
 
-// FIXME: refactor this to have a single display link handler.
 @interface WKAnimationDisplayLinkHandler : NSObject {
-    RefPtr<WebKit::ThreadedAnimationData> _animationData;
+    WebKit::RemoteScrollingCoordinatorProxyIOS* _coordinator;
     CADisplayLink *_displayLink;
 }
 
-- (id)initWithAnimationData:(WebKit::ThreadedAnimationData*)animationData;
+- (id)initWithCoordinator:(WebKit::RemoteScrollingCoordinatorProxyIOS*)coordinator;
 - (void)displayLinkFired:(CADisplayLink *)sender;
 - (void)invalidate;
 - (void)schedule;
@@ -63,16 +62,14 @@
 
 @implementation WKAnimationDisplayLinkHandler
 
-- (id)initWithAnimationData:(WebKit::ThreadedAnimationData*)animationData
+- (id)initWithCoordinator:(WebKit::RemoteScrollingCoordinatorProxyIOS*)coordinator
 {
     assertIsMainRunLoop();
     if (self = [super init]) {
-        _animationData = animationData;
+        _coordinator = coordinator;
         // Note that CADisplayLink retains its target (self), so a call to -invalidate is needed on teardown.
         _displayLink = [CADisplayLink displayLinkWithTarget:self selector:@selector(displayLinkFired:)];
-        WebCore::ScrollingThread::dispatch([displayLink = retainPtr(_displayLink)] {
-            [displayLink addToRunLoop:[NSRunLoop currentRunLoop] forMode:NSRunLoopCommonModes];
-        });
+        [_displayLink addToRunLoop:[NSRunLoop currentRunLoop] forMode:NSRunLoopCommonModes];
         _displayLink.paused = YES;
         _displayLink.preferredFramesPerSecond = (1.0 / _displayLink.maximumRefreshRate);
     }
@@ -87,32 +84,24 @@
 
 - (void)displayLinkFired:(CADisplayLink *)sender
 {
-    ASSERT(WebCore::ScrollingThread::isCurrentThread());
-    _animationData->updateAnimations();
+    _coordinator->updateAnimations();
 }
 
 - (void)invalidate
 {
     ASSERT(isUIThread());
     [_displayLink invalidate];
-    WebCore::ScrollingThread::dispatch([displayLink = retainPtr(_displayLink)] {
-        [displayLink invalidate];
-    });
     _displayLink = nullptr;
 }
 
 - (void)schedule
 {
-    WebCore::ScrollingThread::dispatch([displayLink = retainPtr(_displayLink)] {
-        displayLink.get().paused = NO;
-    });
+    _displayLink.paused = NO;
 }
 
 - (void)pause
 {
-    WebCore::ScrollingThread::dispatch([displayLink = retainPtr(_displayLink)] {
-        displayLink.get().paused = YES;
-    });
+    _displayLink.paused = YES;
 }
 
 @end
@@ -125,6 +114,12 @@ using namespace WebCore;
 RemoteScrollingCoordinatorProxyIOS::RemoteScrollingCoordinatorProxyIOS(WebPageProxy& webPageProxy)
     : RemoteScrollingCoordinatorProxy(webPageProxy)
 {
+}
+
+RemoteScrollingCoordinatorProxyIOS::~RemoteScrollingCoordinatorProxyIOS()
+{
+    if (m_animationDisplayLinkHandler)
+        [m_animationDisplayLinkHandler invalidate];
 }
 
 OptionSet<TouchAction> RemoteScrollingCoordinatorProxyIOS::activeTouchActionsForTouchIdentifier(unsigned touchIdentifier) const
@@ -423,39 +418,40 @@ CGPoint RemoteScrollingCoordinatorProxyIOS::nearestActiveContentInsetAdjustedSna
 
 
 #if ENABLE(THREADED_ANIMATION_RESOLUTION)
-void RemoteScrollingCoordinatorProxyIOS::willCommitLayerAndScrollingTrees()
+void RemoteScrollingCoordinatorProxyIOS::animationEffectStackWasAdded(PlatformLayer* layer, Ref<RemoteAcceleratedEffectStack> effects)
 {
-    if (m_animationData)
-        m_animationData->m_lock.lock();
-}
-    
-void RemoteScrollingCoordinatorProxyIOS::animationEffectStackWasAdded(Ref<RemoteAcceleratedEffectStack> effects)
-{
-    if (!m_animationData) {
-        m_animationData = new ThreadedAnimationData;
-        m_animationDisplayLinkHandler = adoptNS([[WKAnimationDisplayLinkHandler alloc] initWithAnimationData:m_animationData.get()]);
-        m_animationData->m_lock.lock();
+    if (!m_animationDisplayLinkHandler) {
+        m_animationDisplayLinkHandler = adoptNS([[WKAnimationDisplayLinkHandler alloc] initWithCoordinator:this]);
     }
-    assertIsHeld(m_animationData->m_lock);
 
-    m_animationData->m_effects.add(effects);
+    m_effectsStack.append(std::make_pair(layer, effects));
+    [m_animationDisplayLinkHandler schedule];
 }
 
 void RemoteScrollingCoordinatorProxyIOS::animationEffectStackWasRemoved(Ref<RemoteAcceleratedEffectStack> effects)
 {
-    ASSERT(m_animationData);
-    m_animationData->m_effects.remove(effects);
+    m_effectsStack.removeFirstMatching([&effects](const std::pair<RetainPtr<PlatformLayer>, Ref<RemoteAcceleratedEffectStack>>& current) {
+        return current.second == effects;
+    });
+    if (m_effectsStack.isEmpty())
+        [m_animationDisplayLinkHandler pause];
 }
 
-void RemoteScrollingCoordinatorProxyIOS::didCommitLayerAndScrollingTrees()
+void RemoteScrollingCoordinatorProxyIOS::updateAnimations()
 {
-    if (m_animationData) {
-        if (m_animationData->m_effects.isEmpty())
-            [m_animationDisplayLinkHandler pause];
-        else
-            [m_animationDisplayLinkHandler schedule];
+    auto effects = std::exchange(m_effectsStack, { });
+    // FIXME: Rather than using 'now' at the point this is called, we
+    // should probably be using the timestamp of the (next?) display
+    // link update or vblank refresh.
+    auto secondsSinceEpoch = MonotonicTime::now().secondsSinceEpoch();
+    for (auto effect: effects) {
+        effect.second->applyEffectsFromMainThread(effect.first.get(), secondsSinceEpoch);
 
-        m_animationData->m_lock.unlock();
+        // We can clear the effect stack if it's empty, but the previous
+        // call to applyEffects() is important so that the base values
+        // were re-applied.
+        if (effect.second->hasEffects())
+            m_effectsStack.append(effect);
     }
 }
 #endif

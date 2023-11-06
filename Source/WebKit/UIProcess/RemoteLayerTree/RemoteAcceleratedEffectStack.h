@@ -43,6 +43,7 @@ public:
     { }
     
     void applyEffectsFromScrollingThread(Seconds secondsSinceEpoch) const;
+    void applyEffectsFromMainThread(PlatformLayer *layer, Seconds currentTime);
     void initEffectsFromMainThread(PlatformLayer *layer, Seconds currentTime);
 
     void clear(PlatformLayer *);

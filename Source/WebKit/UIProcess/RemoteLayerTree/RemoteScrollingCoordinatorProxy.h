@@ -130,7 +130,7 @@ public:
     virtual void scrollingTreeNodeDidEndScrollSnapping(WebCore::ScrollingNodeID) { }
     
     virtual void willCommitLayerAndScrollingTrees() { }
-    virtual void animationEffectStackWasAdded(Ref<RemoteAcceleratedEffectStack>) { }
+    virtual void animationEffectStackWasAdded(PlatformLayer*, Ref<RemoteAcceleratedEffectStack>) { }
     virtual void animationEffectStackWasRemoved(Ref<RemoteAcceleratedEffectStack>) { }
     virtual void didCommitLayerAndScrollingTrees() { }
 

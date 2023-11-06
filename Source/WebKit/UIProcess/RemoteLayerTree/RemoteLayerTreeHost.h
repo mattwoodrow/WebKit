@@ -68,7 +68,7 @@ public:
     void animationDidEnd(WebCore::PlatformLayerIdentifier, CAAnimation *);
 
 #if ENABLE(THREADED_ANIMATION_RESOLUTION)
-    void animationEffectStackWasAdded(Ref<RemoteAcceleratedEffectStack>);
+    void animationEffectStackWasAdded(PlatformLayer*, Ref<RemoteAcceleratedEffectStack>);
     void animationEffectStackWasRemoved(Ref<RemoteAcceleratedEffectStack>);
 #endif
 

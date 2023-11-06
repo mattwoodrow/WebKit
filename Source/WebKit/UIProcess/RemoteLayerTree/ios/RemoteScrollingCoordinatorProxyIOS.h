@@ -34,17 +34,10 @@ OBJC_CLASS WKAnimationDisplayLinkHandler;
 
 namespace WebKit {
 
-struct ThreadedAnimationData : public ThreadSafeRefCounted<ThreadedAnimationData>
-{
-    void updateAnimations() {}
-
-    Lock m_lock;
-    HashSet<Ref<RemoteAcceleratedEffectStack>> m_effects;
-};
-
 class RemoteScrollingCoordinatorProxyIOS final : public RemoteScrollingCoordinatorProxy {
 public:
     explicit RemoteScrollingCoordinatorProxyIOS(WebPageProxy&);
+    ~RemoteScrollingCoordinatorProxyIOS();
 
     UIScrollView *scrollViewForScrollingNodeID(WebCore::ScrollingNodeID) const;
 
@@ -65,10 +58,10 @@ public:
 #endif
 
 #if ENABLE(THREADED_ANIMATION_RESOLUTION)
-    void willCommitLayerAndScrollingTrees() override WTF_IGNORES_THREAD_SAFETY_ANALYSIS;
-    void animationEffectStackWasAdded(Ref<RemoteAcceleratedEffectStack>) override WTF_IGNORES_THREAD_SAFETY_ANALYSIS;
+    void animationEffectStackWasAdded(PlatformLayer*, Ref<RemoteAcceleratedEffectStack>) override WTF_IGNORES_THREAD_SAFETY_ANALYSIS;
     void animationEffectStackWasRemoved(Ref<RemoteAcceleratedEffectStack>) override;
-    void didCommitLayerAndScrollingTrees() override WTF_IGNORES_THREAD_SAFETY_ANALYSIS;
+
+    void updateAnimations();
 #endif
 
 private:
@@ -94,7 +87,7 @@ private:
 
 #if ENABLE(THREADED_ANIMATION_RESOLUTION)
     RetainPtr<WKAnimationDisplayLinkHandler> m_animationDisplayLinkHandler;
-    RefPtr<ThreadedAnimationData> m_animationData;
+    Vector<std::pair<RetainPtr<PlatformLayer>, Ref<RemoteAcceleratedEffectStack>>> m_effectsStack;
 #endif
 };
 

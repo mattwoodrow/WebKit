@@ -70,9 +70,8 @@ static unsigned keyValueCountForFilter(const FilterOperation& filterOperation)
 static unsigned keyValueCountForFilters(const FilterOperations& filters)
 {
     unsigned count = 0;
-    for (const auto& filter : filters.operations()) {
+    for (const auto& filter : filters.operations())
         count += keyValueCountForFilter(*filter.get());
-    }
     return count;
 }
 

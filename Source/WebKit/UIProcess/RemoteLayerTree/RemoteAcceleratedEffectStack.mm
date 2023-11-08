@@ -73,9 +73,8 @@ void RemoteAcceleratedEffectStack::initEffectsFromMainThread(PlatformLayer *laye
     PlatformCAFilters::setFiltersOnLayer(layer, computedValues.filter);
     m_filterPresentationModifierGroup = PlatformCAFilters::presentationModifiersForFilters(computedValues.filter, m_filterPresentationModifiers);
 
-    for (auto& filterPresentationModifier : m_filterPresentationModifiers) {
+    for (auto& filterPresentationModifier : m_filterPresentationModifiers)
         [layer addPresentationModifier:filterPresentationModifier.get()];
-    }
 
     [m_presentationModifierGroup flushWithTransaction];
     if (m_filterPresentationModifierGroup)

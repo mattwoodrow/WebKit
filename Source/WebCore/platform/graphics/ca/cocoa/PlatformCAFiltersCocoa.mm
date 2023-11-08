@@ -37,6 +37,139 @@
 
 namespace WebCore {
 
+static unsigned keyValueCountForFilter(const FilterOperation& filterOperation)
+{
+    switch (filterOperation.type()) {
+    case FilterOperation::Type::Default:
+    case FilterOperation::Type::Reference:
+    case FilterOperation::Type::None:
+        ASSERT_NOT_REACHED();
+        return 0;
+    case FilterOperation::Type::DropShadow:
+        return 3;
+    case FilterOperation::Type::Sepia:
+    case FilterOperation::Type::Saturate:
+    case FilterOperation::Type::HueRotate:
+    case FilterOperation::Type::Invert:
+    case FilterOperation::Type::Opacity:
+    case FilterOperation::Type::Brightness:
+    case FilterOperation::Type::Contrast:
+    case FilterOperation::Type::Grayscale:
+    case FilterOperation::Type::Blur:
+        return 1;
+    case FilterOperation::Type::AppleInvertLightness:
+        ASSERT_NOT_REACHED(); // AppleInvertLightness is only used in -apple-color-filter.
+        break;
+    case FilterOperation::Type::Passthrough:
+        return 0;
+    }
+    ASSERT_NOT_REACHED();
+    return 0;
+}
+
+static unsigned keyValueCountForFilters(const FilterOperations& filters)
+{
+    unsigned count = 0;
+    for (const auto& filter : filters.operations())
+        count += keyValueCountForFilter(*filter.get());
+    return count;
+}
+
+RetainPtr<CAPresentationModifierGroup> PlatformCAFilters::presentationModifiersForFilters(const FilterOperations& filters, Vector<RetainPtr<CAPresentationModifier>>& presentationModifiers)
+{
+    RetainPtr<CAPresentationModifierGroup> group =  adoptNS([CAPresentationModifierGroup groupWithCapacity:keyValueCountForFilters(filters)]);
+
+    unsigned i = 0;
+    for (const auto& operationPtr : filters.operations()) {
+        auto& filterOperation = *operationPtr;
+        auto filterName = makeString("filter_", i++);
+        switch (filterOperation.type()) {
+        case FilterOperation::Type::Default:
+        case FilterOperation::Type::Reference:
+        case FilterOperation::Type::None:
+            ASSERT_NOT_REACHED();
+            break;
+        case FilterOperation::Type::DropShadow: {
+            const auto& dropShadowOperation = downcast<DropShadowFilterOperation>(filterOperation);
+            auto size = CGSizeMake(dropShadowOperation.x(), dropShadowOperation.y());
+            presentationModifiers.append(adoptNS([[CAPresentationModifier alloc] initWithKeyPath:@"shadowOffset" initialValue:[NSValue value:&size withObjCType:@encode(CGSize)] additive:NO group:group.get()]));
+            presentationModifiers.append(adoptNS([[CAPresentationModifier alloc] initWithKeyPath:@"shadowColor" initialValue:[NSValue value:cachedCGColor(dropShadowOperation.color()).get() withObjCType:@encode(CGColorRef)] additive:NO group:group.get()]));
+            presentationModifiers.append(adoptNS([[CAPresentationModifier alloc] initWithKeyPath:@"shadowRadius" initialValue:@(dropShadowOperation.stdDeviation()) additive:NO group:group.get()]));
+            continue;
+        }
+        case FilterOperation::Type::Grayscale:
+        case FilterOperation::Type::Sepia:
+        case FilterOperation::Type::Saturate:
+        case FilterOperation::Type::HueRotate:
+        case FilterOperation::Type::Invert:
+        case FilterOperation::Type::Opacity:
+        case FilterOperation::Type::Brightness:
+        case FilterOperation::Type::Contrast:
+        case FilterOperation::Type::Blur: {
+            auto keyValueName = makeString("filters.", filterName, animatedFilterPropertyName(filterOperation.type()));
+            presentationModifiers.append(adoptNS([[CAPresentationModifier alloc] initWithKeyPath:keyValueName initialValue:filterValueForOperation(&filterOperation).get() additive:NO group:group.get()]));
+            continue;
+        }
+        case FilterOperation::Type::AppleInvertLightness:
+            ASSERT_NOT_REACHED(); // AppleInvertLightness is only used in -apple-color-filter.
+            break;
+        case FilterOperation::Type::Passthrough:
+            continue;
+        }
+        ASSERT_NOT_REACHED();
+        break;
+    }
+
+    ASSERT(keyValueCountForFilters(filters) == presentationModifiers.size());
+    return group;
+}
+
+void PlatformCAFilters::updatePresentationModifiersForFilters(const FilterOperations& filters, const Vector<RetainPtr<CAPresentationModifier>>& presentationModifiers)
+{
+    ASSERT(keyValueCountForFilters(filters) == presentationModifiers.size());
+
+    unsigned i = 0;
+    for (const auto& operationPtr : filters.operations()) {
+        auto& filterOperation = *operationPtr;
+        switch (filterOperation.type()) {
+        case FilterOperation::Type::Default:
+        case FilterOperation::Type::Reference:
+        case FilterOperation::Type::None:
+            ASSERT_NOT_REACHED();
+            return;
+        case FilterOperation::Type::DropShadow: {
+            const auto& dropShadowOperation = downcast<DropShadowFilterOperation>(filterOperation);
+            auto size = CGSizeMake(dropShadowOperation.x(), dropShadowOperation.y());
+            [presentationModifiers[i].get() setValue:[NSValue value:&size withObjCType:@encode(CGSize)]];
+            [presentationModifiers[i+1].get() setValue:[NSValue value:cachedCGColor(dropShadowOperation.color()).get() withObjCType:@encode(CGColorRef)]];
+            [presentationModifiers[i+2].get() setValue:@(dropShadowOperation.stdDeviation())];
+            i += 3;
+            continue;
+        }
+        case FilterOperation::Type::Grayscale:
+        case FilterOperation::Type::Sepia:
+        case FilterOperation::Type::Saturate:
+        case FilterOperation::Type::HueRotate:
+        case FilterOperation::Type::Invert:
+        case FilterOperation::Type::Opacity:
+        case FilterOperation::Type::Brightness:
+        case FilterOperation::Type::Contrast:
+        case FilterOperation::Type::Blur: {
+            [presentationModifiers[i].get() setValue:filterValueForOperation(&filterOperation).get()];
+            i++;
+            continue;
+        }
+        case FilterOperation::Type::AppleInvertLightness:
+            ASSERT_NOT_REACHED(); // AppleInvertLightness is only used in -apple-color-filter.
+            return;
+        case FilterOperation::Type::Passthrough:
+            continue;
+        }
+        ASSERT_NOT_REACHED();
+        return;
+    }
+}
+
 void PlatformCAFilters::setFiltersOnLayer(PlatformLayer* layer, const FilterOperations& filters)
 {
     if (!filters.size()) {
@@ -101,7 +234,6 @@ void PlatformCAFilters::setFiltersOnLayer(PlatformLayer* layer, const FilterOper
             const auto& colorMatrixOperation = downcast<BasicColorMatrixFilterOperation>(filterOperation);
             CAFilter *filter = [CAFilter filterWithType:kCAFilterColorHueRotate];
             [filter setValue:[NSNumber numberWithFloat:deg2rad(colorMatrixOperation.amount())] forKey:@"inputAngle"];
-            [filter setName:@"hueRotate"];
             [filter setName:filterName];
             return filter;
         }

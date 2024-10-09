@@ -33,6 +33,7 @@ struct WebKit::FrameInfoData {
     Markable<WebCore::FrameIdentifier> frameID
     Markable<WebCore::FrameIdentifier> parentFrameID
     WTF::ProcessID processID
+    WebCore::ScrollbarMode scrollingMode;
     bool isFocused
     bool errorOccurred
 }

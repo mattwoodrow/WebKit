@@ -27,6 +27,7 @@
 
 #include <WebCore/FrameIdentifier.h>
 #include <WebCore/ResourceRequest.h>
+#include <WebCore/ScrollTypes.h>
 #include <WebCore/SecurityOriginData.h>
 #include <wtf/ProcessID.h>
 
@@ -43,6 +44,7 @@ struct FrameInfoData {
     Markable<WebCore::FrameIdentifier> frameID;
     Markable<WebCore::FrameIdentifier> parentFrameID;
     ProcessID processID;
+    WebCore::ScrollbarMode scrollingMode;
     bool isFocused { false };
     bool errorOccurred { false };
 };

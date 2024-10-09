@@ -96,6 +96,8 @@ std::optional<NavigationActionData> WebFrameLoaderClient::navigationActionData(c
     if (auto parentFrame = requestingFrame ? requestingFrame->parentFrame() : nullptr)
         parentFrameID = parentFrame->frameID();
 
+    RefPtr coreLocalFrame = m_frame->coreLocalFrame();
+
     FrameInfoData originatingFrameInfoData {
         navigationAction.initiatedByMainFrame() == InitiatedByMainFrame::Yes,
         FrameType::Local,
@@ -105,6 +107,7 @@ std::optional<NavigationActionData> WebFrameLoaderClient::navigationActionData(c
         WTFMove(originatingFrameID),
         WTFMove(parentFrameID),
         getCurrentProcessID(),
+        coreLocalFrame ? coreLocalFrame->scrollingMode() : ScrollbarMode::Auto,
         requestingFrame ? requestingFrame->isFocused() : false
     };
 

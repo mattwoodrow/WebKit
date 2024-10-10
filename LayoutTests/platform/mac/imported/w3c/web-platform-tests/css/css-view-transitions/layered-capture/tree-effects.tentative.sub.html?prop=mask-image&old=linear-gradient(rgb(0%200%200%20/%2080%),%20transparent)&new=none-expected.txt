@@ -1,0 +1,37 @@
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x380
+  RenderBlock {HTML} at (0,0) size 800x380
+    RenderBody {BODY} at (0,20) size 800x340
+layer at (20,20) size 100x100
+  RenderBlock {DIV} at (20,0) size 100x100 [bgcolor=#008000]
+layer at (20,140) size 100x100
+  RenderBlock {DIV} at (20,120) size 100x100 [bgcolor=#008000]
+layer at (20,260) size 100x100
+  RenderBlock {DIV} at (20,240) size 100x100 [bgcolor=#008000]
+layer at (0,0) size 800x600
+  RenderBlock (positioned) at (0,0) size 800x600 [bgcolor=#FFB6C1]
+layer at (0,0) size 100x100
+  RenderBlock (positioned) at (0,0) size 100x100
+layer at (0,0) size 100x100
+  RenderBlock (positioned) at (0,0) size 100x100
+layer at (0,0) size 100x100
+  RenderViewTransitionCapture at (0,0) size 100x100
+layer at (0,0) size 100x100
+  RenderViewTransitionCapture at (0,0) size 100x100
+layer at (0,0) size 100x100
+  RenderBlock (positioned) at (0,0) size 100x100
+layer at (0,0) size 100x100 isolatesBlending
+  RenderBlock (positioned) at (0,0) size 100x100
+layer at (0,0) size 100x100 blendMode: plus-lighter
+  RenderViewTransitionCapture at (0,0) size 100x100
+layer at (0,0) size 100x100 blendMode: plus-lighter
+  RenderViewTransitionCapture at (0,0) size 100x100
+layer at (0,0) size 100x100
+  RenderBlock (positioned) at (0,0) size 100x100
+layer at (0,0) size 100x100 isolatesBlending
+  RenderBlock (positioned) at (0,0) size 100x100
+layer at (0,0) size 100x100 blendMode: plus-lighter
+  RenderViewTransitionCapture at (0,0) size 100x100
+layer at (0,0) size 100x100 blendMode: plus-lighter
+  RenderViewTransitionCapture at (0,0) size 100x100

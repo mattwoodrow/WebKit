@@ -7625,6 +7625,7 @@ imported/w3c/web-platform-tests/css/css-view-transitions/navigation/transition-t
 
 # View transitions Level 2 - nested view-transitions
 imported/w3c/web-platform-tests/css/css-view-transitions/nested/ [ Skip ]
+imported/w3c/web-platform-tests/css/css-view-transitions/layered-capture [ Skip ]
 
 # Depends on overflow-clip-margin (unimplemented).
 imported/w3c/web-platform-tests/css/css-view-transitions/new-content-with-overflow-zoomed.html [ ImageOnlyFailure ]
@@ -7635,6 +7636,12 @@ imported/w3c/web-platform-tests/css/css-view-transitions/old-content-with-object
 imported/w3c/web-platform-tests/css/css-view-transitions/object-view-box-new-image.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-view-transitions/object-view-box-old-image.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-view-transitions/new-content-with-object-view-box.html [ ImageOnlyFailure ]
+
+# 'auto' transition name
+imported/w3c/web-platform-tests/css/css-view-transitions/auto-name-from-id-shadow.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/css-view-transitions/auto-name-from-id.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/css-view-transitions/auto-name.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/css-view-transitions/navigation/auto-name-from-id.html [ ImageOnlyFailure ]
 
 # -- END: View transitions -- #
 

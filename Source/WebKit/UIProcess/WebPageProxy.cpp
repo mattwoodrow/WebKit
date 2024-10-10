@@ -7705,14 +7705,8 @@ void WebPageProxy::logFrameNavigation(const WebFrameProxy& frame, const URL& pag
 
 void WebPageProxy::decidePolicyForNavigationActionSync(IPC::Connection& connection, NavigationActionData&& data, CompletionHandler<void(PolicyDecision&&)>&& reply)
 {
-    auto& frameInfo = data.frameInfo;
-    RefPtr frame = WebFrameProxy::webFrame(frameInfo.frameID);
-    if (!frame) {
-        // This synchronous IPC message was processed before the asynchronous DidCreateSubframe one so we do not know about this frameID yet.
-        RefPtr parentFrame = WebFrameProxy::webFrame(frameInfo.parentFrameID);
-        MESSAGE_CHECK_BASE(parentFrame, connection);
-        parentFrame->didCreateSubframe(*frameInfo.frameID, frameInfo.frameName, data.effectiveSandboxFlags);
-    }
+    RefPtr frame = WebFrameProxy::webFrame(data.frameInfo.frameID);
+    MESSAGE_CHECK_COMPLETION_BASE(frame, connection, reply({ }));
 
     decidePolicyForNavigationActionSyncShared(frame->protectedProcess(), WTFMove(data), WTFMove(reply));
 }

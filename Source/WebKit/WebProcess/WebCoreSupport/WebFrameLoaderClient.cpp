@@ -191,7 +191,7 @@ void WebFrameLoaderClient::dispatchDecidePolicyForNavigationAction(const Navigat
             return;
         }
 #endif
-        webPage->sendWithAsyncReply(Messages::WebPageProxy::DecidePolicyForNavigationActionAsync(*navigationActionData), [] (PolicyDecision&&) { });
+        webPage->sendWithAsyncReply(Messages::WebPageProxy::DecidePolicyForNavigationActionAsync(*navigationActionData), [] (PolicyDecision&&) { }, IPC::SendOption::DispatchMessageEvenWhenWaitingForSyncReply);
         m_frame->didReceivePolicyDecision(listenerID, PolicyDecision { std::nullopt, PolicyAction::Use });
         return;
     }
@@ -204,7 +204,7 @@ void WebFrameLoaderClient::dispatchDecidePolicyForNavigationAction(const Navigat
         RELEASE_LOG(Network, WebFrameLoaderClient_PREFIX_PARAMETERS "dispatchDecidePolicyForNavigationAction: Got policyAction %u from async IPC", thisPointerForLog, frame.ptr(), frame->frameID().object().toUInt64(), frame->page(), frame->page() ? frame->page()->identifier().toUInt64() : 0, (unsigned)policyDecision.policyAction);
 
         frame->didReceivePolicyDecision(listenerID, WTFMove(policyDecision));
-    });
+    }, IPC::SendOption::DispatchMessageEvenWhenWaitingForSyncReply);
 }
 
 void WebFrameLoaderClient::updateSandboxFlags(SandboxFlags sandboxFlags)

@@ -144,7 +144,7 @@ Ref<WebFrame> WebFrame::createSubframe(WebPage& page, WebFrame& parent, const At
     }, frameID, effectiveSandboxFlags, ownerElement);
     frame->m_coreFrame = coreFrame.get();
 
-    page.send(Messages::WebPageProxy::DidCreateSubframe(parent.frameID(), coreFrame->frameID(), frameName, effectiveSandboxFlags));
+    page.send(Messages::WebPageProxy::DidCreateSubframe(parent.frameID(), coreFrame->frameID(), frameName, effectiveSandboxFlags), IPC::SendOption::DispatchMessageEvenWhenWaitingForSyncReply);
 
     coreFrame->tree().setSpecifiedName(frameName);
     ASSERT(ownerElement.document().frame());

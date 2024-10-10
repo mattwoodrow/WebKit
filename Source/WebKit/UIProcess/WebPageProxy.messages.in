@@ -104,7 +104,7 @@ messages -> WebPageProxy {
 
     # Policy messages
     DecidePolicyForResponse(struct WebKit::FrameInfoData frameInfo, std::optional<WebCore::NavigationIdentifier> navigationID, WebCore::ResourceResponse response, WebCore::ResourceRequest request, bool canShowMIMEType, String downloadAttribute, bool isShowingInitialAboutBlank, enum:uint8_t WebCore::CrossOriginOpenerPolicyValue activeDocumentCOOPValue) -> (struct WebKit::PolicyDecision PolicyDecision)
-    DecidePolicyForNavigationActionAsync(struct WebKit::NavigationActionData data) -> (struct WebKit::PolicyDecision PolicyDecision)
+    DecidePolicyForNavigationActionAsync(struct WebKit::NavigationActionData data) -> (struct WebKit::PolicyDecision PolicyDecision) AllowedWhenWaitingForSyncReply
     DecidePolicyForNavigationActionSync(struct WebKit::NavigationActionData data) -> (struct WebKit::PolicyDecision PolicyDecision) Synchronous
     DecidePolicyForNewWindowAction(struct WebKit::NavigationActionData navigationActionData, String frameName) -> (struct WebKit::PolicyDecision PolicyDecision)
 
@@ -119,7 +119,7 @@ messages -> WebPageProxy {
     EndNetworkRequestsForPageLoadTiming(WebCore::FrameIdentifier frameID, WallTime timestamp)
 
     # Frame lifetime messages
-    DidCreateSubframe(WebCore::FrameIdentifier parent, WebCore::FrameIdentifier newFrameID, String frameName, WebCore::SandboxFlags sandboxFlags)
+    DidCreateSubframe(WebCore::FrameIdentifier parent, WebCore::FrameIdentifier newFrameID, String frameName, WebCore::SandboxFlags sandboxFlags) AllowedWhenWaitingForSyncReply
 
     # Frame load messages
     DidStartProvisionalLoadForFrame(WebCore::FrameIdentifier frameID, struct WebKit::FrameInfoData frameInfo, WebCore::ResourceRequest request, std::optional<WebCore::NavigationIdentifier> navigationID, URL url, URL unreachableURL, WebKit::UserData userData, WallTime timestamp)

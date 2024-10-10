@@ -313,17 +313,28 @@ void ViewTransition::setupViewTransition()
     });
 }
 
-static AtomString effectiveViewTransitionName(RenderLayerModelObject& renderer, Element& originatingElement, Style::Scope& documentScope)
+static AtomString effectiveViewTransitionName(RenderLayerModelObject& renderer, Element& originatingElement, Style::Scope& documentScope, bool isCrossDocument)
 {
     if (renderer.isSkippedContent())
         return nullAtom();
     auto transitionName = renderer.style().viewTransitionName();
-    if (!transitionName)
+    if (transitionName.isNone())
         return nullAtom();
-    auto scope = Style::Scope::forOrdinal(originatingElement, transitionName->scopeOrdinal);
+    auto scope = Style::Scope::forOrdinal(originatingElement, transitionName.scopeOrdinal());
     if (!scope || scope != &documentScope)
         return nullAtom();
-    return transitionName->name;
+    if (transitionName.isCustomIdent())
+        return transitionName.customIdent();
+    ASSERT(transitionName.isAuto());
+    if (originatingElement.hasID())
+        return originatingElement.getIdAttribute();
+    if (isCrossDocument)
+        return nullAtom();
+
+    StringBuilder builder;
+    builder.append("-ua-auto-"_s);
+    builder.append(String::number(originatingElement.identifier().toRawValue()));
+    return builder.toAtomString();
 }
 
 static ExceptionOr<void> checkDuplicateViewTransitionName(const AtomString& name, ListHashSet<AtomString>& usedTransitionNames)
@@ -459,11 +470,13 @@ ExceptionOr<void> ViewTransition::captureOldState()
             if (!styleable)
                 return { };
 
-            if (auto name = effectiveViewTransitionName(renderer, styleable->element, document()->styleScope()); !name.isNull()) {
+            if (auto name = effectiveViewTransitionName(renderer, styleable->element, document()->styleScope(), isCrossDocument()); !name.isNull()) {
                 if (auto check = checkDuplicateViewTransitionName(name, usedTransitionNames); check.hasException())
                     return check.releaseException();
 
                 // FIXME: Skip fragmented content.
+
+                ALWAYS_LOG_WITH_STREAM(stream << "CaptureOldState with name " << name);
 
                 renderer.setCapturedInViewTransition(true);
                 captureRenderers.append(renderer);
@@ -487,8 +500,9 @@ ExceptionOr<void> ViewTransition::captureOldState()
         ASSERT(styleable);
         capture.classList = effectiveViewTransitionClassList(renderer, styleable->element, document()->styleScope());
 
-        auto transitionName = renderer->style().viewTransitionName();
-        m_namedElements.add(transitionName->name, capture);
+        auto transitionName = effectiveViewTransitionName(renderer, styleable->element, document()->styleScope(), isCrossDocument());
+        ALWAYS_LOG_WITH_STREAM(stream << "CaptureOldState 2 with name " << transitionName);
+        m_namedElements.add(transitionName, capture);
     }
 
     for (auto& renderer : captureRenderers)
@@ -509,9 +523,11 @@ ExceptionOr<void> ViewTransition::captureNewState()
             if (!styleable)
                 return { };
 
-            if (auto name = effectiveViewTransitionName(renderer, styleable->element, document()->styleScope()); !name.isNull()) {
+            if (auto name = effectiveViewTransitionName(renderer, styleable->element, document()->styleScope(), isCrossDocument()); !name.isNull()) {
                 if (auto check = checkDuplicateViewTransitionName(name, usedTransitionNames); check.hasException())
                     return check.releaseException();
+
+                ALWAYS_LOG_WITH_STREAM(stream << "captureNewState with name " << name);
 
                 if (!m_namedElements.contains(name)) {
                     CapturedElement capturedElement;

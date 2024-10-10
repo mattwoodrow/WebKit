@@ -98,6 +98,7 @@ class TransformOperations;
 class TransformationMatrix;
 class TranslateTransformOperation;
 class ViewTimeline;
+class ViewTransitionName;
 class WillChangeData;
 
 enum CSSPropertyID : uint16_t;
@@ -1140,7 +1141,7 @@ public:
     inline MathStyle mathStyle() const;
 
     inline const Vector<Style::ScopedName>& viewTransitionClasses() const;
-    inline std::optional<Style::ScopedName> viewTransitionName() const;
+    inline ViewTransitionName viewTransitionName() const;
 
     void setDisplay(DisplayType value)
     {
@@ -1794,7 +1795,7 @@ public:
     void setQuotes(RefPtr<QuotesData>&&);
 
     inline void setViewTransitionClasses(const Vector<Style::ScopedName>&);
-    inline void setViewTransitionName(std::optional<Style::ScopedName>);
+    inline void setViewTransitionName(ViewTransitionName);
 
     inline WillChangeData* willChange() const;
     void setWillChange(RefPtr<WillChangeData>&&);
@@ -1901,7 +1902,7 @@ public:
     static inline ListStyleType initialListStyleType();
     static constexpr OptionSet<TextTransform> initialTextTransform();
     static inline Vector<Style::ScopedName> initialViewTransitionClasses();
-    static inline std::optional<Style::ScopedName> initialViewTransitionName();
+    static inline ViewTransitionName initialViewTransitionName();
     static constexpr Visibility initialVisibility();
     static constexpr WhiteSpaceCollapse initialWhiteSpaceCollapse();
     static float initialHorizontalBorderSpacing() { return 0; }

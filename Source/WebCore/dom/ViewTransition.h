@@ -215,6 +215,8 @@ private:
     // ActiveDOMObject.
     void stop() final;
 
+    bool isCrossDocument() { return !m_shouldCallUpdateCallback; }
+
     OrderedNamedElementsMap m_namedElements;
     ViewTransitionPhase m_phase { ViewTransitionPhase::PendingCapture };
     FloatSize m_initialLargeViewportSize;

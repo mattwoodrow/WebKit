@@ -556,6 +556,7 @@ void RenderElement::setStyle(RenderStyle&& style, StyleDifference minimalStyleDi
 
     adjustFragmentedFlowStateOnContainingBlockChangeIfNeeded(oldStyle, m_style);
 
+    m_hasInitializedStyle = true;
     styleDidChange(diff, &oldStyle);
 
     // Text renderers use their parent style. Notify them about the change.

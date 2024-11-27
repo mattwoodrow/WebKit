@@ -551,7 +551,10 @@ public:
 
     inline OverscrollBehavior overscrollBehaviorX() const;
     inline OverscrollBehavior overscrollBehaviorY() const;
-    
+
+    inline bool backgroundPropagatedToCanvas() const;
+    inline bool effectsPropagatedToCanvas() const;
+
     Visibility visibility() const { return static_cast<Visibility>(m_inheritedFlags.visibility); }
     inline Visibility usedVisibility() const;
 

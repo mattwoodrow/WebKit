@@ -96,6 +96,7 @@ inline const FillLayer& RenderStyle::backgroundLayers() const { return m_nonInhe
 inline const FillLayer& RenderStyle::usedBackgroundLayers() const { return m_nonInheritedData->backgroundData->usedBackground(); }
 inline Ref<const FillLayer> RenderStyle::protectedUsedBackgroundLayers() const { return usedBackgroundLayers(); }
 inline FillBox RenderStyle::backgroundOrigin() const { return usedBackgroundLayers().origin(); }
+inline bool RenderStyle::backgroundPropagatedToCanvas() const { return m_nonInheritedData->backgroundData->propagatedToCanvas; }
 inline FillRepeatXY RenderStyle::backgroundRepeat() const { return usedBackgroundLayers().repeat(); }
 inline const LengthSize& RenderStyle::backgroundSizeLength() const { return usedBackgroundLayers().sizeLength(); }
 inline FillSizeType RenderStyle::backgroundSizeType() const { return usedBackgroundLayers().sizeType(); }
@@ -213,6 +214,7 @@ inline OptionSet<TouchAction> RenderStyle::usedTouchActions() const { return m_r
 inline UserModify RenderStyle::usedUserModify() const { return effectiveInert() ? UserModify::ReadOnly : userModify(); }
 inline float RenderStyle::usedZoom() const { return m_rareInheritedData->usedZoom; }
 inline OptionSet<EventListenerRegionType> RenderStyle::eventListenerRegionTypes() const { return m_rareInheritedData->eventListenerRegionTypes; }
+inline bool RenderStyle::effectsPropagatedToCanvas() const { return m_nonInheritedData->miscData->propagatedToCanvas; }
 inline const FilterOperations& RenderStyle::filter() const { return m_nonInheritedData->miscData->filter->operations; }
 inline const FilterOperations& RenderStyle::usedFilter() const { return m_nonInheritedData->miscData->usedFilter(); }
 inline IntOutsets RenderStyle::filterOutsets() const { return hasFilter() ? usedFilter().outsets() : IntOutsets(); }

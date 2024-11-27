@@ -2024,7 +2024,7 @@ void RenderBox::imageChanged(WrappedImagePtr image, const IntRect*)
     bool didFullRepaint = false;
 
     auto repaintForBackgroundAndMask = [&](auto& style) {
-        if (!parent())
+        if (!parent() && !isRenderView())
             return;
 
         if (!didFullRepaint)
@@ -2067,7 +2067,7 @@ bool RenderBox::repaintLayerRectsForImage(WrappedImagePtr image, const FillLayer
     for (auto* layer = &layers; layer; layer = layer->next()) {
         if (layer->image() && image == layer->image()->data() && (layer->image()->isLoaded(this) || layer->image()->canRender(this, style().usedZoom()))) {
             // Now that we know this image is being used, compute the renderer and the rect if we haven't already.
-            bool drawingRootBackground = drawingBackground && (isDocumentElementRenderer() || (isBody() && !document().documentElement()->renderer()->hasBackground()));
+            bool drawingRootBackground = drawingBackground && (isDocumentElementRenderer() || (isBody() && !document().documentElement()->renderer()->hasBackground()) || isRenderView());
             if (!layerRenderer) {
                 if (drawingRootBackground) {
                     layerRenderer = &view();
@@ -2084,10 +2084,12 @@ bool RenderBox::repaintLayerRectsForImage(WrappedImagePtr image, const FillLayer
                     // If we're drawing the root background, then we want to use the bounds of the view
                     // (since root backgrounds cover the canvas, not just the element). If the root element
                     // is composited though, we need to issue the repaint to that root element.
-                    auto documentElementRenderer = downcast<RenderBox>(document().documentElement()->renderer());
-                    auto rendererLayer = documentElementRenderer->layer();
-                    if (rendererLayer && rendererLayer->isComposited())
-                        layerRenderer = documentElementRenderer;
+                    if (!isRenderView()) {
+                        auto documentElementRenderer = downcast<RenderBox>(document().documentElement()->renderer());
+                        auto rendererLayer = documentElementRenderer->layer();
+                        if (rendererLayer && rendererLayer->isComposited())
+                            layerRenderer = documentElementRenderer;
+                    }
                 } else {
                     layerRenderer = this;
                     rendererRect = borderBoxRect();

@@ -3092,6 +3092,13 @@ void RenderLayer::paint(GraphicsContext& context, const LayoutRect& damageRect, 
 {
     OverlapTestRequestMap overlapTestRequests;
 
+    // If the view isn't going to apply the base background during paint,
+    // we should do it explicitly here (outside of any possible effects on the view's layer).
+    if (isRenderViewLayer() && renderer().view().baseBackgroundPainter() == RenderView::BaseBackgroundPainter::RootLayer) {
+        PaintInfo paintInfo(context, damageRect, PaintPhase::BlockBackground, paintBehavior, nullptr, nullptr, nullptr, &renderer(), this);
+        renderer().view().paintBaseBackground(paintInfo);
+    }
+
     LayerPaintingInfo paintingInfo(this, enclosingIntRect(damageRect), paintBehavior, subpixelOffset, subtreePaintRoot, &overlapTestRequests, paintPolicy == SecurityOriginPaintPolicy::AccessibleOriginOnly);
     if (regionContext) {
         paintingInfo.regionContext = regionContext;
@@ -3206,7 +3213,7 @@ void RenderLayer::paintSVGResourceLayer(GraphicsContext& context, const AffineTr
 
 static inline bool paintForFixedRootBackground(const RenderLayer* layer, OptionSet<RenderLayer::PaintLayerFlag> paintFlags)
 {
-    return layer->renderer().isDocumentElementRenderer() && (paintFlags & RenderLayer::PaintLayerFlag::PaintingRootBackgroundOnly);
+    return (layer->renderer().isRenderView() || layer->renderer().isDocumentElementRenderer()) && (paintFlags & RenderLayer::PaintLayerFlag::PaintingRootBackgroundOnly);
 }
 
 void RenderLayer::paintLayer(GraphicsContext& context, const LayerPaintingInfo& paintingInfo, OptionSet<PaintLayerFlag> paintFlags)
@@ -5318,7 +5325,7 @@ LayoutRect RenderLayer::localBoundingBox(OptionSet<CalculateLayerBoundsFlag> fla
         } else
             result = box->visualOverflowRect();
 
-        if (flags.contains(IncludeRootBackgroundPaintingArea) && renderer().isDocumentElementRenderer()) {
+        if (flags.contains(IncludeRootBackgroundPaintingArea) && renderer().isDocumentElementRenderer() && !renderer().document().settings().untransformedRootBackgrounds()) {
             // If the root layer becomes composited (e.g. because some descendant with negative z-index is composited),
             // then it has to be big enough to cover the viewport in order to display the background. This is akin
             // to the code in RenderBox::paintRootBoxFillLayers().
@@ -6314,6 +6321,7 @@ TextStream& operator<<(TextStream& ts, IndirectCompositingReason reason)
     case IndirectCompositingReason::GraphicalEffect: ts << "graphical effect"; break;
     case IndirectCompositingReason::Perspective: ts << "perspective"; break;
     case IndirectCompositingReason::Preserve3D: ts << "preserve-3d"; break;
+    case IndirectCompositingReason::BlendMode: ts << "mix-blend-mode"; break;
     }
 
     return ts;

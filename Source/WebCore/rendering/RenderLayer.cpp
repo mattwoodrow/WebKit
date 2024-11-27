@@ -712,7 +712,7 @@ bool RenderLayer::willCompositeClipPath() const
     if (!isComposited())
         return false;
 
-    auto* clipPath = renderer().style().clipPath();
+    auto* clipPath = renderer().style().usedClipPath();
     if (!clipPath)
         return false;
 
@@ -975,7 +975,7 @@ bool RenderLayer::canRender3DTransforms() const
 
 bool RenderLayer::paintsWithFilters() const
 {
-    const auto& filter = renderer().style().filter();
+    const auto& filter = renderer().style().usedFilter();
     if (filter.isEmpty())
         return false;
 
@@ -1511,7 +1511,7 @@ void RenderLayer::updateBlendMode()
             parent()->dirtyAncestorChainHasBlendingDescendants();
     }
 
-    BlendMode newBlendMode = renderer().style().blendMode();
+    BlendMode newBlendMode = renderer().style().usedBlendMode();
     if (newBlendMode != static_cast<BlendMode>(m_blendMode))
         m_blendMode = static_cast<unsigned>(newBlendMode);
 }
@@ -3366,13 +3366,13 @@ std::pair<Path, WindRule> RenderLayer::computeClipPath(const LayoutSize& offsetF
 {
     const RenderStyle& style = renderer().style();
 
-    if (RefPtr clipPath = dynamicDowncast<ShapePathOperation>(*style.clipPath())) {
+    if (RefPtr clipPath = dynamicDowncast<ShapePathOperation>(*style.usedClipPath())) {
         auto referenceBoxRect = referenceBoxRectForClipPath(clipPath->referenceBox(), offsetFromRoot, rootRelativeBoundsForNonBoxes);
         auto snappedReferenceBoxRect = snapRectToDevicePixelsIfNeeded(referenceBoxRect, renderer());
         return { clipPath->pathForReferenceRect(snappedReferenceBoxRect), clipPath->windRule() };
     }
 
-    RefPtr clipPath = dynamicDowncast<BoxPathOperation>(*style.clipPath());
+    RefPtr clipPath = dynamicDowncast<BoxPathOperation>(*style.usedClipPath());
     CheckedPtr box = dynamicDowncast<RenderBox>(renderer());
     if (clipPath && box) {
         auto shapeRect = computeRoundedRectForBoxShape(clipPath->referenceBox(), *box).pixelSnappedRoundedRectForPainting(renderer().document().deviceScaleFactor());
@@ -3403,8 +3403,8 @@ void RenderLayer::setupClipPath(GraphicsContext& context, GraphicsContextStateSa
 
     auto& style = renderer().style();
     LayoutSize paintingOffsetFromRoot = LayoutSize(snapSizeToDevicePixel(offsetFromRoot + paintingInfo.subpixelOffset, LayoutPoint(), renderer().document().deviceScaleFactor()));
-    ASSERT(style.clipPath());
-    if (is<ShapePathOperation>(*style.clipPath()) || (is<BoxPathOperation>(*style.clipPath()) && is<RenderBox>(renderer()))) {
+    ASSERT(style.usedClipPath());
+    if (is<ShapePathOperation>(*style.usedClipPath()) || (is<BoxPathOperation>(*style.usedClipPath()) && is<RenderBox>(renderer()))) {
         // clippedContentBounds is used as the reference box for inlines, which is also poorly specified: https://github.com/w3c/csswg-drafts/issues/6383.
         auto [path, windRule] = computeClipPath(paintingOffsetFromRoot, clippedContentBounds);
 
@@ -3418,7 +3418,7 @@ void RenderLayer::setupClipPath(GraphicsContext& context, GraphicsContextStateSa
         return;
     }
 
-    if (RefPtr referenceClipPathOperation = dynamicDowncast<ReferencePathOperation>(style.clipPath())) {
+    if (RefPtr referenceClipPathOperation = dynamicDowncast<ReferencePathOperation>(style.usedClipPath())) {
         if (auto* svgClipper = renderer().svgClipperResourceFromStyle()) {
             RefPtr graphicsElement = svgClipper->shouldApplyPathClipping();
             if (!graphicsElement) {
@@ -5596,7 +5596,7 @@ bool RenderLayer::backgroundIsKnownToBeOpaqueInRect(const LayoutRect& localRect)
     if (renderer().style().usedVisibility() != Visibility::Visible)
         return false;
 
-    if (paintsWithFilters() && renderer().style().filter().hasFilterThatAffectsOpacity())
+    if (paintsWithFilters() && renderer().style().usedFilter().hasFilterThatAffectsOpacity())
         return false;
 
     // FIXME: Handle simple transforms.
@@ -6076,15 +6076,15 @@ void RenderLayer::clearLayerScrollableArea()
 
 void RenderLayer::updateFiltersAfterStyleChange(StyleDifference diff, const RenderStyle* oldStyle)
 {
-    if (renderer().style().filter().hasReferenceFilter()) {
+    if (renderer().style().usedFilter().hasReferenceFilter()) {
         ensureLayerFilters();
-        m_filters->updateReferenceFilterClients(renderer().style().filter());
+        m_filters->updateReferenceFilterClients(renderer().style().usedFilter());
     } else if (!paintsWithFilters())
         clearLayerFilters();
     else if (m_filters)
         m_filters->removeReferenceFilterClients();
 
-    if (diff >= StyleDifference::RepaintLayer && oldStyle && oldStyle->filter() != renderer().style().filter())
+    if (diff >= StyleDifference::RepaintLayer && oldStyle && oldStyle->usedFilter() != renderer().style().usedFilter())
         clearLayerFilters();
 }
 
@@ -6124,7 +6124,7 @@ void RenderLayer::updateFilterPaintingStrategy()
         // Early-return only if we *don't* have reference filters.
         // For reference filters, we still want the FilterEffect graph built
         // for us, even if we're composited.
-        if (!renderer().style().filter().hasReferenceFilter())
+        if (!renderer().style().usedFilter().hasReferenceFilter())
             return;
     }
 
@@ -6154,7 +6154,7 @@ bool RenderLayer::isTransparentRespectingParentFrames() const
 
     float currentOpacity = 1;
     for (auto* layer = this; layer; layer = parentLayerCrossFrame(*layer)) {
-        currentOpacity *= layer->renderer().style().opacity();
+        currentOpacity *= layer->renderer().style().usedOpacity();
         if (currentOpacity < minimumVisibleOpacity)
             return true;
     }

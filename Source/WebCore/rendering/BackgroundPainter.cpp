@@ -84,7 +84,7 @@ void BackgroundPainter::paintBackground(const LayoutRect& paintRect, BleedAvoida
     auto backgroundColor = m_renderer.style().visitedDependentColorWithColorFilter(CSSPropertyBackgroundColor);
     auto compositeOp = document().compositeOperatorForBackgroundColor(backgroundColor, m_renderer);
 
-    paintFillLayers(backgroundColor, m_renderer.style().backgroundLayers(), paintRect, bleedAvoidance, compositeOp);
+    paintFillLayers(backgroundColor, m_renderer.style().usedBackgroundLayers(), paintRect, bleedAvoidance, compositeOp);
 }
 
 void BackgroundPainter::paintRootBoxFillLayers() const
@@ -982,7 +982,7 @@ bool BackgroundPainter::boxShadowShouldBeAppliedToBackground(const RenderBoxMode
     if (!backgroundColor.isOpaque())
         return false;
 
-    auto* lastBackgroundLayer = &style.backgroundLayers();
+    auto* lastBackgroundLayer = &style.usedBackgroundLayers();
     while (auto* next = lastBackgroundLayer->next())
         lastBackgroundLayer = next;
 

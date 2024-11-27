@@ -1012,8 +1012,8 @@ void RenderElement::styleDidChange(StyleDifference diff, const RenderStyle* oldS
     auto registerImages = [this](auto* style, auto* oldStyle) {
         if (!style && !oldStyle)
             return;
-        updateFillImages(oldStyle ? &oldStyle->protectedBackgroundLayers().get() : nullptr, style ? &style->protectedBackgroundLayers().get() : nullptr);
-        updateFillImages(oldStyle ? &oldStyle->protectedMaskLayers().get() : nullptr, style ? &style->protectedMaskLayers().get() : nullptr);
+        updateFillImages(oldStyle ? &oldStyle->protectedUsedBackgroundLayers().get() : nullptr, style ? &style->protectedUsedBackgroundLayers().get() : nullptr);
+        updateFillImages(oldStyle ? &oldStyle->protectedUsedMaskLayers().get() : nullptr, style ? &style->protectedUsedMaskLayers().get() : nullptr);
         updateImage(oldStyle ? oldStyle->borderImage().protectedImage().get() : nullptr, style ? style->borderImage().protectedImage().get() : nullptr);
         updateImage(oldStyle ? oldStyle->maskBorder().protectedImage().get() : nullptr, style ? style->maskBorder().protectedImage().get() : nullptr);
         updateShapeImage(oldStyle ? oldStyle->protectedShapeOutside().get() : nullptr, style ? style->protectedShapeOutside().get() : nullptr);
@@ -1160,15 +1160,16 @@ void RenderElement::willBeDestroyed()
 
     clearSubtreeLayoutRootIfNeeded();
 
+
     auto unregisterImage = [this](auto* image) {
         if (image)
             image->removeClient(*this);
     };
 
     auto unregisterImages = [&](auto& style) {
-        for (auto* backgroundLayer = &style.backgroundLayers(); backgroundLayer; backgroundLayer = backgroundLayer->next())
+        for (auto* backgroundLayer = &style.usedBackgroundLayers(); backgroundLayer; backgroundLayer = backgroundLayer->next())
             unregisterImage(backgroundLayer->protectedImage().get());
-        for (auto* maskLayer = &style.maskLayers(); maskLayer; maskLayer = maskLayer->next())
+        for (auto* maskLayer = &style.usedMaskLayers(); maskLayer; maskLayer = maskLayer->next())
             unregisterImage(maskLayer->protectedImage().get());
         unregisterImage(style.borderImage().protectedImage().get());
         unregisterImage(style.maskBorder().protectedImage().get());
@@ -1321,7 +1322,7 @@ bool RenderElement::repaintAfterLayoutIfNeeded(SingleThreadWeakPtr<const RenderL
         return true;
 
     auto mustRepaintBackgroundOrBorderOnSizeChange = [&](LayoutRect oldOutlineBounds, LayoutRect newOutlineBounds) {
-        if (hasMask() && mustRepaintFillLayers(*this, style().maskLayers()))
+        if (hasMask() && mustRepaintFillLayers(*this, style().usedMaskLayers()))
             return true;
 
         if (style().hasBorderRadius()) {
@@ -1338,7 +1339,7 @@ bool RenderElement::repaintAfterLayoutIfNeeded(SingleThreadWeakPtr<const RenderL
         if (!hasVisibleBoxDecorations())
             return false;
 
-        if (mustRepaintFillLayers(*this, style().backgroundLayers()))
+        if (mustRepaintFillLayers(*this, style().usedBackgroundLayers()))
             return true;
 
         // Our fill layers are ok. Let's check border.

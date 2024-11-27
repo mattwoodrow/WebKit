@@ -544,7 +544,7 @@ void Adjuster::adjust(RenderStyle& style, const RenderStyle* userAgentAppearance
             || style.hasOpacity()
             || hasTransformRelatedProperty(style, m_element.get(), m_parentStyle)
             || style.hasMask()
-            || style.clipPath()
+            || style.usedClipPath()
             || style.boxReflect()
             || style.hasFilter()
             || style.hasBackdropFilter()
@@ -687,7 +687,7 @@ void Adjuster::adjust(RenderStyle& style, const RenderStyle* userAgentAppearance
             || style.hasOpacity()
             || style.overflowY() != Overflow::Visible
             || style.hasClip()
-            || style.clipPath()
+            || style.usedClipPath()
             || style.hasFilter()
             || style.hasIsolation()
             || style.hasMask()

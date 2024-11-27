@@ -648,7 +648,8 @@ public:
     inline const LengthSize& backgroundSizeLength() const;
     inline FillLayer& ensureBackgroundLayers();
     inline const FillLayer& backgroundLayers() const; // Defined in RenderStyleInlines.h.
-    inline Ref<const FillLayer> protectedBackgroundLayers() const; // Defined in RenderStyleInlines.h.
+    inline const FillLayer& usedBackgroundLayers() const; // Defined in RenderStyleInlines.h.
+    inline Ref<const FillLayer> protectedUsedBackgroundLayers() const; // Defined in RenderStyleInlines.h.
     inline BlendMode backgroundBlendMode() const;
 
     inline StyleImage* maskImage() const;
@@ -662,7 +663,8 @@ public:
     inline const LengthSize& maskSizeLength() const;
     inline FillLayer& ensureMaskLayers();
     inline const FillLayer& maskLayers() const; // Defined in RenderStyleInlines.h.
-    inline Ref<const FillLayer> protectedMaskLayers() const; // Defined in RenderStyleInlines.h.
+    inline const FillLayer& usedMaskLayers() const; // Defined in RenderStyleInlines.h.
+    inline Ref<const FillLayer> protectedUsedMaskLayers() const; // Defined in RenderStyleInlines.h.
     inline const NinePieceImage& maskBorder() const;
     inline StyleImage* maskBorderSource() const;
     inline const LengthBox& maskBorderSlices() const;
@@ -742,6 +744,7 @@ public:
 
     inline float textStrokeWidth() const;
     inline float opacity() const;
+    inline float usedOpacity() const;
     inline bool hasOpacity() const;
     inline bool hasZeroOpacity() const;
     inline StyleAppearance appearance() const;
@@ -1111,6 +1114,7 @@ public:
     inline OptionSet<SpeakAs> speakAs() const;
 
     inline const FilterOperations& filter() const;
+    inline const FilterOperations& usedFilter() const;
     inline bool hasFilter() const;
     bool hasReferenceFilterOnly() const;
 
@@ -1118,6 +1122,7 @@ public:
     inline bool hasAppleColorFilter() const;
 
     inline const FilterOperations& backdropFilter() const;
+    inline const FilterOperations& usedBackdropFilter() const;
     inline bool hasBackdropFilter() const;
 
     inline void setBlendMode(BlendMode);
@@ -1129,6 +1134,7 @@ public:
     inline void setIsolation(Isolation);
 
     inline BlendMode blendMode() const;
+    inline BlendMode usedBlendMode() const;
     inline bool hasBlendMode() const;
 
     inline Isolation isolation() const;
@@ -1193,6 +1199,10 @@ public:
     inline void resetBorderBottomRightRadius();
 
     inline void setBackgroundColor(const Style::Color&);
+
+    inline void setBackgroundPropagatedToCanvas(bool);
+    inline void setEffectsPropagatedToCanvas(bool);
+
     inline void setBackgroundAttachment(FillAttachment);
     inline void setBackgroundClip(FillBox);
     inline void setBackgroundOrigin(FillBox);
@@ -1768,6 +1778,7 @@ public:
 
     inline void setClipPath(RefPtr<PathOperation>&&);
     inline PathOperation* clipPath() const;
+    inline PathOperation* usedClipPath() const;
     static PathOperation* initialClipPath() { return nullptr; }
 
     inline bool hasUsedContentNone() const;
@@ -1854,13 +1865,13 @@ public:
     bool lastChildState() const { return m_nonInheritedFlags.lastChildState; }
     void setLastChildState() { setUnique(); m_nonInheritedFlags.lastChildState = true; }
 
-    Style::Color unresolvedColorForProperty(CSSPropertyID colorProperty, bool visitedLink = false) const;
-    Color colorResolvingCurrentColor(CSSPropertyID colorProperty, bool visitedLink) const;
+    Style::Color unresolvedColorForProperty(CSSPropertyID colorProperty, bool visitedLink = false, bool computed = false) const;
+    Color colorResolvingCurrentColor(CSSPropertyID colorProperty, bool visitedLink, bool computed = false) const;
 
     // Resolves the currentColor keyword, but must not be used for the "color" property which has a different semantic.
     WEBCORE_EXPORT Color colorResolvingCurrentColor(const Style::Color&, bool visitedLink = false) const;
 
-    WEBCORE_EXPORT Color visitedDependentColor(CSSPropertyID, OptionSet<PaintBehavior> paintBehavior = { }) const;
+    WEBCORE_EXPORT Color visitedDependentColor(CSSPropertyID, OptionSet<PaintBehavior> paintBehavior = { }, bool computed = false) const;
     WEBCORE_EXPORT Color visitedDependentColorWithColorFilter(CSSPropertyID, OptionSet<PaintBehavior> paintBehavior = { }) const;
 
     WEBCORE_EXPORT Color colorByApplyingColorFilter(const Color&) const;
@@ -2192,6 +2203,7 @@ public:
     inline const Style::Color& borderTopColor() const;
     inline const Style::Color& borderBottomColor() const;
     inline const Style::Color& backgroundColor() const;
+    inline const Style::Color& usedBackgroundColor() const;
     WEBCORE_EXPORT const Color& color() const;
     inline const Style::Color& columnRuleColor() const;
     inline const Style::Color& outlineColor() const;

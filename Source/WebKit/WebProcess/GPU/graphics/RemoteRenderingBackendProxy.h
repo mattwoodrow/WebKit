@@ -67,6 +67,7 @@ enum class RenderingMode : bool;
 
 namespace WebKit {
 
+class ImageBufferSetClient;
 class WebPage;
 class RemoteImageBufferProxy;
 class RemoteSerializedImageBufferProxy;
@@ -120,7 +121,7 @@ public:
     void releaseAllImageResources();
     void releaseRenderingResource(WebCore::RenderingResourceIdentifier);
     void markSurfacesVolatile(Vector<std::pair<Ref<RemoteImageBufferSetProxy>, OptionSet<BufferInSetType>>>&&, CompletionHandler<void(bool madeAllVolatile)>&&, bool forcePurge);
-    RefPtr<RemoteImageBufferSetProxy> createRemoteImageBufferSet();
+    RefPtr<RemoteImageBufferSetProxy> createRemoteImageBufferSet(ImageBufferSetClient&);
     void releaseRemoteImageBufferSet(RemoteImageBufferSetProxy&);
     void getImageBufferResourceLimitsForTesting(CompletionHandler<void(WebCore::ImageBufferResourceLimits)>&&);
 
@@ -136,16 +137,19 @@ public:
         RefPtr<WebCore::ImageBuffer> secondaryBack;
     };
 
+#if PLATFORM(COCOA)
     struct LayerPrepareBuffersData {
-        RefPtr<RemoteImageBufferSetProxy> bufferSet;
+        Ref<RemoteImageBufferSetProxy> bufferSet;
         WebCore::Region dirtyRegion;
         bool supportsPartialRepaint { true };
         bool hasEmptyDirtyRegion { false };
         bool requiresClearedPixels { true };
     };
 
-#if PLATFORM(COCOA)
-    Vector<SwapBuffersDisplayRequirement> prepareImageBufferSetsForDisplay(Vector<LayerPrepareBuffersData>&&);
+    void startPreparingImageBufferSetsForDisplay();
+    void endPreparingImageBufferSetsForDisplay();
+
+    void prepareImageBufferSetForDisplay(LayerPrepareBuffersData&&);
 #endif
 
     void finalizeRenderingUpdate();
@@ -215,6 +219,10 @@ private:
     HashMap<MarkSurfacesAsVolatileRequestIdentifier, CompletionHandler<void(bool)>> m_markAsVolatileRequests;
     HashMap<RemoteImageBufferSetIdentifier, WeakPtr<RemoteImageBufferSetProxy>> m_bufferSets;
     Ref<WorkQueue> m_queue;
+
+#if PLATFORM(COCOA)
+    Vector<LayerPrepareBuffersData> m_bufferSetsToPrepare;
+#endif
 
     RenderingUpdateID m_renderingUpdateID;
     RenderingUpdateID m_didRenderingUpdateID;

@@ -271,9 +271,9 @@ void RemoteRenderingBackendProxy::releaseImageBuffer(RenderingResourceIdentifier
     send(Messages::RemoteRenderingBackend::ReleaseImageBuffer(renderingResourceIdentifier));
 }
 
-RefPtr<RemoteImageBufferSetProxy>  RemoteRenderingBackendProxy::createRemoteImageBufferSet()
+RefPtr<RemoteImageBufferSetProxy>  RemoteRenderingBackendProxy::createRemoteImageBufferSet(ImageBufferSetClient& client)
 {
-    RefPtr<RemoteImageBufferSetProxy> result = adoptRef(new RemoteImageBufferSetProxy(*this));
+    RefPtr<RemoteImageBufferSetProxy> result = adoptRef(new RemoteImageBufferSetProxy(*this, client));
     send(Messages::RemoteRenderingBackend::CreateRemoteImageBufferSet(result->identifier(), result->displayListResourceIdentifier()));
 
     auto addResult = m_bufferSets.add(result->identifier(), result);
@@ -422,14 +422,19 @@ void RemoteRenderingBackendProxy::releaseAllImageResources()
 }
 
 #if PLATFORM(COCOA)
-Vector<SwapBuffersDisplayRequirement> RemoteRenderingBackendProxy::prepareImageBufferSetsForDisplay(Vector<LayerPrepareBuffersData>&& prepareBuffersInput)
+void RemoteRenderingBackendProxy::startPreparingImageBufferSetsForDisplay()
 {
-    if (prepareBuffersInput.isEmpty())
-        return Vector<SwapBuffersDisplayRequirement>();
+    ASSERT(m_bufferSetsToPrepare.isEmpty());
+}
+
+void RemoteRenderingBackendProxy::endPreparingImageBufferSetsForDisplay()
+{
+    if (m_bufferSetsToPrepare.isEmpty())
+        return;
 
     bool needsSync = false;
 
-    auto inputData = WTF::map(prepareBuffersInput, [&](auto& perLayerData) {
+    auto inputData = WTF::map(m_bufferSetsToPrepare, [&](auto& perLayerData) {
         // If the front buffer might be volatile, then we have to wait for the callback
         // to find out we were able to copy pixels from it or if it had been discarded.
         if (perLayerData.bufferSet->requestedVolatility().contains(BufferInSetType::Front))
@@ -449,24 +454,31 @@ Vector<SwapBuffersDisplayRequirement> RemoteRenderingBackendProxy::prepareImageB
         };
     });
 
-    LOG_WITH_STREAM(RemoteLayerBuffers, stream << "RemoteRenderingBackendProxy::prepareImageBufferSetsForDisplay - input buffers  " << inputData);
+    LOG_WITH_STREAM(RemoteLayerBuffers, stream << "RemoteRenderingBackendProxy::endPreparingImageBufferSetsForDisplay - input buffers  " << inputData);
 
-    Vector<SwapBuffersDisplayRequirement> result;
     if (needsSync) {
         auto sendResult = sendSync(Messages::RemoteRenderingBackend::PrepareImageBufferSetsForDisplaySync(inputData));
         if (!sendResult.succeeded()) {
-            result.grow(inputData.size());
-            for (auto& displayRequirement : result)
-                displayRequirement = SwapBuffersDisplayRequirement::NeedsFullDisplay;
-        } else
-            std::tie(result) = sendResult.takeReply();
+            for (auto& bufferSetToPrepare : m_bufferSetsToPrepare)
+                bufferSetToPrepare.bufferSet->setNeedsDisplay();
+        } else {
+            auto [result] = sendResult.takeReply();
+            RELEASE_ASSERT(result.size() == m_bufferSetsToPrepare.size());
+            for (unsigned i = 0; i < result.size(); ++i) {
+                if (result[i] == SwapBuffersDisplayRequirement::NeedsFullDisplay)
+                    m_bufferSetsToPrepare[i].bufferSet->setNeedsDisplay();
+            }
+        }
     } else {
         send(Messages::RemoteRenderingBackend::PrepareImageBufferSetsForDisplay(inputData));
-        result.grow(inputData.size());
-        for (auto& displayRequirement : result)
-            displayRequirement = SwapBuffersDisplayRequirement::NeedsNormalDisplay;
     }
-    return result;
+
+    m_bufferSetsToPrepare.clear();
+}
+
+void RemoteRenderingBackendProxy::prepareImageBufferSetForDisplay(LayerPrepareBuffersData&& bufferSetToPrepare)
+{
+    m_bufferSetsToPrepare.append(WTFMove(bufferSetToPrepare));
 }
 #endif
 

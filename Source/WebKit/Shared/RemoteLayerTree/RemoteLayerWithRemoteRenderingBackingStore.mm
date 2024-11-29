@@ -50,7 +50,7 @@ RemoteLayerWithRemoteRenderingBackingStore::RemoteLayerWithRemoteRenderingBackin
         return;
     }
 
-    m_bufferSet = collection->layerTreeContext().ensureRemoteRenderingBackendProxy().createRemoteImageBufferSet();
+    m_bufferSet = collection->layerTreeContext().ensureRemoteRenderingBackendProxy().createRemoteImageBufferSet(*this);
 }
 
 RemoteLayerWithRemoteRenderingBackingStore::~RemoteLayerWithRemoteRenderingBackingStore()
@@ -73,6 +73,17 @@ bool RemoteLayerWithRemoteRenderingBackingStore::frontBufferMayBeVolatile() cons
 
 void RemoteLayerWithRemoteRenderingBackingStore::prepareToDisplay()
 {
+    if (performDelegatedLayerDisplay())
+        return;
+
+    auto bufferSet = protectedBufferSet();
+    if (!bufferSet)
+        return;
+
+    if (!hasFrontBuffer() || !supportsPartialRepaint())
+        setNeedsDisplay();
+
+    bufferSet->prepareToDisplay(dirtyRegion(), supportsPartialRepaint(), hasEmptyDirtyRegion(), drawingRequiresClearedPixels());
     m_contentsBufferHandle = std::nullopt;
 }
 
@@ -139,6 +150,11 @@ std::optional<RemoteImageBufferSetIdentifier> RemoteLayerWithRemoteRenderingBack
     if (!m_bufferSet)
         return std::nullopt;
     return m_bufferSet->identifier();
+}
+
+void RemoteLayerWithRemoteRenderingBackingStore::setNeedsDisplay()
+{
+    RemoteLayerBackingStore::setNeedsDisplay();
 }
 
 #if ENABLE(RE_DYNAMIC_CONTENT_SCALING)

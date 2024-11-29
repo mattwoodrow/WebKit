@@ -68,53 +68,16 @@ void RemoteLayerBackingStoreCollection::deref() const
 
 void RemoteLayerBackingStoreCollection::prepareBackingStoresForDisplay(RemoteLayerTreeTransaction& transaction)
 {
-    Vector<RemoteRenderingBackendProxy::LayerPrepareBuffersData> prepareBuffersData;
-    prepareBuffersData.reserveInitialCapacity(m_backingStoresNeedingDisplay.computeSize());
-
-    Vector<WeakPtr<RemoteLayerWithRemoteRenderingBackingStore>> backingStoreList;
-    backingStoreList.reserveInitialCapacity(m_backingStoresNeedingDisplay.computeSize());
-
     auto& remoteRenderingBackend = layerTreeContext().ensureRemoteRenderingBackendProxy();
+    remoteRenderingBackend.startPreparingImageBufferSetsForDisplay();
 
     for (CheckedRef backingStore : m_backingStoresNeedingDisplay) {
         backingStore->layer().properties().notePropertiesChanged(LayerChange::BackingStoreChanged);
         transaction.layerPropertiesChanged(backingStore->layer());
-
-        if (CheckedPtr remoteBackingStore = dynamicDowncast<RemoteLayerWithRemoteRenderingBackingStore>(backingStore.get())) {
-            if (remoteBackingStore->performDelegatedLayerDisplay())
-                continue;
-
-            auto bufferSet = remoteBackingStore->protectedBufferSet();
-            if (!bufferSet)
-                continue;
-
-            if (!remoteBackingStore->hasFrontBuffer() || !remoteBackingStore->supportsPartialRepaint())
-                remoteBackingStore->setNeedsDisplay();
-
-            prepareBuffersData.append({
-                bufferSet,
-                remoteBackingStore->dirtyRegion(),
-                remoteBackingStore->supportsPartialRepaint(),
-                remoteBackingStore->hasEmptyDirtyRegion(),
-                remoteBackingStore->drawingRequiresClearedPixels(),
-            });
-
-            backingStoreList.append(*remoteBackingStore);
-        }
-
         backingStore->prepareToDisplay();
     }
 
-    if (prepareBuffersData.size()) {
-        auto swapResult = remoteRenderingBackend.prepareImageBufferSetsForDisplay(WTFMove(prepareBuffersData));
-        RELEASE_ASSERT(swapResult.size() == backingStoreList.size() || swapResult.isEmpty());
-        for (unsigned i = 0; i < swapResult.size(); ++i) {
-            auto& backingStoreSwapResult = swapResult[i];
-            auto& backingStore = backingStoreList[i];
-            if (backingStoreSwapResult == SwapBuffersDisplayRequirement::NeedsFullDisplay)
-                backingStore->setNeedsDisplay();
-        }
-    }
+    remoteRenderingBackend.endPreparingImageBufferSetsForDisplay();
 }
 
 bool RemoteLayerBackingStoreCollection::paintReachableBackingStoreContents()

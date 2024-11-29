@@ -27,10 +27,12 @@
 
 #if ENABLE(GPU_PROCESS)
 
+#include "ImageBufferSetIdentifier.h"
 #include "SwapBuffersDisplayRequirement.h"
 #include <WebCore/FloatRect.h>
 #include <WebCore/ImageBuffer.h>
 #include <WebCore/Region.h>
+#include <wtf/Identified.h>
 #include <wtf/Vector.h>
 
 namespace WebKit {
@@ -43,7 +45,7 @@ namespace WebKit {
 // and accessing the GraphicsContext.
 // Splitting out a virtual base class so that RemoteImageBufferProxy can implement the interface
 // would also be nice.
-class ImageBufferSet {
+class ImageBufferSet : public Identified<ImageBufferSetIdentifier> {
 public:
     using PaintRectList = Vector<WebCore::FloatRect, 5>;
 

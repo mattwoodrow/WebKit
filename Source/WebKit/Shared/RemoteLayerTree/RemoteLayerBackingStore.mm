@@ -81,7 +81,7 @@ public:
         return std::unique_ptr<DelegatedContentsFenceFlusher> { new DelegatedContentsFenceFlusher(WTFMove(fence)) };
     }
 
-    bool flushAndCollectHandles(HashMap<RemoteImageBufferSetIdentifier, std::unique_ptr<BufferSetBackendHandle>>&) final
+    bool flushAndCollectHandles(HashMap<ImageBufferSetIdentifier, std::unique_ptr<BufferSetBackendHandle>>&) final
     {
         return m_fence->waitFor(delegatedContentsFinishedTimeout);
     }
@@ -148,25 +148,6 @@ RemoteLayerBackingStore::ProcessModel RemoteLayerBackingStore::processModelForLa
     return ProcessModel::InProcess;
 }
 
-#if !LOG_DISABLED
-static bool hasValue(const ImageBufferBackendHandle& backendHandle)
-{
-    return WTF::switchOn(backendHandle,
-        [&] (const ShareableBitmap::Handle& handle) {
-            return true;
-        },
-        [&] (const MachSendRight& machSendRight) {
-            return !!machSendRight;
-        }
-#if ENABLE(RE_DYNAMIC_CONTENT_SCALING)
-        , [&] (const WebCore::DynamicContentScalingDisplayList& handle) {
-            return true;
-        }
-#endif
-    );
-}
-#endif
-
 void RemoteLayerBackingStore::encode(IPC::Encoder& encoder) const
 {
     encoder << m_parameters.isOpaque;
@@ -178,20 +159,12 @@ void RemoteLayerBackingStore::encode(IPC::Encoder& encoder) const
     if (m_contentsBufferHandle) {
         ASSERT(m_parameters.type == Type::IOSurface);
         handle = ImageBufferBackendHandle { *m_contentsBufferHandle };
-    } else
-        handle = frontBufferHandle();
-
-    // It would be nice to ASSERT(handle && hasValue(*handle)) here, but when we hit the timeout in RemoteImageBufferProxy::ensureBackendCreated(), we don't have a handle.
-#if !LOG_DISABLED
-    if (!(handle && hasValue(*handle)))
-        LOG_WITH_STREAM(RemoteLayerBuffers, stream << "RemoteLayerBackingStore " << m_layer->layerID() << " encode - no buffer handle; did ensureBackendCreated() time out?");
-#endif
+    }
 
     encoder << WTFMove(handle);
 
     encoder << bufferSetIdentifier();
 
-    encodeBufferAndBackendInfos(encoder);
     encoder << m_contentsRenderingResourceIdentifier;
     encoder << m_previouslyPaintedRect;
 

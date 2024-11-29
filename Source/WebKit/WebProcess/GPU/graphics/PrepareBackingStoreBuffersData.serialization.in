@@ -25,7 +25,7 @@
 header: "PrepareBackingStoreBuffersData.h"
 
 [AdditionalEncoder=StreamConnectionEncoder, CustomHeader] struct WebKit::ImageBufferSetPrepareBufferForDisplayInputData {
-    WebKit::RemoteImageBufferSetIdentifier remoteBufferSet;
+    WebKit::ImageBufferSetIdentifier remoteBufferSet;
     WebCore::Region dirtyRegion;
     bool supportsPartialRepaint;
     bool hasEmptyDirtyRegion;

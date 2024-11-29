@@ -26,10 +26,10 @@
 #pragma once
 
 #include "BufferIdentifierSet.h"
+#include "ImageBufferSetIdentifier.h"
 #include "MarkSurfacesAsVolatileRequestIdentifier.h"
 #include "PrepareBackingStoreBuffersData.h"
 #include "RemoteDisplayListRecorderProxy.h"
-#include "RemoteImageBufferSetIdentifier.h"
 #include "RenderingUpdateID.h"
 #include "WorkQueueMessageReceiver.h"
 #include <wtf/Identified.h>
@@ -64,7 +64,7 @@ public:
     ThreadSafeImageBufferSetFlusher() = default;
     virtual ~ThreadSafeImageBufferSetFlusher() = default;
     // Returns true if flush succeeded, false if it failed.
-    virtual bool flushAndCollectHandles(HashMap<RemoteImageBufferSetIdentifier, std::unique_ptr<BufferSetBackendHandle>>&) = 0;
+    virtual bool flushAndCollectHandles(HashMap<ImageBufferSetIdentifier, std::unique_ptr<BufferSetBackendHandle>>&) = 0;
 };
 
 // A RemoteImageBufferSet is an ImageBufferSet, where the actual ImageBuffers are owned by the GPU process.
@@ -78,7 +78,7 @@ public:
 // IPC call.
 // FIXME: It would be nice if this could actually be a subclass of ImageBufferSet, but
 // probably can't while it uses batching for prepare and volatility.
-class RemoteImageBufferSetProxy : public IPC::WorkQueueMessageReceiver, public Identified<RemoteImageBufferSetIdentifier> {
+class RemoteImageBufferSetProxy : public IPC::WorkQueueMessageReceiver, public Identified<ImageBufferSetIdentifier> {
 public:
     RemoteImageBufferSetProxy(RemoteRenderingBackendProxy&);
     ~RemoteImageBufferSetProxy();

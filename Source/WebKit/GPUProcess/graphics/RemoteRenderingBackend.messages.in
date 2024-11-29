@@ -42,8 +42,8 @@ messages -> RemoteRenderingBackend Stream {
     ReleaseAllImageResources()
     ReleaseRenderingResource(WebCore::RenderingResourceIdentifier renderingResourceIdentifier)
 
-    CreateRemoteImageBufferSet(WebKit::RemoteImageBufferSetIdentifier bufferSetIdentifier, WebCore::RenderingResourceIdentifier displayListIdentifier)
-    ReleaseRemoteImageBufferSet(WebKit::RemoteImageBufferSetIdentifier bufferSetIdentifier)
+    CreateRemoteImageBufferSet(WebKit::ImageBufferSetIdentifier bufferSetIdentifier, WebCore::RenderingResourceIdentifier displayListIdentifier)
+    ReleaseRemoteImageBufferSet(WebKit::ImageBufferSetIdentifier bufferSetIdentifier)
 
 #if PLATFORM(COCOA)
     // These messages also result in the 'DidPrepareForDisplay' message being
@@ -53,7 +53,7 @@ messages -> RemoteRenderingBackend Stream {
     PrepareImageBufferSetsForDisplaySync(Vector<WebKit::ImageBufferSetPrepareBufferForDisplayInputData> swapBuffersInput)  -> (Vector<WebKit::SwapBuffersDisplayRequirement> displayRequirements) Synchronous
 #endif
 
-    MarkSurfacesVolatile(WebKit::MarkSurfacesAsVolatileRequestIdentifier requestIdentifier, Vector<std::pair<WebKit::RemoteImageBufferSetIdentifier, OptionSet<WebKit::BufferInSetType>>> renderingResourceIdentifiers, bool forcePurge)
+    MarkSurfacesVolatile(WebKit::MarkSurfacesAsVolatileRequestIdentifier requestIdentifier, Vector<std::pair<WebKit::ImageBufferSetIdentifier, OptionSet<WebKit::BufferInSetType>>> renderingResourceIdentifiers, bool forcePurge)
     FinalizeRenderingUpdate(WebKit::RenderingUpdateID renderingUpdateID)
 
 #if USE(GRAPHICS_LAYER_WC)

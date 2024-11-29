@@ -29,8 +29,8 @@
 
 #include "IPCEvent.h"
 #include "ImageBufferSet.h"
+#include "ImageBufferSetIdentifier.h"
 #include "PrepareBackingStoreBuffersData.h"
-#include "RemoteImageBufferSetIdentifier.h"
 #include "RenderingUpdateID.h"
 #include "StreamConnectionWorkQueue.h"
 #include "StreamMessageReceiver.h"
@@ -46,7 +46,7 @@ class RemoteRenderingBackend;
 
 class RemoteImageBufferSet : public IPC::StreamMessageReceiver, public ImageBufferSet {
 public:
-    static Ref<RemoteImageBufferSet> create(RemoteImageBufferSetIdentifier, WebCore::RenderingResourceIdentifier displayListIdentifier, RemoteRenderingBackend&);
+    static Ref<RemoteImageBufferSet> create(ImageBufferSetIdentifier, WebCore::RenderingResourceIdentifier displayListIdentifier, RemoteRenderingBackend&);
     ~RemoteImageBufferSet();
     void stopListeningForIPC();
 
@@ -62,7 +62,7 @@ public:
     bool makeBuffersVolatile(OptionSet<BufferInSetType> requestedBuffers, OptionSet<BufferInSetType>& volatileBuffers, bool forcePurge);
 
 private:
-    RemoteImageBufferSet(RemoteImageBufferSetIdentifier, WebCore::RenderingResourceIdentifier, RemoteRenderingBackend&);
+    RemoteImageBufferSet(ImageBufferSetIdentifier, WebCore::RenderingResourceIdentifier, RemoteRenderingBackend&);
     void startListeningForIPC();
     IPC::StreamConnectionWorkQueue& workQueue() const;
 
@@ -83,7 +83,7 @@ private:
         return m_pixelFormat == WebCore::ImageBufferPixelFormat::RGB10 || m_pixelFormat == WebCore::ImageBufferPixelFormat::BGRX8;
     }
 
-    const RemoteImageBufferSetIdentifier m_identifier;
+    const ImageBufferSetIdentifier m_identifier;
     const WebCore::RenderingResourceIdentifier m_displayListIdentifier;
     RefPtr<RemoteRenderingBackend> m_backend;
 

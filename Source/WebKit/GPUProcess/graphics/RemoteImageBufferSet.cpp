@@ -43,14 +43,14 @@
 
 namespace WebKit {
 
-Ref<RemoteImageBufferSet> RemoteImageBufferSet::create(RemoteImageBufferSetIdentifier identifier, RemoteGraphicsContextIdentifier contextIdentifier, RemoteRenderingBackend& renderingBackend)
+Ref<RemoteImageBufferSet> RemoteImageBufferSet::create(ImageBufferSetIdentifier identifier, RemoteGraphicsContextIdentifier contextIdentifier, RemoteRenderingBackend& renderingBackend)
 {
     auto instance = adoptRef(*new RemoteImageBufferSet(identifier, contextIdentifier, renderingBackend));
     instance->startListeningForIPC();
     return instance;
 }
 
-RemoteImageBufferSet::RemoteImageBufferSet(RemoteImageBufferSetIdentifier identifier, RemoteGraphicsContextIdentifier contextIdentifier, RemoteRenderingBackend& renderingBackend)
+RemoteImageBufferSet::RemoteImageBufferSet(ImageBufferSetIdentifier identifier, RemoteGraphicsContextIdentifier contextIdentifier, RemoteRenderingBackend& renderingBackend)
     : m_identifier(identifier)
     , m_contextIdentifier(contextIdentifier)
     , m_renderingBackend(renderingBackend)

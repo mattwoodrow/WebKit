@@ -97,8 +97,9 @@ enum class LayoutUpToDate : bool { No, Yes };
 
 enum class RepaintStatus : uint8_t {
     NeedsNormalRepaint,
+    NeedsFullRepaintForPositionedMovementLayout,
     NeedsFullRepaint,
-    NeedsFullRepaintForPositionedMovementLayout
+    NeedsFullRepaintEvenIfNotSelfPainting,
 };
 
 enum ClipRectsType {
@@ -751,9 +752,13 @@ public:
     
     LayoutRect repaintRectIncludingNonCompositingDescendants() const;
 
-    void setRepaintStatus(RepaintStatus status) { m_repaintStatus = status; }
+    void setRepaintStatus(RepaintStatus status)
+    {
+        if (status > m_repaintStatus)
+            m_repaintStatus = status;
+    }
     RepaintStatus repaintStatus() const { return m_repaintStatus; }
-    bool needsFullRepaint() const { return m_repaintStatus == RepaintStatus::NeedsFullRepaint || m_repaintStatus == RepaintStatus::NeedsFullRepaintForPositionedMovementLayout; }
+    bool needsFullRepaint() const { return m_repaintStatus > RepaintStatus::NeedsNormalRepaint; }
 
     LayoutUnit staticInlinePosition() const { return m_offsetForPosition.width(); }
     LayoutUnit staticBlockPosition() const { return m_offsetForPosition.height(); }

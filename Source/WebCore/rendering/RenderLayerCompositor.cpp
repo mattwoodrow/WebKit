@@ -549,7 +549,7 @@ void RenderLayerCompositor::BackingSharingState::issuePendingRepaints()
     for (auto& layer : m_layersPendingRepaint) {
         LOG_WITH_STREAM(Compositing, stream << "Issuing postponed repaint of layer " << &layer);
         layer.compositingStatusChanged(LayoutUpToDate::Yes);
-        layer.compositor().repaintOnCompositingChange(layer);
+        layer.compositor().repaintOnCompositingChange(layer, LayoutUpToDate::Yes);
     }
     
     m_layersPendingRepaint.clear();
@@ -1519,7 +1519,7 @@ void RenderLayerCompositor::computeCompositingRequirements(RenderLayer* ancestor
             if (layerRepaintTargetsBackingSharingLayer(layer, backingSharingState))
                 backingSharingState.addLayerNeedingRepaint(layer);
             else
-                repaintOnCompositingChange(layer);
+                repaintOnCompositingChange(layer, queryData.layoutUpToDate);
         }
     }
 
@@ -2133,7 +2133,7 @@ void RenderLayerCompositor::layerGainedCompositedScrollableOverflow(RenderLayer&
     if (layerChanged) {
         layer.compositingStatusChanged(queryData.layoutUpToDate);
         if (!layer.isComposited())
-            repaintOnCompositingChange(layer);
+            repaintOnCompositingChange(layer, queryData.layoutUpToDate);
         layer.setChildrenNeedCompositingGeometryUpdate();
         layer.setNeedsCompositingLayerConnection();
         layer.setSubsequentLayersNeedCompositingRequirementsTraversal();
@@ -2164,7 +2164,7 @@ void RenderLayerCompositor::layerStyleChanged(StyleDifference diff, RenderLayer&
     if (layerChanged) {
         layer.compositingStatusChanged(queryData.layoutUpToDate);
         if (!layer.isComposited())
-            repaintOnCompositingChange(layer);
+            repaintOnCompositingChange(layer, queryData.layoutUpToDate);
         layer.setChildrenNeedCompositingGeometryUpdate();
         layer.setNeedsCompositingLayerConnection();
         layer.setSubsequentLayersNeedCompositingRequirementsTraversal();
@@ -2350,18 +2350,18 @@ bool RenderLayerCompositor::updateBacking(RenderLayer& layer, RequiresCompositin
         return backingSharingState && layerRepaintTargetsBackingSharingLayer(layer, *backingSharingState);
     };
     
-    auto repaintLayer = [&](RenderLayer& layer) {
+    auto repaintLayer = [&](RenderLayer& layer, LayoutUpToDate layoutUpToDate) {
         if (repaintTargetsSharedBacking(layer)) {
             LOG_WITH_STREAM(Compositing, stream << "Layer " << &layer << " needs to repaint into potential backing-sharing layer, postponing repaint");
             backingSharingState->addLayerNeedingRepaint(layer);
         } else
-            repaintOnCompositingChange(layer);
+            repaintOnCompositingChange(layer, layoutUpToDate);
     };
 
     if (backingRequired == BackingRequired::Yes) {
         // If we need to repaint, do so before making backing and disconnecting from the backing provider layer.
         if (!layer.backing())
-            repaintLayer(layer);
+            repaintLayer(layer, LayoutUpToDate::Yes);
 
         layer.disconnectFromBackingProviderLayer();
 
@@ -2407,7 +2407,7 @@ bool RenderLayerCompositor::updateBacking(RenderLayer& layer, RequiresCompositin
             layerChanged = true;
 
             // If we need to repaint, do so now that we've removed the backing.
-            repaintLayer(layer);
+            repaintLayer(layer, queryData.layoutUpToDate);
         }
     }
 
@@ -2457,7 +2457,7 @@ bool RenderLayerCompositor::updateLayerCompositingState(RenderLayer& layer, cons
     if (layerChanged) {
         layer.compositingStatusChanged(queryData.layoutUpToDate);
         if (!layer.isComposited())
-            repaintOnCompositingChange(layer);
+            repaintOnCompositingChange(layer, queryData.layoutUpToDate);
     }
 
     // See if we need content or clipping layers. Methods called here should assume
@@ -2468,23 +2468,28 @@ bool RenderLayerCompositor::updateLayerCompositingState(RenderLayer& layer, cons
     return layerChanged;
 }
 
-void RenderLayerCompositor::repaintOnCompositingChange(RenderLayer& layer)
+void RenderLayerCompositor::repaintOnCompositingChange(RenderLayer& layer, LayoutUpToDate layoutUpdateToDate)
 {
     // If the renderer is not attached yet, no need to repaint.
     if (&layer.renderer() != &m_renderView && !layer.renderer().parent())
         return;
 
+
     CheckedPtr repaintContainer = layer.renderer().containerForRepaint().renderer;
     if (!repaintContainer)
         repaintContainer = &m_renderView;
 
-    layer.repaintIncludingNonCompositingDescendants(repaintContainer.get());
     if (repaintContainer == &m_renderView) {
         // The contents of this layer may be moving between the window
         // and a GraphicsLayer, so we need to make sure the window system
         // synchronizes those changes on the screen.
         m_renderView.frameView().setNeedsOneShotDrawingSynchronization();
     }
+
+    if (layoutUpdateToDate == LayoutUpToDate::Yes)
+        layer.repaintIncludingNonCompositingDescendants(repaintContainer.get());
+    else
+        layer.setRepaintStatus(RepaintStatus::NeedsFullRepaintEvenIfNotSelfPainting);
 }
 
 // This method assumes that layout is up-to-date, unlike repaintOnCompositingChange().

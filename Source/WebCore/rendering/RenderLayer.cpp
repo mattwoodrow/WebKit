@@ -1234,7 +1234,15 @@ void RenderLayer::recursiveUpdateLayerPositions(OptionSet<UpdateLayerPositionsFl
     }
 
     auto repaintIfNecessary = [&](bool checkForRepaint) {
-        if (isVisibilityHiddenOrOpacityZero() || !isSelfPaintingLayer()) {
+        if (isVisibilityHiddenOrOpacityZero()) {
+            LAYER_POSITIONS_ASSERT_IMPLIES(mode == Verify, !repaintRects());
+            clearRepaintRects();
+            return;
+        }
+
+        if (!isSelfPaintingLayer()) {
+            if (checkForRepaint && shouldRepaintAfterLayout())
+                repaintIncludingNonCompositingDescendants(renderer().containerForRepaint().renderer.get());
             LAYER_POSITIONS_ASSERT_IMPLIES(mode == Verify, !repaintRects());
             clearRepaintRects();
             return;
@@ -1260,7 +1268,7 @@ void RenderLayer::recursiveUpdateLayerPositions(OptionSet<UpdateLayerPositionsFl
         auto newRects = repaintRects();
 
         if (checkForRepaint && shouldRepaintAfterLayout() && newRects) {
-            auto needsFullRepaint = repaintStatus() == RepaintStatus::NeedsFullRepaint ? RequiresFullRepaint::Yes : RequiresFullRepaint::No;
+            auto needsFullRepaint = repaintStatus() >= RepaintStatus::NeedsFullRepaint ? RequiresFullRepaint::Yes : RequiresFullRepaint::No;
             auto resolvedOldRects = valueOrDefault(oldRects);
             renderer().repaintAfterLayoutIfNeeded(WTFMove(repaintContainer), needsFullRepaint, resolvedOldRects, *newRects);
         }
@@ -2305,12 +2313,17 @@ bool RenderLayer::shouldRepaintAfterLayout() const
     if (is<RenderSVGContainer>(renderer()) && !paintsWithFilters())
         return false;
 
-    if (m_repaintStatus == RepaintStatus::NeedsNormalRepaint || m_repaintStatus == RepaintStatus::NeedsFullRepaint)
+    if (m_repaintStatus == RepaintStatus::NeedsFullRepaintEvenIfNotSelfPainting)
+        return true;
+
+    if (!isSelfPaintingLayer())
+        return false;
+
+    if (m_repaintStatus != RepaintStatus::NeedsFullRepaintForPositionedMovementLayout)
         return true;
 
     // Composited layers that were moved during a positioned movement only
     // layout, don't need to be repainted. They just need to be recomposited.
-    ASSERT(m_repaintStatus == RepaintStatus::NeedsFullRepaintForPositionedMovementLayout);
     return !isComposited() || backing()->paintsIntoCompositedAncestor();
 }
 
@@ -6614,7 +6627,7 @@ void outputLayerPositionTreeRecursive(TextStream& stream, const WebCore::RenderL
 
     if (layer.repaintStatus() == WebCore::RepaintStatus::NeedsFullRepaintForPositionedMovementLayout)
         stream << "P";
-    else if (layer.repaintStatus() == WebCore::RepaintStatus::NeedsFullRepaint)
+    else if (layer.repaintStatus() >= WebCore::RepaintStatus::NeedsFullRepaint)
         stream << "F";
     else
         stream << "-";

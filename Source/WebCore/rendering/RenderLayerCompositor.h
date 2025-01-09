@@ -244,7 +244,7 @@ public:
     void rootBackgroundColorOrTransparencyChanged();
     
     // Repaint the appropriate layers when the given RenderLayer starts or stops being composited.
-    void repaintOnCompositingChange(RenderLayer&);
+    void repaintOnCompositingChange(RenderLayer&, LayoutUpToDate);
     
     void repaintInCompositedAncestor(RenderLayer&, const LayoutRect&);
     

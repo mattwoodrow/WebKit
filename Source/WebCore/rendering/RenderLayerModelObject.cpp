@@ -170,7 +170,7 @@ void RenderLayerModelObject::styleDidChange(StyleDifference diff, const RenderSt
         setHasReflection(false);
 
         // Repaint the about to be destroyed self-painting layer when style change also triggers repaint.
-        if (layer()->isSelfPaintingLayer() && layer()->repaintStatus() == RepaintStatus::NeedsFullRepaint && layer()->cachedClippedOverflowRect())
+        if (layer()->isSelfPaintingLayer() && layer()->repaintStatus() >= RepaintStatus::NeedsFullRepaint && layer()->cachedClippedOverflowRect())
             repaintUsingContainer(containerForRepaint().renderer.get(), *(layer()->cachedClippedOverflowRect()));
 
         layer()->removeOnlyThisLayer(); // calls destroyLayer() which clears m_layer

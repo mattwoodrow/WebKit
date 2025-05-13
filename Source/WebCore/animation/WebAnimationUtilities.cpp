@@ -327,6 +327,22 @@ String pseudoElementIdentifierAsString(const std::optional<Style::PseudoElementI
     static NeverDestroyed<const String> targetText(MAKE_STATIC_STRING_IMPL("::target-text"));
     static NeverDestroyed<const String> viewTransition(MAKE_STATIC_STRING_IMPL("::view-transition"));
     static NeverDestroyed<const String> webkitScrollbar(MAKE_STATIC_STRING_IMPL("::-webkit-scrollbar"));
+
+    auto viewTransitionPseudoString = [&] {
+        switch (pseudoElementIdentifier->pseudoId) {
+        case PseudoId::ViewTransitionGroup:
+            return "::view-transition-group"_s;
+        case PseudoId::ViewTransitionImagePair:
+            return "::view-transition-image-pair"_s;
+        case PseudoId::ViewTransitionOld:
+            return "::view-transition-old"_s;
+        case PseudoId::ViewTransitionNew:
+            return "::view-transition-new"_s;
+        default:
+            return ""_s;
+        }
+    };
+
     switch (pseudoElementIdentifier->pseudoId) {
     case PseudoId::After:
         return after;
@@ -351,13 +367,12 @@ String pseudoElementIdentifierAsString(const std::optional<Style::PseudoElementI
     case PseudoId::ViewTransition:
         return viewTransition;
     case PseudoId::ViewTransitionGroup:
-        return makeString("::view-transition-group"_s, '(', pseudoElementIdentifier->nameArgument, ')');
     case PseudoId::ViewTransitionImagePair:
-        return makeString("::view-transition-image-pair"_s, '(', pseudoElementIdentifier->nameArgument, ')');
     case PseudoId::ViewTransitionOld:
-        return makeString("::view-transition-old"_s, '(', pseudoElementIdentifier->nameArgument, ')');
     case PseudoId::ViewTransitionNew:
-        return makeString("::view-transition-new"_s, '(', pseudoElementIdentifier->nameArgument, ')');
+        if (pseudoElementIdentifier->nameArgument.startsWith("-ua-auto-"_s))
+            return makeString(viewTransitionPseudoString(), "(match-element)"_s);
+        return makeString(viewTransitionPseudoString(), '(', pseudoElementIdentifier->nameArgument, ')');
     case PseudoId::WebKitScrollbar:
         return webkitScrollbar;
     default:

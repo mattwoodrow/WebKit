@@ -53,6 +53,11 @@ private:
     bool acceleratesDrawing() const override;
     void setAcceleratesDrawing(bool) override;
 
+#if HAVE(SUPPORT_HDR_DISPLAY)
+    float edrHeadroom() override;
+    void setEDRHeadroom(float) override;
+#endif
+
     WebCore::ContentsFormat contentsFormat() const override;
     void setContentsFormat(WebCore::ContentsFormat) override;
 

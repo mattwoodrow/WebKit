@@ -1720,6 +1720,9 @@ void Page::screenPropertiesDidChange()
         element.setPreferredDynamicRangeMode(mode);
     });
 #endif
+#if HAVE(SUPPORT_HDR_DISPLAY)
+    updateDisplayEDRHeadroom();
+#endif
 
     setNeedsRecalcStyleInAllFrames();
 }
@@ -5752,5 +5755,27 @@ bool Page::requiresUserGestureForVideoPlayback() const
         return autoplayPolicy == AutoplayPolicy::Deny;
     return m_settings->requiresUserGestureForVideoPlayback();
 }
+
+#if HAVE(SUPPORT_HDR_DISPLAY)
+void Page::updateDisplayEDRHeadroom()
+{
+    float headroom = currentEDRHeadroomForDisplay(m_displayID);
+    if (headroom == m_displayEDRHeadroom.headroom)
+        return;
+
+    LOG_WITH_STREAM(HDR, stream << "Page " << this << " updateDisplayEDRHeadroom " << m_displayEDRHeadroom.headroom << " to " << headroom);
+    m_displayEDRHeadroom = headroom;
+
+    for (auto& rootFrame : m_rootFrames) {
+        ASSERT(rootFrame->isRootFrame());
+        RefPtr view = rootFrame->view();
+        if (!view)
+            continue;
+
+        view->setDescendantsNeedUpdateBackingAndHierarchyTraversal();
+
+    }
+}
+#endif
 
 } // namespace WebCore

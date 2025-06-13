@@ -112,6 +112,9 @@ GraphicsContext& ImageBufferIOSurfaceBackend::context()
 {
     if (!m_context) {
         m_context = makeUnique<GraphicsContextCG>(ensurePlatformContext());
+#if HAVE(SUPPORT_HDR_DISPLAY)
+        m_context->setMaxEDRHeadroom(m_surface->edrHeadroom());
+#endif
         applyBaseTransform(*m_context);
     }
     return *m_context;
@@ -314,6 +317,15 @@ RetainPtr<CGImageRef> ImageBufferIOSurfaceBackend::createImageReference()
     CGImageSetCachingFlags(image.get(), kCGImageCachingTransient);
     return image;
 }
+
+#if HAVE(SUPPORT_HDR_DISPLAY)
+void ImageBufferIOSurfaceBackend::setEDRHeadroom(float headroom)
+{
+    m_surface->setEDRHeadroom(headroom);
+    if (m_context)
+        m_context->setMaxEDRHeadroom(headroom);
+}
+#endif
 
 } // namespace WebCore
 

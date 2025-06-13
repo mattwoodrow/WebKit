@@ -104,6 +104,9 @@ public:
         WebCore::ContentsFormat contentsFormat { WebCore::ContentsFormat::RGBA8 };
         float scale { 1.0f };
         bool isOpaque { false };
+#if HAVE(SUPPORT_HDR_DISPLAY)
+        float edrHeadroom { 1.0f };
+#endif
 
 #if ENABLE(RE_DYNAMIC_CONTENT_SCALING)
         WebCore::IncludeDynamicContentScalingDisplayList includeDisplayList { WebCore::IncludeDynamicContentScalingDisplayList::No };
@@ -254,6 +257,9 @@ private:
 
     bool m_isOpaque;
     RemoteLayerBackingStore::Type m_type;
+#if HAVE(SUPPORT_HDR_DISPLAY)
+    float m_edrHeadroom;
+#endif
 };
 
 WTF::TextStream& operator<<(WTF::TextStream&, BackingStoreNeedsDisplayReason);

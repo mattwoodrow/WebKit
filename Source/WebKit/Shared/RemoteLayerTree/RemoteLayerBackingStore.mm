@@ -175,6 +175,9 @@ void RemoteLayerBackingStore::encode(IPC::Encoder& encoder) const
 {
     encoder << m_parameters.isOpaque;
     encoder << m_parameters.type;
+#if HAVE(SUPPORT_HDR_DISPLAY)
+    encoder << m_parameters.edrHeadroom;
+#endif
 
     // FIXME: For simplicity this should be moved to the end of display() once the buffer handles can be created once
     // and stored in m_bufferHandle. http://webkit.org/b/234169
@@ -223,6 +226,9 @@ void RemoteLayerBackingStoreProperties::dump(TextStream& ts) const
 
     ts.dumpProperty("is opaque"_s, isOpaque());
     ts.dumpProperty("has buffer handle"_s, !!bufferHandle());
+#if HAVE(SUPPORT_HDR_DISPLAY)
+    ts.dumpProperty("headroom", m_edrHeadroom);
+#endif
 }
 
 bool RemoteLayerBackingStore::layerWillBeDisplayed()
@@ -616,7 +622,13 @@ void RemoteLayerBackingStoreProperties::updateCachedBuffers(RemoteLayerTreeNode&
     });
 
     for (auto& current : cachedBuffers) {
-        if (m_frontBufferInfo->resourceIdentifier == current.imageBufferInfo.resourceIdentifier) {
+        // Don't reuse the cached CAIOSurface if the headroom has changed, since we need to force
+        // CA to re-initialize from the IOSurface metadata.
+#if HAVE(SUPPORT_HDR_DISPLAY)
+        if (m_frontBufferInfo->resourceIdentifier == current.imageBufferInfo.resourceIdentifier && m_edrHeadroom == current.edrHeadroom) {
+#else
+            if (m_frontBufferInfo->resourceIdentifier == current.imageBufferInfo.resourceIdentifier) {
+#endif
             m_contentsBuffer = current.buffer;
             break;
         }

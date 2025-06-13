@@ -222,6 +222,11 @@ public:
     void setScrollingNodeID(std::optional<WebCore::ScrollingNodeID>) override;
 #endif
 
+#if HAVE(SUPPORT_HDR_DISPLAY)
+    float edrHeadroom() override;
+    void setEDRHeadroom(float) override;
+#endif
+
 #if HAVE(CORE_ANIMATION_SEPARATED_LAYERS)
     bool isSeparated() const override;
     void setIsSeparated(bool) override;
@@ -299,6 +304,9 @@ private:
     WeakPtr<PlatformCALayerRemote> m_superlayer;
     HashMap<String, RefPtr<WebCore::PlatformCAAnimation>> m_animations;
 
+#if HAVE(SUPPORT_HDR_DISPLAY)
+    float m_edrHeadroom { 1.0f };
+#endif
     bool m_acceleratesDrawing { false };
     WeakPtr<RemoteLayerTreeContext> m_context;
 };

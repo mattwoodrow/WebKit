@@ -127,6 +127,9 @@ public:
     struct CachedContentsBuffer {
         BufferAndBackendInfo imageBufferInfo;
         RetainPtr<id> buffer;
+#if HAVE(SUPPORT_HDR_DISPLAY)
+        float edrHeadroom { 1.0f };
+#endif
     };
 
     Vector<CachedContentsBuffer> takeCachedContentsBuffers() { return std::exchange(m_cachedContentsBuffers, { }); }

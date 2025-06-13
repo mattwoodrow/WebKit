@@ -51,6 +51,27 @@ struct RemoteImageBufferSetConfiguration {
 #if ENABLE(RE_DYNAMIC_CONTENT_SCALING)
     WebCore::IncludeDynamicContentScalingDisplayList includeDisplayList { WebCore::IncludeDynamicContentScalingDisplayList::No };
 #endif
+
+#if HAVE(SUPPORT_HDR_DISPLAY)
+    float edrHeadroom { 1.0f };
+
+    bool canUseExistingImageBuffers(const RemoteImageBufferSetConfiguration& other)
+    {
+        if (logicalSize != other.logicalSize
+            || resolutionScale != other.resolutionScale
+            || colorSpace != other.colorSpace
+            || contentsFormat != other.contentsFormat
+            || pixelFormat != other.pixelFormat
+            || renderingMode != other.renderingMode
+#if ENABLE(RE_DYNAMIC_CONTENT_SCALING)
+            || includeDisplayList != other.includeDisplayList
+#endif
+            || renderingPurpose != other.renderingPurpose) {
+            return false;
+        }
+        return true;
+    }
+#endif
 };
 
 } // namespace WebKit

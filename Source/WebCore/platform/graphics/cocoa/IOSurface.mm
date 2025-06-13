@@ -685,6 +685,18 @@ void IOSurface::ensureColorSpace()
     m_colorSpace = surfaceColorSpace().value_or(DestinationColorSpace::SRGB());
 }
 
+#if HAVE(SUPPORT_HDR_DISPLAY)
+void IOSurface::setEDRHeadroom(float headroom)
+{
+    if (headroom == m_edrHeadroom)
+        return;
+
+    LOG_WITH_STREAM(HDR, stream << "IOSurface::setEDRHeadroom " << *this << " " << headroom);
+    m_edrHeadroom = headroom;
+    IOSurfaceSetValue(m_surface.get(), CFSTR("IOSurfaceContentHeadroom"), @(headroom));
+}
+#endif
+
 std::optional<DestinationColorSpace> IOSurface::surfaceColorSpace() const
 {
     auto propertyList = adoptCF(IOSurfaceCopyValue(m_surface.get(), kIOSurfaceColorSpace));

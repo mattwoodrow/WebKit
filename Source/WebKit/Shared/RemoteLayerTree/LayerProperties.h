@@ -200,6 +200,9 @@ struct LayerProperties {
 #if ENABLE(SCROLLING_THREAD)
     Markable<WebCore::ScrollingNodeID> scrollingNodeID;
 #endif
+#if HAVE(SUPPORT_HDR_DISPLAY)
+    float edrHeadroom { 1.0f };
+#endif
 #if HAVE(CORE_ANIMATION_SEPARATED_LAYERS)
     bool isSeparated { false };
 #if HAVE(CORE_ANIMATION_SEPARATED_PORTALS)

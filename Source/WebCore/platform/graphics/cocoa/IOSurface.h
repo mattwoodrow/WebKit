@@ -195,6 +195,11 @@ public:
     IntSize size() const { return m_size; }
     size_t totalBytes() const { return m_totalBytes; }
 
+#if HAVE(SUPPORT_HDR_DISPLAY)
+    void setEDRHeadroom(float);
+    float edrHeadroom() const { return m_edrHeadroom; }
+#endif
+
     WEBCORE_EXPORT DestinationColorSpace colorSpace();
     WEBCORE_EXPORT IOSurfaceID surfaceID() const;
     WEBCORE_EXPORT size_t bytesPerRow() const;
@@ -234,6 +239,9 @@ private:
     std::optional<DestinationColorSpace> m_colorSpace;
     IntSize m_size;
     size_t m_totalBytes;
+#if HAVE(SUPPORT_HDR_DISPLAY)
+    float m_edrHeadroom { 1.0f };
+#endif
 
     ProcessIdentity m_resourceOwner;
 

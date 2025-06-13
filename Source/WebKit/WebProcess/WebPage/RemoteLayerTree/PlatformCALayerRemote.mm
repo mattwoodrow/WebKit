@@ -343,6 +343,9 @@ void PlatformCALayerRemote::updateBackingStore()
     parameters.contentsFormat = contentsFormat();
     parameters.scale = m_properties.contentsScale;
     parameters.isOpaque = m_properties.opaque;
+#if HAVE(SUPPORT_HDR_DISPLAY)
+    parameters.edrHeadroom = m_edrHeadroom;
+#endif
 
 #if ENABLE(RE_DYNAMIC_CONTENT_SCALING)
     parameters.includeDisplayList = shouldIncludeDisplayListInBackingStore();
@@ -1076,6 +1079,22 @@ void PlatformCALayerRemote::setScrollingNodeID(std::optional<ScrollingNodeID> no
 
     m_properties.scrollingNodeID = nodeID;
     m_properties.notePropertiesChanged(LayerChange::ScrollingNodeIDChanged);
+}
+#endif
+
+#if HAVE(SUPPORT_HDR_DISPLAY)
+float PlatformCALayerRemote::edrHeadroom()
+{
+    return m_properties.edrHeadroom;
+}
+
+void PlatformCALayerRemote::setEDRHeadroom(float headroom)
+{
+    if (headroom == m_edrHeadroom)
+        return;
+
+    m_edrHeadroom = headroom;
+    updateBackingStore();
 }
 #endif
 

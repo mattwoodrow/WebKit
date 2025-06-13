@@ -235,6 +235,17 @@ void TileController::setAcceleratesDrawing(bool acceleratesDrawing)
     tileGrid().updateTileLayerProperties();
 }
 
+#if HAVE(SUPPORT_HDR_DISPLAY)
+void TileController::setEDRHeadroom(float headroom)
+{
+    if (m_edrHeadroom == headroom)
+        return;
+
+    m_edrHeadroom = headroom;
+    tileGrid().updateTileLayerProperties();
+}
+#endif
+
 void TileController::setContentsFormat(ContentsFormat contentsFormat)
 {
     if (m_contentsFormat == contentsFormat)
@@ -860,6 +871,9 @@ Ref<PlatformCALayer> TileController::createTileLayer(const IntRect& tileRect, Ti
     layer->setContentsScale(m_deviceScaleFactor * temporaryScaleFactor);
     layer->setAcceleratesDrawing(m_acceleratesDrawing);
     layer->setContentsFormat(m_contentsFormat);
+#if HAVE(SUPPORT_HDR_DISPLAY)
+    layer->setEDRHeadroom(m_edrHeadroom);
+#endif
     layer->setNeedsDisplay();
     return layer;
 }

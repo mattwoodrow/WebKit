@@ -2054,8 +2054,14 @@ void RenderLayerBacking::updateDrawsContent(PaintedContentsInfo& contentsInfo)
         m_backgroundLayer->setDrawsContent(m_backgroundLayerPaintsFixedRootBackground ? hasPaintedContent : contentsInfo.paintsBoxDecorations());
 
 #if HAVE(SUPPORT_HDR_DISPLAY)
-    if (contentsInfo.paintsHDRContent() || contentsInfo.rendererHasHDRContent())
+    if (contentsInfo.paintsHDRContent() || contentsInfo.rendererHasHDRContent()) {
         m_graphicsLayer->setDrawsHDRContent(true);
+        // FIXME: This uses the highest requested headroom in the Document, but could be restricted
+        // to just the layer (but that's more expensive to compute and track).
+        float clampedHeadroom = std::min(m_owningLayer.page().displayEDRHeadroom(), renderer().view().highestRequestedHeadroom());
+        LOG_WITH_STREAM(HDR, stream << "RenderLayerBacking " << *this << " updateDrawContent headroom " << clampedHeadroom);
+        m_graphicsLayer->setEDRHeadroom(clampedHeadroom);
+    }
 #endif
 }
 

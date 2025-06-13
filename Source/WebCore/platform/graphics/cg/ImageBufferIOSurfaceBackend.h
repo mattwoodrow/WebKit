@@ -54,6 +54,10 @@ public:
     GraphicsContext& context() override;
     void flushContext() override;
 
+#if HAVE(SUPPORT_HDR_DISPLAY)
+    void setEDRHeadroom(float) override;
+#endif
+
 protected:
     ImageBufferIOSurfaceBackend(const Parameters&, std::unique_ptr<IOSurface>, RetainPtr<CGContextRef> platformContext, PlatformDisplayID, IOSurfacePool*);
     CGContextRef ensurePlatformContext();

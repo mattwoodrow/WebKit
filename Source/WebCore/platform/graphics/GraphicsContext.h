@@ -239,6 +239,10 @@ public:
     virtual void setLineJoin(LineJoin) = 0;
     virtual void setMiterLimit(float) = 0;
 
+#if HAVE(SUPPORT_HDR_DISPLAY)
+    virtual void setMaxEDRHeadroom(float) { }
+#endif
+
     // Images, Patterns, ControlParts, and Media
 
     IntSize compatibleImageBufferSize(const FloatSize&) const;

@@ -102,6 +102,7 @@ public:
     WEBCORE_EXPORT void setDrawsContent(bool) override;
 #if HAVE(SUPPORT_HDR_DISPLAY)
     WEBCORE_EXPORT void setDrawsHDRContent(bool) override;
+    WEBCORE_EXPORT void setEDRHeadroom(float) override;
 #endif
     WEBCORE_EXPORT void setContentsVisible(bool) override;
     WEBCORE_EXPORT void setAcceleratesDrawing(bool) override;
@@ -280,6 +281,7 @@ private:
 #if HAVE(SUPPORT_HDR_DISPLAY)
     bool drawsHDRContent() const override { return m_drawsHDRContent; }
     void updateDrawsHDRContent();
+    void updateEDRHeadroom();
 #endif
 
     WEBCORE_EXPORT void setAllowsBackingStoreDetaching(bool) override;
@@ -668,6 +670,7 @@ private:
 #endif
 #if HAVE(SUPPORT_HDR_DISPLAY)
         DrawsHDRContentChanged                  = 1LLU << 47,
+        EDRHeadroomChanged                      = 1LLU << 48,
 #endif
     };
     typedef uint64_t LayerChangeFlags;

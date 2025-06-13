@@ -925,6 +925,74 @@ void RenderView::removeRendererWithPausedImageAnimations(RenderElement& renderer
         images.removeFirst(&image);
 }
 
+#if HAVE(SUPPORT_HDR_DISPLAY)
+void RenderView::addRendererWithHDRImages(RenderElement& renderer, CachedImage& image)
+{
+    LOG_WITH_STREAM(HDR, stream << "RenderView " << this << " addRendererWithHDRImages " << renderer << " image " << &image << " headroom " << image.currentFrameHeadroom());
+
+    ASSERT(!renderer.hasHDRImages() || m_renderersWithHDRImages.contains(renderer));
+    m_highestRequestedHeadroom = std::nullopt;
+    layer()->setDescendantsNeedUpdateBackingAndHierarchyTraversal();
+
+    renderer.setHasHDRImages(true);
+    auto& images = m_renderersWithHDRImages.ensure(renderer, [] {
+        return Vector<WeakPtr<CachedImage>>();
+    }).iterator->value;
+    if (!images.contains(&image))
+        images.append(image);
+
+    if (m_highestRequestedHeadroom)
+        m_highestRequestedHeadroom = std::max(*m_highestRequestedHeadroom, image.currentFrameHeadroom());
+
+
+}
+
+void RenderView::removeRendererWithHDRImages(RenderElement& renderer, CachedImage* image)
+{
+    ASSERT(renderer.hasHDRImages());
+    m_highestRequestedHeadroom = std::nullopt;
+    layer()->setDescendantsNeedUpdateBackingAndHierarchyTraversal();
+
+    if (!image) {
+        LOG_WITH_STREAM(HDR, stream << "RenderView " << this << " removeRendererWithHDRImages " << renderer);
+        renderer.setHasHDRImages(false);
+        m_renderersWithHDRImages.remove(renderer);
+        return;
+    }
+
+    LOG_WITH_STREAM(HDR, stream << "RenderView " << this << " removeRendererWithHDRImages " << renderer << " image " << image << " headroom " << image->currentFrameHeadroom());
+
+    auto it = m_renderersWithHDRImages.find(renderer);
+    ASSERT(it != m_renderersWithHDRImages.end());
+
+    auto& images = it->value;
+    if (!images.contains(image))
+        return;
+
+    if (images.size() == 1) {
+        renderer.setHasHDRImages(false);
+        m_renderersWithHDRImages.remove(renderer);
+    } else
+        images.removeFirst(image);
+}
+
+Headroom RenderView::highestRequestedHeadroom()
+{
+    if (!m_highestRequestedHeadroom) {
+        m_highestRequestedHeadroom = Headroom::None;
+
+        for (auto it : m_renderersWithHDRImages) {
+            for (auto& image : it.value)
+                m_highestRequestedHeadroom = std::max(*m_highestRequestedHeadroom, image->currentFrameHeadroom());
+        }
+    }
+
+    LOG_WITH_STREAM(HDR, stream << "RenderView " << this << " highestRequestedHeadroom " << *m_highestRequestedHeadroom);
+
+    return *m_highestRequestedHeadroom;
+}
+#endif
+
 void RenderView::resumePausedImageAnimationsIfNeeded(const IntRect& visibleRect)
 {
     Vector<std::pair<SingleThreadWeakPtr<RenderElement>, WeakPtr<CachedImage>>, 10> toRemove;

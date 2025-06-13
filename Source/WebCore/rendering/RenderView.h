@@ -189,6 +189,13 @@ public:
     void removeRendererWithPausedImageAnimations(RenderElement&);
     void removeRendererWithPausedImageAnimations(RenderElement&, CachedImage&);
 
+#if HAVE(SUPPORT_HDR_DISPLAY)
+    void addRendererWithHDRImages(RenderElement&, CachedImage&);
+    void removeRendererWithHDRImages(RenderElement&, CachedImage*);
+    bool hasRendererWithHDRImages() const { return !m_renderersWithHDRImages.isEmptyIgnoringNullReferences(); }
+    Headroom highestRequestedHeadroom();
+#endif
+
     class RepaintRegionAccumulator {
         WTF_MAKE_NONCOPYABLE(RepaintRegionAccumulator);
     public:
@@ -287,6 +294,11 @@ private:
     SingleThreadWeakHashMap<RenderElement, Vector<WeakPtr<CachedImage>>> m_renderersWithPausedImageAnimation;
     WeakHashSet<SVGSVGElement, WeakPtrImplWithEventTargetData> m_SVGSVGElementsWithPausedImageAnimation;
     SingleThreadWeakHashSet<RenderElement> m_visibleInViewportRenderers;
+
+#if HAVE(SUPPORT_HDR_DISPLAY)
+    SingleThreadWeakHashMap<RenderElement, Vector<WeakPtr<CachedImage>>> m_renderersWithHDRImages;
+    std::optional<Headroom> m_highestRequestedHeadroom;
+#endif
 
     SingleThreadWeakHashSet<const RenderBox> m_boxesWithScrollSnapPositions;
     SingleThreadWeakHashSet<const RenderBox> m_containerQueryBoxes;

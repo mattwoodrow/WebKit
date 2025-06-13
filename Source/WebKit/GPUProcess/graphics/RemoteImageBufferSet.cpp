@@ -90,6 +90,18 @@ IPC::StreamConnectionWorkQueue& RemoteImageBufferSet::workQueue() const
 
 void RemoteImageBufferSet::updateConfiguration(const RemoteImageBufferSetConfiguration& configuration)
 {
+#if HAVE(SUPPORT_HDR_DISPLAY)
+    if (m_configuration.canUseExistingImageBuffers(configuration)) {
+        m_configuration = configuration;
+        if (m_frontBuffer)
+            m_frontBuffer->setEDRHeadroom(m_configuration.edrHeadroom);
+        if (m_backBuffer)
+            m_backBuffer->setEDRHeadroom(m_configuration.edrHeadroom);
+        if (m_secondaryBackBuffer)
+            m_secondaryBackBuffer->setEDRHeadroom(m_configuration.edrHeadroom);
+        return;
+    }
+#endif
     m_configuration = configuration;
     clearBuffers();
 }
@@ -143,6 +155,9 @@ void RemoteImageBufferSet::ensureBufferForDisplay(ImageBufferSetPrepareBufferFor
             creationContext.dynamicContentScalingResourceCache = ensureDynamicContentScalingResourceCache();
 #endif
         m_frontBuffer = m_renderingBackend->allocateImageBuffer(m_configuration.logicalSize, m_configuration.renderingMode, m_configuration.renderingPurpose, m_configuration.resolutionScale, m_configuration.colorSpace, m_configuration.pixelFormat, WTFMove(creationContext));
+#if HAVE(SUPPORT_HDR_DISPLAY)
+        m_frontBuffer->setEDRHeadroom(m_configuration.edrHeadroom);
+#endif
         m_frontBufferIsCleared = true;
     }
 

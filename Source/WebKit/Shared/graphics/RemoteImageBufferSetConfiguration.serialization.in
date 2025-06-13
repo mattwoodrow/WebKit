@@ -36,6 +36,9 @@ header: "RemoteImageBufferSetConfiguration.h"
 #if ENABLE(RE_DYNAMIC_CONTENT_SCALING)
     WebCore::IncludeDynamicContentScalingDisplayList includeDisplayList;
 #endif
+#if HAVE(SUPPORT_HDR_DISPLAY)
+    float edrHeadroom;
+#endif
 };
 
 #endif

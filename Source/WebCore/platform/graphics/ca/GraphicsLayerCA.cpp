@@ -738,6 +738,16 @@ void GraphicsLayerCA::setDrawsHDRContent(bool drawsHDRContent)
     GraphicsLayer::setDrawsHDRContent(drawsHDRContent);
     noteLayerPropertyChanged(DrawsHDRContentChanged | DebugIndicatorsChanged);
 }
+
+void GraphicsLayerCA::setEDRHeadroom(float headroom)
+{
+    if (headroom == m_edrHeadroom)
+        return;
+
+    GraphicsLayer::setEDRHeadroom(headroom);
+    setNeedsDisplay();
+    noteLayerPropertyChanged(EDRHeadroomChanged);
+}
 #endif
 
 void GraphicsLayerCA::setContentsVisible(bool contentsVisible)
@@ -2143,6 +2153,9 @@ void GraphicsLayerCA::commitLayerChangesBeforeSublayers(CommitState& commitState
 #if HAVE(SUPPORT_HDR_DISPLAY)
     if (m_uncommittedChanges & DrawsHDRContentChanged)
         updateDrawsHDRContent();
+
+    if (m_uncommittedChanges & EDRHeadroomChanged)
+        updateEDRHeadroom();
 #endif
 
     if (m_uncommittedChanges & NameChanged)
@@ -3322,6 +3335,11 @@ void GraphicsLayerCA::updateDrawsHDRContent()
 {
     auto contentsFormat = PlatformCALayer::contentsFormatForLayer(nullptr, this);
     protectedLayer()->setContentsFormat(contentsFormat);
+}
+
+void GraphicsLayerCA::updateEDRHeadroom()
+{
+    protectedLayer()->setEDRHeadroom(m_edrHeadroom);
 }
 #endif
 
@@ -4652,6 +4670,7 @@ ASCIILiteral GraphicsLayerCA::layerChangeAsString(LayerChange layerChange)
 #endif
 #if HAVE(SUPPORT_HDR_DISPLAY)
     case LayerChange::DrawsHDRContentChanged: return "DrawsHDRContentChanged"_s;
+    case LayerChange::EDRHeadroomChanged: return "EDRHeadroomChanged"_s;
 #endif
     }
     ASSERT_NOT_REACHED();

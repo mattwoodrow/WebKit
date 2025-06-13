@@ -138,6 +138,10 @@ public:
     virtual IOSurface* surface() { return nullptr; }
 #endif
 
+#if HAVE(SUPPORT_HDR_DISPLAY)
+    virtual void setEDRHeadroom(float) { }
+#endif
+
 #if USE(CAIRO)
     virtual RefPtr<cairo_surface_t> createCairoSurface() { return nullptr; }
 #endif

@@ -80,6 +80,11 @@ public:
     WEBCORE_EXPORT void setContentsScale(float);
     WEBCORE_EXPORT float contentsScale() const;
 
+#if HAVE(SUPPORT_HDR_DISPLAY)
+    float edrHeadroom() { return m_edrHeadroom; }
+    WEBCORE_EXPORT void setEDRHeadroom(float);
+#endif
+
     bool acceleratesDrawing() const { return m_acceleratesDrawing; }
     WEBCORE_EXPORT void setAcceleratesDrawing(bool);
 
@@ -231,6 +236,10 @@ private:
 
     float m_zoomedOutContentsScale { 0 };
     float m_deviceScaleFactor;
+
+#if HAVE(SUPPORT_HDR_DISPLAY)
+    float m_edrHeadroom { 1 };
+#endif
 
     std::unique_ptr<TileCoverageMap> m_coverageMap;
 

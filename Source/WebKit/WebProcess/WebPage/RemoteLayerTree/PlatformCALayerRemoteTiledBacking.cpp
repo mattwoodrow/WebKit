@@ -87,6 +87,19 @@ void PlatformCALayerRemoteTiledBacking::setAcceleratesDrawing(bool acceleratesDr
     m_tileController->setAcceleratesDrawing(acceleratesDrawing);
 }
 
+#if HAVE(SUPPORT_HDR_DISPLAY)
+float PlatformCALayerRemoteTiledBacking::edrHeadroom()
+{
+    return m_tileController->edrHeadroom();
+}
+
+void PlatformCALayerRemoteTiledBacking::setEDRHeadroom(float headroom)
+{
+    m_tileController->setEDRHeadroom(headroom);
+}
+#endif
+
+
 ContentsFormat PlatformCALayerRemoteTiledBacking::contentsFormat() const
 {
     return m_tileController->contentsFormat();

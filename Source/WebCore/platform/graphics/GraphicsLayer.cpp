@@ -453,6 +453,12 @@ void GraphicsLayer::setDrawsHDRContent(bool b)
     ASSERT(m_type != Type::Structural);
     m_drawsHDRContent = b;
 }
+
+void GraphicsLayer::setEDRHeadroom(float headroom)
+{
+    ASSERT(m_type != Type::Structural);
+    m_edrHeadroom = headroom;
+}
 #endif
 
 const TransformationMatrix& GraphicsLayer::transform() const
@@ -998,6 +1004,8 @@ void GraphicsLayer::dumpProperties(TextStream& ts, OptionSet<LayerTreeAsTextOpti
 #if HAVE(SUPPORT_HDR_DISPLAY)
     if (m_drawsHDRContent)
         ts << indent << "(drawsHDRContent "_s << m_drawsHDRContent << ")\n"_s;
+    if (m_edrHeadroom != 1)
+        ts << indent << "(edrHeadroom"_s << m_edrHeadroom << ")\n"_s;
 #endif
 
     if (!m_contentsVisible)

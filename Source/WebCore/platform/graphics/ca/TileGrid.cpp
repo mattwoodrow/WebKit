@@ -208,6 +208,9 @@ void TileGrid::updateTileLayerProperties()
     bool acceleratesDrawing = m_controller->acceleratesDrawing();
     auto contentsFormat = m_controller->contentsFormat();
     bool opaque = m_controller->tilesAreOpaque();
+#if HAVE(SUPPORT_HDR_DISPLAY)
+    float headroom = m_controller->edrHeadroom();
+#endif
     Color tileDebugBorderColor = m_controller->tileDebugBorderColor();
     float tileDebugBorderWidth = m_controller->tileDebugBorderWidth();
     for (auto& tileInfo : m_tiles.values()) {
@@ -216,6 +219,9 @@ void TileGrid::updateTileLayerProperties()
         tileInfo.layer->setOpaque(opaque);
         tileInfo.layer->setBorderColor(tileDebugBorderColor);
         tileInfo.layer->setBorderWidth(tileDebugBorderWidth);
+#if HAVE(SUPPORT_HDR_DISPLAY)
+        tileInfo.layer->setEDRHeadroom(headroom);
+#endif
     }
 }
 

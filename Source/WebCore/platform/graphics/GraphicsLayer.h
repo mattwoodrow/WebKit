@@ -427,6 +427,9 @@ public:
 #if HAVE(SUPPORT_HDR_DISPLAY)
     bool drawsHDRContent() const { return m_drawsHDRContent; }
     WEBCORE_EXPORT virtual void setDrawsHDRContent(bool);
+
+    float edrHeadroom() const { return m_edrHeadroom; }
+    WEBCORE_EXPORT virtual void setEDRHeadroom(float);
 #endif
 
     bool contentsAreVisible() const { return m_contentsVisible; }
@@ -874,6 +877,9 @@ protected:
     ScalingFilter m_contentsMagnificationFilter = ScalingFilter::Linear;
     FloatRoundedRect m_backdropFiltersRect;
     std::optional<FloatRect> m_animationExtent;
+#if HAVE(SUPPORT_HDR_DISPLAY)
+    float m_edrHeadroom { 1.0f };
+#endif
 
     EventRegion m_eventRegion;
 #if USE(CA)

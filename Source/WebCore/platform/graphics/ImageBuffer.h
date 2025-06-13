@@ -189,6 +189,10 @@ public:
     IOSurface* surface();
 #endif
 
+#if HAVE(SUPPORT_HDR_DISPLAY)
+    WEBCORE_EXPORT void setEDRHeadroom(float);
+#endif
+
 #if USE(CAIRO)
     WEBCORE_EXPORT RefPtr<cairo_surface_t> createCairoSurface();
 #endif

@@ -300,6 +300,11 @@ public:
     virtual GraphicsLayer::CustomAppearance customAppearance() const = 0;
     virtual void updateCustomAppearance(GraphicsLayer::CustomAppearance) = 0;
 
+#if HAVE(SUPPORT_HDR_DISPLAY)
+    virtual float edrHeadroom();
+    virtual void setEDRHeadroom(float);
+#endif
+
 #if HAVE(CORE_ANIMATION_SEPARATED_LAYERS)
     virtual bool isSeparated() const = 0;
     virtual void setIsSeparated(bool) = 0;

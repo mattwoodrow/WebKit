@@ -128,6 +128,9 @@ void RemoteLayerWithRemoteRenderingBackingStore::ensureBackingStore(const Parame
 #if ENABLE(RE_DYNAMIC_CONTENT_SCALING)
             .includeDisplayList = m_parameters.includeDisplayList,
 #endif
+#if HAVE(SUPPORT_HDR_DISPLAY)
+            .edrHeadroom = m_parameters.edrHeadroom,
+#endif
         };
         m_bufferSet->setConfiguration(WTFMove(configuration));
     }
@@ -170,6 +173,9 @@ void RemoteLayerWithRemoteRenderingBackingStore::dump(WTF::TextStream& ts) const
     ts.dumpProperty("buffer set"_s, m_bufferSet);
     ts.dumpProperty("cache identifiers"_s, m_bufferCacheIdentifiers);
     ts.dumpProperty("is opaque"_s, isOpaque());
+#if HAVE(SUPPORT_HDR_DISPLAY)
+    ts.dumpProperty("headroom", m_parameters.edrHeadroom);
+#endif
 }
 
 } // namespace WebKit

@@ -464,6 +464,14 @@ SkSurface* ImageBuffer::surface() const
 }
 #endif
 
+#if HAVE(SUPPORT_HDR_DISPLAY)
+void ImageBuffer::setEDRHeadroom(float headroom)
+{
+    if (m_backend)
+        m_backend->setEDRHeadroom(headroom);
+}
+#endif
+
 #if USE(CAIRO)
 RefPtr<cairo_surface_t> ImageBuffer::createCairoSurface()
 {

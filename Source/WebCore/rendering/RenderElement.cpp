@@ -134,6 +134,9 @@ inline RenderElement::RenderElement(Type type, ContainerNode& elementOrDocument,
     , m_hasPausedImageAnimations(false)
     , m_hasCounterNodeMap(false)
     , m_hasContinuationChainNode(false)
+#if HAVE(SUPPORT_HDR_DISPLAY)
+    , m_hasHDRImages(false)
+#endif
     , m_isContinuation(false)
     , m_isFirstLetter(false)
     , m_renderBlockHasMarginBeforeQuirk(false)
@@ -1214,6 +1217,11 @@ void RenderElement::willBeDestroyed()
     if (m_hasPausedImageAnimations)
         checkedView()->removeRendererWithPausedImageAnimations(*this);
 
+#if HAVE(SUPPORT_HDR_DISPLAY)
+    if (m_hasHDRImages)
+        checkedView()->removeRendererWithHDRImages(*this, nullptr);
+#endif
+
     if (style().contentVisibility() == ContentVisibility::Auto && element())
         ContentVisibilityDocumentState::unobserve(*protectedElement());
 }
@@ -1671,6 +1679,11 @@ VisibleInViewportState RenderElement::imageFrameAvailable(CachedImage& image, Im
     if (!isVisible && animatingState == ImageAnimatingState::Yes)
         checkedView()->addRendererWithPausedImageAnimations(*this, image);
 
+#if HAVE(SUPPORT_HDR_DISPLAY)
+    if (image.hasHDRContent())
+        checkedView()->addRendererWithHDRImages(*this, image);
+#endif
+
     // Static images should repaint even if they are outside the viewport rectangle
     // because they should be inside the TileCoverageRect.
     if (isVisible || animatingState == ImageAnimatingState::No)
@@ -1718,6 +1731,9 @@ void RenderElement::imageContentChanged(CachedImage& cachedImage)
         if (cachedImage.hasHDRContent())
             document().setHasHDRContent();
     }
+
+    if (cachedImage.hasHDRContent())
+        checkedView()->addRendererWithHDRImages(*this, cachedImage);
 
     if (document().hasHDRContent()) {
         if (CheckedPtr rendererLayer = enclosingLayer()) {

@@ -2712,6 +2712,8 @@ public:
 
 #if PLATFORM(IOS_FAMILY)
     void isPotentialTapInProgress(CompletionHandler<void(bool)>&&);
+
+    void willRefreshDisplay();
 #endif
 
 #if PLATFORM(COCOA) && ENABLE(ASYNC_SCROLLING)

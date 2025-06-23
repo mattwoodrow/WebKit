@@ -53,7 +53,9 @@ public:
 private:
     explicit PlaceholderRenderingContextSource(PlaceholderRenderingContext&);
 
-    WeakPtr<PlaceholderRenderingContext> m_placeholder; // For main thread use.
+    WeakPtr<PlaceholderRenderingContext> m_placeholder WTF_GUARDED_BY_CAPABILITY(mainThread);
+    RefPtr<ImageBuffer> m_imageBufferForDelegate WTF_GUARDED_BY_CAPABILITY(mainThread);
+    bool m_delegateHasCopiedToLayer WTF_GUARDED_BY_CAPABILITY(mainThread) { false };
     Lock m_lock;
     RefPtr<GraphicsLayerAsyncContentsDisplayDelegate> m_delegate WTF_GUARDED_BY_LOCK(m_lock);
 };

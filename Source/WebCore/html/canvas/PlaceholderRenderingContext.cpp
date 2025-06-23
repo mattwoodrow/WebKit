@@ -49,10 +49,13 @@ PlaceholderRenderingContextSource::PlaceholderRenderingContextSource(Placeholder
 
 void PlaceholderRenderingContextSource::setPlaceholderBuffer(ImageBuffer& imageBuffer)
 {
+    bool delegateCopiedToLayer = false;
     {
         Locker locker { m_lock };
-        if (m_delegate)
+        if (m_delegate) {
             m_delegate->tryCopyToLayer(imageBuffer);
+            delegateCopiedToLayer = true;
+        }
     }
 
     RefPtr clone = imageBuffer.clone();
@@ -61,21 +64,38 @@ void PlaceholderRenderingContextSource::setPlaceholderBuffer(ImageBuffer& imageB
     std::unique_ptr serializedClone = ImageBuffer::sinkIntoSerializedImageBuffer(WTFMove(clone));
     if (!serializedClone)
         return;
-    callOnMainThread([weakPlaceholder = m_placeholder, buffer = WTFMove(serializedClone)] () mutable {
-        RefPtr placeholder = weakPlaceholder.get();
-        if (!placeholder)
+    callOnMainThread([protectedThis = Ref { *this }, this, buffer = WTFMove(serializedClone), delegateCopiedToLayer] () mutable {
+        assertIsMainThread();
+        m_delegateHasCopiedToLayer |= delegateCopiedToLayer;
+        if (!m_placeholder)
             return;
-        RefPtr imageBuffer = SerializedImageBuffer::sinkIntoImageBuffer(WTFMove(buffer), placeholder->protectedCanvas()->scriptExecutionContext()->graphicsClient());
+        RefPtr imageBuffer = SerializedImageBuffer::sinkIntoImageBuffer(WTFMove(buffer), m_placeholder->protectedCanvas()->scriptExecutionContext()->graphicsClient());
         if (!imageBuffer)
             return;
-        placeholder->setPlaceholderBuffer(imageBuffer.releaseNonNull());
+
+        if (!m_delegateHasCopiedToLayer) {
+            Locker locker { m_lock };
+            if (m_delegate) {
+                m_delegate->tryCopyToLayer(*imageBuffer);
+                m_delegateHasCopiedToLayer = true;
+            } else
+                m_imageBufferForDelegate = imageBuffer;
+        }
+
+        m_placeholder->setPlaceholderBuffer(imageBuffer.releaseNonNull());
     });
 }
 
 void PlaceholderRenderingContextSource::setContentsToLayer(GraphicsLayer& layer)
 {
+    assertIsMainThread();
     Locker locker { m_lock };
     m_delegate = layer.createAsyncContentsDisplayDelegate(m_delegate.get());
+    if (m_imageBufferForDelegate) {
+        ASSERT(!m_delegateHasCopiedToLayer);
+        m_delegate->tryCopyToLayer(*std::exchange(m_imageBufferForDelegate, nullptr));
+        m_delegateHasCopiedToLayer = true;
+    }
 }
 
 WTF_MAKE_TZONE_OR_ISO_ALLOCATED_IMPL(PlaceholderRenderingContext);

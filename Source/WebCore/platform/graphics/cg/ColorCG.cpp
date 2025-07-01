@@ -163,15 +163,44 @@ static std::pair<CGColorSpaceRef, ColorComponents<float, 4>> convertToCGCompatib
     return { cachedCGColorSpace<ColorSpaceFor<FallbackColorType>>(), componentsConvertedToFallbackColorSpace };
 }
 
+static float headroomForColor(const Color& color, CGColorSpaceRef cgColorSpace)
+{
+    if (!CGColorSpaceUsesExtendedRange(cgColorSpace))
+        return 1.0f;
+
+    // FIXME: Should this be in extended linear DisplayP3?
+    auto linearComponents = asColorComponents(color.callOnUnderlyingType([] (const auto& underlyingColor) {
+        return convertColor<ExtendedLinearSRGBA<float>>(underlyingColor).resolved();
+    }));
+
+    float headroom = std::max(std::max(linearComponents[0], linearComponents[1]), linearComponents[2]);
+    if (WTF::areEssentiallyEqual(headroom, std::floorf(headroom), 1.0e-3f))
+        headroom = std::floorf(headroom);
+
+    return headroom;
+}
+
 static RetainPtr<CGColorRef> createCGColor(const Color& color)
 {
     auto [colorSpace, components] = color.colorSpaceAndResolvedColorComponents();
     auto [cgColorSpace, cgCompatibleComponents] = convertToCGCompatibleComponents(colorSpace, components);
-    
+
     auto [c1, c2, c3, c4] = cgCompatibleComponents;
     std::array<CGFloat, 4> cgFloatComponents { c1, c2, c3, c4 };
 
-    return adoptCF(CGColorCreate(cgColorSpace, cgFloatComponents.data()));
+    auto result = adoptCF(CGColorCreate(cgColorSpace, cgFloatComponents.data()));
+
+    if (auto headroom = headroomForColor(color, cgColorSpace); headroom > 1) {
+        auto info = adoptCF(CGColorConversionInfoCreateForToneMapping(cgColorSpace, headroom, cgColorSpace, 1.0f, kCGToneMappingDefault, nullptr, nullptr));
+
+        if (info) {
+            std::array<CGFloat, 4> tonemappedCGFloatComponents = cgFloatComponents;
+            CGColorConversionInfoConvertColorComponents(info.get(), cgFloatComponents.data(), tonemappedCGFloatComponents.data(), nullptr);
+            return adoptCF(CGColorCreate(cgColorSpace, tonemappedCGFloatComponents.data()));
+        }
+    }
+
+    return result;
 }
 
 RetainPtr<CGColorRef> cachedCGColor(const Color& color)

@@ -40,7 +40,7 @@ void LegacyRenderSVGHiddenContainer::layout()
     clearNeedsLayout();
 }
 
-void LegacyRenderSVGHiddenContainer::paint(PaintInfo&, const LayoutPoint&)
+void LegacyRenderSVGHiddenContainer::paintInternal(PaintInfo&, const LayoutPoint&)
 {
     // This subtree does not paint.
 }

@@ -59,7 +59,7 @@ private:
 
     void computePreferredLogicalWidths() final;
     void layoutBlock(RelayoutChildren, LayoutUnit pageLogicalHeight = 0_lu) final;
-    void paint(PaintInfo&, const LayoutPoint&) final;
+    void paintInternal(PaintInfo&, const LayoutPoint&) final;
 
     struct HorizontalParameters {
         LayoutUnit kernBeforeDegree;

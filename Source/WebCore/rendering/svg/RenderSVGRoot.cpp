@@ -266,7 +266,7 @@ bool RenderSVGRoot::shouldApplyViewportClip() const
 // FIXME: Basically a copy of RenderBlock::paint() - ideally one would share this code.
 // However with LFC on the horizon that investment is useless, we should concentrate
 // on LFC/SVG integration once the LBSE is upstreamed.
-void RenderSVGRoot::paint(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
+void RenderSVGRoot::paintInternal(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
 {
     // Don't paint, if the context explicitly disabled it.
     if (paintInfo.context().paintingDisabled() && !paintInfo.context().detectingContentfulPaint())

@@ -1201,10 +1201,10 @@ LayoutUnit RenderTableCell::borderHalfAfter(bool outer) const
     return 0;
 }
 
-void RenderTableCell::paint(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
+void RenderTableCell::paintInternal(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
 {
     ASSERT(paintInfo.phase != PaintPhase::CollapsedTableBorders);
-    RenderBlockFlow::paint(paintInfo, paintOffset);
+    RenderBlockFlow::paintInternal(paintInfo, paintOffset);
 }
 
 struct CollapsedBorder {

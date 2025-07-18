@@ -56,7 +56,7 @@ SVGForeignObjectElement& LegacyRenderSVGForeignObject::foreignObjectElement() co
     return downcast<SVGForeignObjectElement>(RenderSVGBlock::graphicsElement());
 }
 
-void LegacyRenderSVGForeignObject::paint(PaintInfo& paintInfo, const LayoutPoint&)
+void LegacyRenderSVGForeignObject::paintInternal(PaintInfo& paintInfo, const LayoutPoint&)
 {
     if (paintInfo.context().paintingDisabled())
         return;
@@ -80,7 +80,7 @@ void LegacyRenderSVGForeignObject::paint(PaintInfo& paintInfo, const LayoutPoint
 
     LayoutPoint childPoint = IntPoint();
     if (paintInfo.phase == PaintPhase::Selection) {
-        RenderBlock::paint(childPaintInfo, childPoint);
+        RenderBlock::paintInternal(childPaintInfo, childPoint);
         return;
     }
 

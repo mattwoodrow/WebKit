@@ -94,7 +94,7 @@ private:
     ASCIILiteral renderName() const override { return "RenderFrameSet"_s; }
 
     void layout() override;
-    void paint(PaintInfo&, const LayoutPoint&) override;
+    void paintInternal(PaintInfo&, const LayoutPoint&) override;
     bool canHaveChildren() const override { return true; }
     bool isChildAllowed(const RenderObject&, const RenderStyle&) const override;
     CursorDirective getCursor(const LayoutPoint&, Cursor&) const override;

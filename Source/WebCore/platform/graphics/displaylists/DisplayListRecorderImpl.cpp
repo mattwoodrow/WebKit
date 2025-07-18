@@ -55,6 +55,11 @@ RecorderImpl::~RecorderImpl()
     ASSERT(stateStack().size() == 1); // If this fires, it indicates mismatched save/restore.
 }
 
+bool RecorderImpl::hasDisplayList() const
+{
+    return !m_items.isEmpty();
+}
+
 Ref<const DisplayList> RecorderImpl::takeDisplayList()
 {
     appendStateChangeItemIfNecessary();

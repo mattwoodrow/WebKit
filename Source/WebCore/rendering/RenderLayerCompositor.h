@@ -49,6 +49,8 @@ class ScrollingCoordinator;
 class StickyPositionViewportConstraints;
 class TiledBacking;
 
+class PaintLayerBuilder;
+
 enum class ScrollingNodeType : uint8_t;
 
 enum class CompositingUpdateType {
@@ -679,6 +681,8 @@ private:
     RefPtr<GraphicsLayer> m_layerForHeader;
     RefPtr<GraphicsLayer> m_layerForFooter;
 #endif
+
+    RefPtr<PaintLayerBuilder> m_paintBuilder;
 
     bool m_viewBackgroundIsTransparent { false };
 

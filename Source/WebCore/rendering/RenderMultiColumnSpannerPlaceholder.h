@@ -51,7 +51,7 @@ private:
     void computeIntrinsicLogicalWidths(LayoutUnit&, LayoutUnit&) const override { ASSERT_NOT_REACHED(); }
 
     bool canHaveChildren() const override { return false; }
-    void paint(PaintInfo&, const LayoutPoint&) override { }
+    void paintInternal(PaintInfo&, const LayoutPoint&) override { }
     ASCIILiteral renderName() const override;
 
     SingleThreadWeakPtr<RenderBox> m_spanner;

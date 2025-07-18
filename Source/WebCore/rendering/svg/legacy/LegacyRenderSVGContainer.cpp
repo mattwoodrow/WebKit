@@ -120,7 +120,7 @@ bool LegacyRenderSVGContainer::selfWillPaint()
     return resources && resources->filter();
 }
 
-void LegacyRenderSVGContainer::paint(PaintInfo& paintInfo, const LayoutPoint&)
+void LegacyRenderSVGContainer::paintInternal(PaintInfo& paintInfo, const LayoutPoint&)
 {
     if (paintInfo.phase != PaintPhase::EventRegion && paintInfo.context().paintingDisabled())
         return;

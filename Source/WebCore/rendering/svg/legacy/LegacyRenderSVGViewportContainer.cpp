@@ -100,13 +100,13 @@ bool LegacyRenderSVGViewportContainer::pointIsInsideViewportClip(const FloatPoin
     return m_viewport.contains(pointInParent);
 }
 
-void LegacyRenderSVGViewportContainer::paint(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
+void LegacyRenderSVGViewportContainer::paintInternal(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
 {
     // An empty viewBox disables rendering.
     if (svgSVGElement().hasEmptyViewBox())
         return;
 
-    LegacyRenderSVGContainer::paint(paintInfo, paintOffset);
+    LegacyRenderSVGContainer::paintInternal(paintInfo, paintOffset);
 }
 
 }

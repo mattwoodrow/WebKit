@@ -648,10 +648,10 @@ void RenderImage::paintReplaced(PaintInfo& paintInfo, const LayoutPoint& paintOf
     }
 }
 
-void RenderImage::paint(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
+void RenderImage::paintInternal(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
 {
-    RenderReplaced::paint(paintInfo, paintOffset);
-    
+    RenderReplaced::paintInternal(paintInfo, paintOffset);
+
     if (paintInfo.phase == PaintPhase::Outline)
         paintAreaElementFocusRing(paintInfo, paintOffset);
 }

@@ -606,9 +606,9 @@ void RenderMathMLToken::layoutBlock(RelayoutChildren relayoutChildren, LayoutUni
     clearNeedsLayout();
 }
 
-void RenderMathMLToken::paint(PaintInfo& info, const LayoutPoint& paintOffset)
+void RenderMathMLToken::paintInternal(PaintInfo& info, const LayoutPoint& paintOffset)
 {
-    RenderMathMLBlock::paint(info, paintOffset);
+    RenderMathMLBlock::paintInternal(info, paintOffset);
 
     // FIXME: Instead of using DrawGlyph, we may consider using the more general TextPainter so that we can apply mathvariant to strings with an arbitrary number of characters and preserve advanced CSS effects (text-shadow, etc).
     if (info.context().paintingDisabled() || info.phase != PaintPhase::Foreground || style().usedVisibility() != Visibility::Visible || !m_mathVariantCodePoint)

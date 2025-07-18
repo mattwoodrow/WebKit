@@ -36,7 +36,7 @@ class RenderSVGContainer : public RenderSVGModelObject {
 public:
     virtual ~RenderSVGContainer();
 
-    void paint(PaintInfo&, const LayoutPoint&) override;
+    void paintInternal(PaintInfo&, const LayoutPoint&) override;
 
     bool isObjectBoundingBoxValid() const { return m_objectBoundingBoxValid; }
     bool isLayoutSizeChanged() const { return m_isLayoutSizeChanged; }

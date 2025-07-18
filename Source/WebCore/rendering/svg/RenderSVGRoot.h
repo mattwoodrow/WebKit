@@ -86,7 +86,7 @@ private:
     LayoutUnit computeReplacedLogicalHeight(std::optional<LayoutUnit> estimatedUsedWidth = std::nullopt) const final;
     void layout() final;
     void layoutChildren();
-    void paint(PaintInfo&, const LayoutPoint&) final;
+    void paintInternal(PaintInfo&, const LayoutPoint&) final;
     void paintObject(PaintInfo&, const LayoutPoint&) final;
     void paintContents(PaintInfo&, const LayoutPoint&);
 

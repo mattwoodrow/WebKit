@@ -803,7 +803,7 @@ PositionWithAffinity RenderSVGText::positionForPoint(const LayoutPoint& pointInC
     return const_cast<RenderObject&>(closestBox->renderer()).positionForPoint({ pointInContents.x(), LayoutUnit(closestBox->visualRectIgnoringBlockDirection().y()) }, source, fragment);
 }
 
-void RenderSVGText::paint(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
+void RenderSVGText::paintInternal(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
 {
     if (document().settings().layerBasedSVGEngineEnabled()) {
         OptionSet<PaintPhase> relevantPaintPhases { PaintPhase::Foreground, PaintPhase::ClippingMask, PaintPhase::Mask, PaintPhase::Outline, PaintPhase::SelfOutline };
@@ -822,7 +822,7 @@ void RenderSVGText::paint(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
         }
 
         if (paintInfo.phase == PaintPhase::Outline || paintInfo.phase == PaintPhase::SelfOutline) {
-            RenderBlock::paint(paintInfo, paintOffset);
+            RenderBlock::paintInternal(paintInfo, paintOffset);
             return;
         }
 
@@ -832,7 +832,7 @@ void RenderSVGText::paint(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
         auto coordinateSystemOriginTranslation = adjustedPaintOffset - nominalSVGLayoutLocation();
         paintInfo.context().translate(coordinateSystemOriginTranslation.width(), coordinateSystemOriginTranslation.height());
 
-        RenderBlock::paint(paintInfo, paintOffset);
+        RenderBlock::paintInternal(paintInfo, paintOffset);
         return;
     }
 
@@ -848,12 +848,12 @@ void RenderSVGText::paint(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
     PaintInfo blockInfo(paintInfo);
     GraphicsContextStateSaver stateSaver(blockInfo.context());
     blockInfo.applyTransform(localToParentTransform());
-    RenderBlock::paint(blockInfo, LayoutPoint());
+    RenderBlock::paintInternal(blockInfo, LayoutPoint());
 
     // Paint the outlines, if any
     if (paintInfo.phase == PaintPhase::Foreground) {
         blockInfo.phase = PaintPhase::SelfOutline;
-        RenderBlock::paint(blockInfo, LayoutPoint());
+        RenderBlock::paintInternal(blockInfo, LayoutPoint());
     }
 }
 

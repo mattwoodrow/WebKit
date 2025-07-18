@@ -302,7 +302,7 @@ void RenderWidget::paintContents(PaintInfo& paintInfo, const LayoutPoint& paintO
     }
 }
 
-void RenderWidget::paint(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
+void RenderWidget::paintInternal(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
 {
     if (!shouldPaint(paintInfo, paintOffset))
         return;

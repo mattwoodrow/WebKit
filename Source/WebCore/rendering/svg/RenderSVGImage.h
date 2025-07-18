@@ -63,7 +63,7 @@ private:
     void imageChanged(WrappedImagePtr, const IntRect* = nullptr) final;
 
     void layout() final;
-    void paint(PaintInfo&, const LayoutPoint&) final;
+    void paintInternal(PaintInfo&, const LayoutPoint&) final;
 
     void paintForeground(PaintInfo&, const LayoutPoint&);
     ImageDrawResult paintIntoRect(PaintInfo&, const FloatRect&, const FloatRect&);

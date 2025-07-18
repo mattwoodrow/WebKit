@@ -973,7 +973,7 @@ void RenderBlock::paintCarets(PaintInfo& paintInfo, const LayoutPoint& paintOffs
     }
 }
 
-void RenderBlock::paint(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
+void RenderBlock::paintInternal(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
 {
     auto adjustedPaintOffset = paintOffset + location();
     PaintPhase phase = paintInfo.phase;

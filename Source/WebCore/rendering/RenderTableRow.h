@@ -83,7 +83,7 @@ private:
     void computeIntrinsicLogicalWidths(LayoutUnit&, LayoutUnit&) const override { }
 
     bool requiresLayer() const final;
-    void paint(PaintInfo&, const LayoutPoint&) override;
+    void paintInternal(PaintInfo&, const LayoutPoint&) override;
     void imageChanged(WrappedImagePtr, const IntRect* = 0) override;
     void styleDidChange(StyleDifference, const RenderStyle* oldStyle) override;
 

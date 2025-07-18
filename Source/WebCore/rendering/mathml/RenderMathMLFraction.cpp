@@ -289,9 +289,9 @@ void RenderMathMLFraction::layoutBlock(RelayoutChildren relayoutChildren, Layout
     clearNeedsLayout();
 }
 
-void RenderMathMLFraction::paint(PaintInfo& info, const LayoutPoint& paintOffset)
+void RenderMathMLFraction::paintInternal(PaintInfo& info, const LayoutPoint& paintOffset)
 {
-    RenderMathMLRow::paint(info, paintOffset);
+    RenderMathMLRow::paintInternal(info, paintOffset);
     LayoutUnit thickness = lineThickness();
     if (info.context().paintingDisabled() || info.phase != PaintPhase::Foreground || style().usedVisibility() != Visibility::Visible || !isValid() || !thickness)
         return;

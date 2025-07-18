@@ -92,7 +92,7 @@ public:
     void repaintViewRectangle(const LayoutRect&) const;
     void repaintViewAndCompositedLayers();
 
-    void paint(PaintInfo&, const LayoutPoint&) override;
+    void paintInternal(PaintInfo&, const LayoutPoint&) override;
     void paintBoxDecorations(PaintInfo&, const LayoutPoint&) override;
     // Return the renderer whose background style is used to paint the root background.
     RenderElement* rendererForRootBackground() const;

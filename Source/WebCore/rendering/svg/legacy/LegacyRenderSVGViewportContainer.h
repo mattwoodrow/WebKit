@@ -45,7 +45,7 @@ public:
     void determineIfLayoutSizeChanged() override;
     void setNeedsTransformUpdate() override { m_needsTransformUpdate = true; }
 
-    void paint(PaintInfo&, const LayoutPoint&) override;
+    void paintInternal(PaintInfo&, const LayoutPoint&) override;
 
 private:
     void element() const = delete;

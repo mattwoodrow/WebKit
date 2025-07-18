@@ -265,7 +265,7 @@ void LegacyRenderSVGShape::fillStrokeMarkers(PaintInfo& childPaintInfo)
     }
 }
 
-void LegacyRenderSVGShape::paint(PaintInfo& paintInfo, const LayoutPoint&)
+void LegacyRenderSVGShape::paintInternal(PaintInfo& paintInfo, const LayoutPoint&)
 {
     if (style().usedVisibility() == Visibility::Hidden || isEmpty())
         return;

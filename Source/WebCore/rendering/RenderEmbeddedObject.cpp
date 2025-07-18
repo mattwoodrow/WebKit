@@ -198,7 +198,7 @@ void RenderEmbeddedObject::setUnavailablePluginIndicatorIsPressed(bool pressed)
     repaint();
 }
 
-void RenderEmbeddedObject::paint(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
+void RenderEmbeddedObject::paintInternal(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
 {
     // The relevant repainted object heuristic is not tuned for plugin documents.
     bool countsTowardsRelevantObjects = !document().isPluginDocument() && paintInfo.phase == PaintPhase::Foreground;
@@ -206,14 +206,14 @@ void RenderEmbeddedObject::paint(PaintInfo& paintInfo, const LayoutPoint& paintO
     if (isPluginUnavailable()) {
         if (countsTowardsRelevantObjects)
             page().addRelevantUnpaintedObject(*this, visualOverflowRect());
-        RenderReplaced::paint(paintInfo, paintOffset);
+        RenderReplaced::paintInternal(paintInfo, paintOffset);
         return;
     }
 
     if (countsTowardsRelevantObjects)
         page().addRelevantRepaintedObject(*this, visualOverflowRect());
 
-    RenderWidget::paint(paintInfo, paintOffset);
+    RenderWidget::paintInternal(paintInfo, paintOffset);
 }
 
 static void drawReplacementArrow(GraphicsContext& context, const FloatRect& insideRect)

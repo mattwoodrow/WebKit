@@ -75,7 +75,7 @@ private:
     void imageChanged(WrappedImagePtr, const IntRect* = nullptr) override;
 
     void layout() override;
-    void paint(PaintInfo&, const LayoutPoint&) override;
+    void paintInternal(PaintInfo&, const LayoutPoint&) override;
 
     void invalidateBufferedForeground();
 

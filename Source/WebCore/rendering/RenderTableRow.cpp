@@ -237,7 +237,7 @@ void RenderTableRow::paintOutlineForRowIfNeeded(PaintInfo& paintInfo, const Layo
         paintOutline(paintInfo, LayoutRect(adjustedPaintOffset, size()));
 }
 
-void RenderTableRow::paint(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
+void RenderTableRow::paintInternal(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
 {
     ASSERT(hasSelfPaintingLayer());
 

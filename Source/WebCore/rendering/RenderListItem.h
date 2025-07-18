@@ -57,7 +57,7 @@ public:
 private:
     ASCIILiteral renderName() const final { return "RenderListItem"_s; }
     
-    void paint(PaintInfo&, const LayoutPoint&) final;
+    void paintInternal(PaintInfo&, const LayoutPoint&) final;
 
     void styleDidChange(StyleDifference, const RenderStyle* oldStyle) final;
 

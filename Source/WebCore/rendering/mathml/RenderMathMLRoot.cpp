@@ -288,9 +288,9 @@ void RenderMathMLRoot::layoutBlock(RelayoutChildren relayoutChildren, LayoutUnit
     clearNeedsLayout();
 }
 
-void RenderMathMLRoot::paint(PaintInfo& info, const LayoutPoint& paintOffset)
+void RenderMathMLRoot::paintInternal(PaintInfo& info, const LayoutPoint& paintOffset)
 {
-    RenderMathMLRow::paint(info, paintOffset);
+    RenderMathMLRow::paintInternal(info, paintOffset);
 
     if (!firstChild() || info.context().paintingDisabled() || style().usedVisibility() != Visibility::Visible || !isValid())
         return;

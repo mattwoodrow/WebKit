@@ -39,7 +39,7 @@ protected:
 private:
     ASCIILiteral renderName() const override { return "RenderSVGHiddenContainer"_s; }
 
-    void paint(PaintInfo&, const LayoutPoint&) final;
+    void paintInternal(PaintInfo&, const LayoutPoint&) final;
 
     LayoutRect clippedOverflowRect(const RenderLayerModelObject*, VisibleRectContext) const final { return { }; }
     void absoluteQuads(Vector<FloatQuad>&, bool* wasFixed) const final;

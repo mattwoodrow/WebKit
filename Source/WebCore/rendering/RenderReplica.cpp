@@ -67,7 +67,7 @@ void RenderReplica::computePreferredLogicalWidths()
     clearNeedsPreferredWidthsUpdate();
 }
 
-void RenderReplica::paint(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
+void RenderReplica::paintInternal(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
 {
     if (paintInfo.phase != PaintPhase::Foreground && paintInfo.phase != PaintPhase::Mask)
         return;

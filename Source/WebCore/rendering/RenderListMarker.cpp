@@ -147,7 +147,7 @@ static auto textRunForContent(ListMarkerTextContent textContent, const RenderSty
     return { WTFMove(textRun), WTFMove(textForRun) };
 }
 
-void RenderListMarker::paint(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
+void RenderListMarker::paintInternal(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
 {
     if (paintInfo.phase != PaintPhase::Foreground && paintInfo.phase != PaintPhase::Accessibility)
         return;

@@ -114,7 +114,7 @@ void RenderFrameSet::paintRowBorder(const PaintInfo& paintInfo, const IntRect& b
     }
 }
 
-void RenderFrameSet::paint(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
+void RenderFrameSet::paintInternal(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
 {
     if (paintInfo.phase != PaintPhase::Foreground)
         return;

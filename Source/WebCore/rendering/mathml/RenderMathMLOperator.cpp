@@ -318,9 +318,9 @@ std::optional<LayoutUnit> RenderMathMLOperator::firstLineBaseline() const
     return RenderMathMLToken::firstLineBaseline();
 }
 
-void RenderMathMLOperator::paint(PaintInfo& info, const LayoutPoint& paintOffset)
+void RenderMathMLOperator::paintInternal(PaintInfo& info, const LayoutPoint& paintOffset)
 {
-    RenderMathMLToken::paint(info, paintOffset);
+    RenderMathMLToken::paintInternal(info, paintOffset);
     if (!useMathOperator())
         return;
 

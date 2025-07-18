@@ -41,7 +41,7 @@ protected:
 private:
     ASCIILiteral renderName() const override { return "RenderSVGHiddenContainer"_s; }
 
-    void paint(PaintInfo&, const LayoutPoint&) final { }
+    void paintInternal(PaintInfo&, const LayoutPoint&) final { }
 
     LayoutRect clippedOverflowRect(const RenderLayerModelObject*, VisibleRectContext) const final { return { }; }
     std::optional<RepaintRects> computeVisibleRectsInContainer(const RepaintRects& rects, const RenderLayerModelObject*, VisibleRectContext) const final { return rects; }

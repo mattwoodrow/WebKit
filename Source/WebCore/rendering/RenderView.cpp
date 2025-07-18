@@ -331,7 +331,7 @@ void RenderView::computeColumnCountAndWidth()
     setComputedColumnCountAndWidth(1, columnWidth);
 }
 
-void RenderView::paint(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
+void RenderView::paintInternal(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
 {
     // If we ever require layout but receive a paint anyway, something has gone horribly wrong.
     ASSERT(!needsLayout());

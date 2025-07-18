@@ -278,12 +278,12 @@ void RenderListItem::computePreferredLogicalWidths()
     RenderBlockFlow::computePreferredLogicalWidths();
 }
 
-void RenderListItem::paint(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
+void RenderListItem::paintInternal(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
 {
     if (!logicalHeight() && hasNonVisibleOverflow())
         return;
 
-    RenderBlockFlow::paint(paintInfo, paintOffset);
+    RenderBlockFlow::paintInternal(paintInfo, paintOffset);
 }
 
 String RenderListItem::markerTextWithoutSuffix() const

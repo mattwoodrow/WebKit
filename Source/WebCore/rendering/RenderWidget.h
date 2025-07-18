@@ -85,7 +85,7 @@ protected:
     void willBeDestroyed() override;
     void styleDidChange(StyleDifference, const RenderStyle* oldStyle) final;
     void layout() override;
-    void paint(PaintInfo&, const LayoutPoint&) override;
+    void paintInternal(PaintInfo&, const LayoutPoint&) override;
     bool nodeAtPoint(const HitTestRequest&, HitTestResult&, const HitTestLocation& locationInContainer, const LayoutPoint& accumulatedOffset, HitTestAction) override;
     bool requiresLayer() const override;
 

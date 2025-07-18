@@ -69,7 +69,7 @@ public:
 
 private:
     void paintReplaced(PaintInfo&, const LayoutPoint&) final;
-    void paint(PaintInfo&, const LayoutPoint&) final;
+    void paintInternal(PaintInfo&, const LayoutPoint&) final;
 
     CursorDirective getCursor(const LayoutPoint&, Cursor&) const final;
 

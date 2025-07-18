@@ -238,7 +238,7 @@ Color RenderReplaced::calculateHighlightColor() const
     return Color();
 }
 
-void RenderReplaced::paint(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
+void RenderReplaced::paintInternal(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
 {
     if (!shouldPaint(paintInfo, paintOffset))
         return;

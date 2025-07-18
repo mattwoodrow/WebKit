@@ -38,7 +38,7 @@ public:
 
     SVGForeignObjectElement& foreignObjectElement() const;
 
-    void paint(PaintInfo&, const LayoutPoint&) override;
+    void paintInternal(PaintInfo&, const LayoutPoint&) override;
 
     bool requiresLayer() const override { return false; }
     void layout() override;

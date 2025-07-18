@@ -125,7 +125,7 @@ void RenderSVGImage::layout()
     clearNeedsLayout();
 }
 
-void RenderSVGImage::paint(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
+void RenderSVGImage::paintInternal(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
 {
     OptionSet<PaintPhase> relevantPaintPhases { PaintPhase::Foreground, PaintPhase::ClippingMask, PaintPhase::Mask, PaintPhase::Outline, PaintPhase::SelfOutline };
     if (!shouldPaintSVGRenderer(paintInfo, relevantPaintPhases) || !imageResource().cachedImage())

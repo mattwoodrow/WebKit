@@ -45,7 +45,7 @@ public:
 
     void layout() override;
     
-    void paint(PaintInfo&, const LayoutPoint&) override;
+    void paintInternal(PaintInfo&, const LayoutPoint&) override;
 
 private:
     bool canHaveChildren() const override { return false; }

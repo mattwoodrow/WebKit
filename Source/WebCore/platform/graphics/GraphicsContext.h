@@ -55,6 +55,7 @@ class FilterResults;
 class FloatRoundedRect;
 class Gradient;
 class ImageBuffer;
+class PaintTreeRecorder;
 class Path;
 class SystemImage;
 class TextRun;
@@ -65,6 +66,7 @@ enum class RequiresClipToRect : bool { No, Yes };
 namespace DisplayList {
 class DrawNativeImage;
 class DisplayList;
+class RecorderImpl;
 }
 
 class GraphicsContext {
@@ -95,6 +97,8 @@ public:
     virtual bool invalidatingControlTints() const { return false; }
     virtual bool invalidatingImagesWithAsyncDecodes() const { return false; }
     virtual bool detectingContentfulPaint() const { return false; }
+
+    virtual PaintTreeRecorder* asRecorder() { return nullptr; }
 
     // Context State
 

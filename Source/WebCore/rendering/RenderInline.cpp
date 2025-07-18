@@ -229,7 +229,7 @@ bool RenderInline::mayAffectLayout() const
     return mayAffectLayout;
 }
 
-void RenderInline::paint(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
+void RenderInline::paintInternal(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
 {
     if (auto* lineLayout = LayoutIntegration::LineLayout::containing(*this))
         lineLayout->paint(paintInfo, paintOffset, this);

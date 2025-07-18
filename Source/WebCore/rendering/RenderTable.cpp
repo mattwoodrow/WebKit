@@ -768,7 +768,7 @@ void RenderTable::addOverflowFromChildren()
         addOverflowFromChild(*section);
 }
 
-void RenderTable::paint(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
+void RenderTable::paintInternal(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
 {
     auto isSkippedContent = [&] {
         if (style().usedContentVisibility() == ContentVisibility::Visible)

@@ -41,7 +41,7 @@ public:
     SVGForeignObjectElement& foreignObjectElement() const;
     Ref<SVGForeignObjectElement> protectedForeignObjectElement() const;
 
-    void paint(PaintInfo&, const LayoutPoint&) override;
+    void paintInternal(PaintInfo&, const LayoutPoint&) override;
 
     void layout() override;
 

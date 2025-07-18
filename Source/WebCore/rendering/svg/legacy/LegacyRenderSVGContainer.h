@@ -34,7 +34,7 @@ class LegacyRenderSVGContainer : public LegacyRenderSVGModelObject {
 public:
     virtual ~LegacyRenderSVGContainer();
 
-    void paint(PaintInfo&, const LayoutPoint&) override;
+    void paintInternal(PaintInfo&, const LayoutPoint&) override;
     void setNeedsBoundariesUpdate() final { m_needsBoundariesUpdate = true; }
     virtual bool didTransformToRootUpdate() { return false; }
     bool isObjectBoundingBoxValid() const { return static_cast<bool>(m_objectBoundingBox); }

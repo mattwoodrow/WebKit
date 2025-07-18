@@ -80,6 +80,9 @@ enum class PaintBehavior : uint32_t {
     FixedAndStickyLayersOnly                    = 1 << 21,
     DrawsHDRContent                             = 1 << 22,
     DraggableSnapshot                           = 1 << 23,
+    BuildPaintTree                              = 1 << 24,
 };
+
+WTF::TextStream& operator<<(WTF::TextStream&, PaintPhase);
 
 } // namespace WebCore

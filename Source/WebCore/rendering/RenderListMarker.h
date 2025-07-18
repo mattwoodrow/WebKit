@@ -78,7 +78,7 @@ private:
     ASCIILiteral renderName() const final { return "RenderListMarker"_s; }
     void computePreferredLogicalWidths() final;
     bool canHaveChildren() const final { return false; }
-    void paint(PaintInfo&, const LayoutPoint&) final;
+    void paintInternal(PaintInfo&, const LayoutPoint&) final;
     void layout() final;
     void imageChanged(WrappedImagePtr, const IntRect*) final;
     LayoutRect selectionRectForRepaint(const RenderLayerModelObject* repaintContainer, bool clipToVisibleContent) final;

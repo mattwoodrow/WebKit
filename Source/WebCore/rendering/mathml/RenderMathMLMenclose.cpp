@@ -226,9 +226,9 @@ static void drawLine(PaintInfo& info, const LayoutUnit& xStart, const LayoutUnit
     info.context().strokePath(line);
 }
 
-void RenderMathMLMenclose::paint(PaintInfo& info, const LayoutPoint& paintOffset)
+void RenderMathMLMenclose::paintInternal(PaintInfo& info, const LayoutPoint& paintOffset)
 {
-    RenderMathMLRow::paint(info, paintOffset);
+    RenderMathMLRow::paintInternal(info, paintOffset);
 
     if (info.context().paintingDisabled() || info.phase != PaintPhase::Foreground || style().usedVisibility() != Visibility::Visible)
         return;

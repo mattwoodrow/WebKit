@@ -181,7 +181,7 @@ void LegacyRenderSVGImage::layout()
     clearNeedsLayout();
 }
 
-void LegacyRenderSVGImage::paint(PaintInfo& paintInfo, const LayoutPoint&)
+void LegacyRenderSVGImage::paintInternal(PaintInfo& paintInfo, const LayoutPoint&)
 {
     if (paintInfo.context().paintingDisabled() || paintInfo.phase != PaintPhase::Foreground
         || style().usedVisibility() == Visibility::Hidden || !imageResource().cachedImage())

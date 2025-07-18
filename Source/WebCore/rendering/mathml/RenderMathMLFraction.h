@@ -53,7 +53,7 @@ private:
     void computePreferredLogicalWidths() final;
     void layoutBlock(RelayoutChildren, LayoutUnit pageLogicalHeight = 0_lu) final;
     std::optional<LayoutUnit> firstLineBaseline() const final;
-    void paint(PaintInfo&, const LayoutPoint&) final;
+    void paintInternal(PaintInfo&, const LayoutPoint&) final;
     RenderMathMLOperator* unembellishedOperator() const final;
     bool isMathContentCentered() const final { return true; }
 

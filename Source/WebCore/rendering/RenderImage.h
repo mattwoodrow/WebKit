@@ -101,7 +101,7 @@ protected:
     void imageChanged(WrappedImagePtr, const IntRect* = nullptr) override;
 
     ImageDrawResult paintIntoRect(PaintInfo&, const FloatRect&);
-    void paint(PaintInfo&, const LayoutPoint&) final;
+    void paintInternal(PaintInfo&, const LayoutPoint&) final;
     void layout() override;
 
     void intrinsicSizeChanged() override

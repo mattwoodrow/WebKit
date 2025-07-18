@@ -926,7 +926,7 @@ std::optional<LayoutUnit> RenderTableSection::baselineFromCellContentEdges(ItemP
     return result;
 }
 
-void RenderTableSection::paint(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
+void RenderTableSection::paintInternal(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
 {
     ASSERT(!needsLayout());
     // avoid crashing on bugs that cause us to paint with dirty layout

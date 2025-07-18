@@ -284,6 +284,31 @@ private:
     std::array<RefPtr<ClipRects>, NumCachedClipRectsTypes * 2> m_clipRects;
 };
 
+class RecordingClipStateSaver
+{
+public:
+    RecordingClipStateSaver(GraphicsContext& context)
+      : m_context(context)
+    {
+        if (auto *recorder = context.asRecorder()) {
+            m_savedClip = recorder->m_currentClip;
+            m_savedScroller = recorder->m_currentScroller;
+        }
+    }
+
+    ~RecordingClipStateSaver()
+    {
+        if (auto *recorder = m_context.asRecorder()) {
+            recorder->m_currentClip = m_savedClip;
+            recorder->m_currentScroller = m_savedScroller;
+        }
+    }
+
+    GraphicsContext& m_context;
+    RefPtr<PaintClip> m_savedClip;
+    RefPtr<PaintScroller> m_savedScroller;
+};
+
 void makeMatrixRenderable(TransformationMatrix& matrix, bool has3DRendering)
 {
     if (!has3DRendering)
@@ -3223,9 +3248,12 @@ void RenderLayer::paint(GraphicsContext& context, const LayoutRect& damageRect, 
 
 void RenderLayer::clipToRect(GraphicsContext& context, GraphicsContextStateSaver& stateSaver, RegionContextStateSaver& regionContextStateSaver, const LayerPaintingInfo& paintingInfo, OptionSet<PaintBehavior> paintBehavior, const ClipRect& clipRect, BorderRadiusClippingRule rule)
 {
+    if (context.asRecorder())
+        return;
+
     float deviceScaleFactor = renderer().document().deviceScaleFactor();
     bool needsClipping = !clipRect.isInfinite() && clipRect.rect() != paintingInfo.paintDirtyRect;
-    if (needsClipping || clipRect.affectedByRadius())
+    if ((needsClipping || clipRect.affectedByRadius()) && !context.asRecorder())
         stateSaver.save();
 
     if (needsClipping) {
@@ -3358,7 +3386,78 @@ void RenderLayer::paintLayer(GraphicsContext& context, const LayerPaintingInfo& 
         return;
     }
 
-    paintLayerWithEffects(context, paintingInfo, paintFlags);
+    if (paintingInfo.paintBehavior & PaintBehavior::BuildPaintTree)
+        paintLayerWithPaintTree(context, paintingInfo, paintFlags);
+    else
+        paintLayerWithEffects(context, paintingInfo, paintFlags);
+}
+
+void RenderLayer::paintLayerWithPaintTree(GraphicsContext& context, const LayerPaintingInfo& paintingInfo, OptionSet<PaintLayerFlag> paintFlags)
+{
+    // Non self-painting leaf layers don't need to be painted as their renderer() should properly paint itself.
+    if (!isSelfPaintingLayer() && !hasSelfPaintingLayerDescendant())
+        return;
+
+    LayoutSize offsetFromRoot = offsetFromAncestor(paintingInfo.rootLayer);
+
+    RecordingClipStateSaver recordingStateSaver(context);
+
+    // Surely there is a better way to do this. We only need to adjust if we've stepped into
+    // a layer where the parent layer isn't on the CB chain
+    const auto* cb = renderer().containingBlock();
+    if (cb && cb->layer()) {
+        if (cb->layer()->isRenderViewLayer() && renderer().isFixedPositioned()) {
+            context.asRecorder()->m_currentClip = nullptr;
+            context.asRecorder()->m_currentScroller = nullptr;
+        } else {
+            context.asRecorder()->m_currentClip = cb->layer()->m_paintClip;
+            context.asRecorder()->m_currentScroller = cb->layer()->m_paintScroller;
+        }
+    }
+
+    // FIXME: clip/clip-path clipping
+
+    // FIXME: Container effects: transform/opacity etc
+    size_t currentCount = context.asRecorder()->m_paintItems.size();
+
+    // FIXME: RenderView layer should clip to the viewport
+    if (renderer().hasNonVisibleOverflow()) {
+        // FIXME: What to do about pixel snapping (for clips, but also paint recording).
+        // Should we do all of this in LayoutUnits, and try to snap later?
+        LayoutRect overflowClipRect = rendererOverflowClipRect(toLayoutPoint(offsetFromRoot), OverlayScrollbarSizeRelevancy::IncludeOverlayScrollbarSize);
+        overflowClipRect.move(paintingInfo.subpixelOffset);
+        //auto snappedClipRect = snapRectToDevicePixelsIfNeeded(overflowClipRect, renderer());
+        m_paintClip = adoptRef(new PaintClip(overflowClipRect, context.asRecorder()->m_currentScroller.get(), context.asRecorder()->m_currentClip.get()));
+        context.asRecorder()->m_currentClip = m_paintClip;
+    }
+
+    // FIXME: Scrollers shouldn't require a RenderLayer (since it affects the paint order
+    // incorrectly), this should be a function of renderer traversal.
+    // FIXME: Can we build these trees (scrolls and clips) in advance, similar to how we do
+    // for RenderLayer trees. Having these largely be constant between paints would be useful I think.
+    if (usesCompositedScrolling() || isRenderViewLayer()) {
+        m_paintScroller = adoptRef(new PaintScroller(renderer(),  context.asRecorder()->m_currentScroller.get()));
+        //context.asRecorder()->m_currentScroller = paintScroller;
+    }
+
+    auto localPaintFlags = paintFlags - OptionSet<PaintLayerFlag> { PaintLayerFlag::AppliedTransform, PaintLayerFlag::PaintingOverflowContentsRoot };
+    localPaintFlags.add(paintLayerPaintingCompositingAllPhasesFlags());
+    paintLayerContents(context, paintingInfo, localPaintFlags);
+
+    if (renderer().opacity() != 1) {
+        OpacityData data;
+        data.opacity = renderer().opacity();
+        data.paintItems = context.asRecorder()->m_paintItems.subvector(currentCount);
+        context.asRecorder()->m_paintItems.shrink(currentCount);
+
+        // Start with no clip on the container. Just because clips affect this element doesn't
+        // mean they'll affect all descendants (like position:fixed ones). If this element is a containing
+        // block for fixed we could clip here and then reset clipping for descendants. Or we could detect
+        // that no descendants escape (with precomputed RenderLayer flags?).
+        // We could probably also walk up the clip chain and find a subset that does apply.
+        context.asRecorder()->m_paintItems.append({ &renderer(), PaintItemType::Opacity, { }, nullptr, context.asRecorder()->m_currentScroller });
+        context.asRecorder()->m_paintItems.last().m_data.emplace<OpacityData>(WTFMove(data));
+    }
 }
 
 void RenderLayer::paintLayerWithEffects(GraphicsContext& context, const LayerPaintingInfo& paintingInfo, OptionSet<PaintLayerFlag> paintFlags)
@@ -3836,6 +3935,7 @@ void RenderLayer::paintLayerContents(GraphicsContext& context, const LayerPainti
             PaintBehavior::ExcludeText,
             PaintBehavior::FixedAndStickyLayersOnly,
             PaintBehavior::DrawsHDRContent,
+            PaintBehavior::BuildPaintTree,
         };
         OptionSet<PaintBehavior> paintBehavior = paintingInfo.paintBehavior & flagsToCopy;
 
@@ -4301,6 +4401,10 @@ void RenderLayer::paintForegroundForFragments(const LayerFragments& layerFragmen
     const LayoutRect& transparencyPaintDirtyRect, bool haveTransparency, const LayerPaintingInfo& localPaintingInfo, OptionSet<PaintBehavior> paintBehavior,
     RenderObject* subtreePaintRootForRenderer)
 {
+    RecordingClipStateSaver recordingStateSaver(context);
+    if (m_paintScroller && context.asRecorder())
+        context.asRecorder()->m_currentScroller = m_paintScroller;
+
     // Begin transparency if we have something to paint.
     if (haveTransparency) {
         for (const auto& fragment : layerFragments) {
@@ -4331,6 +4435,7 @@ void RenderLayer::paintForegroundForFragments(const LayerFragments& layerFragmen
         PaintBehavior::FixedAndStickyLayersOnly,
         PaintBehavior::DontShowVisitedLinks,
         PaintBehavior::DrawsHDRContent,
+        PaintBehavior::BuildPaintTree,
     };
     localPaintBehavior.add(localPaintingInfo.paintBehavior & flagsToCopy);
 
@@ -6685,8 +6790,31 @@ TextStream& operator<<(TextStream& ts, PaintBehavior behavior)
     case PaintBehavior::FixedAndStickyLayersOnly: ts << "FixedAndStickyLayersOnly"_s; break;
     case PaintBehavior::DrawsHDRContent: ts << "DrawsHDRContent"_s; break;
     case PaintBehavior::DraggableSnapshot: ts << "DraggableSnapshot"_s; break;
+    case PaintBehavior::BuildPaintTree: ts << "BuildPaintTree"_s; break;
     }
 
+    return ts;
+}
+
+TextStream& operator<<(TextStream& ts, PaintPhase phase)
+{
+    switch (phase) {
+    case PaintPhase::BlockBackground: ts << "block-background"_s; break;
+        case PaintPhase::ChildBlockBackground: ts << "child-block-background"_s; break;
+        case PaintPhase::ChildBlockBackgrounds: ts << "child-block-backgrounds"_s; break;
+        case PaintPhase::Float: ts << "float"_s; break;
+        case PaintPhase::Foreground: ts << "foreground"_s; break;
+        case PaintPhase::Outline: ts << "outline"_s; break;
+        case PaintPhase::ChildOutlines: ts << "child-outlines"_s; break;
+        case PaintPhase::SelfOutline: ts << "self-outline"_s; break;
+        case PaintPhase::Selection: ts << "selection"_s; break;
+        case PaintPhase::CollapsedTableBorders: ts << "collapsed-table-borders"_s; break;
+        case PaintPhase::TextClip: ts << "text-clip"_s; break;
+        case PaintPhase::Mask: ts << "mask"_s; break;
+        case PaintPhase::ClippingMask: ts << "clipping-mask"_s; break;
+        case PaintPhase::EventRegion: ts << "event-region"_s; break;
+        case PaintPhase::Accessibility: ts << "accessibility"_s; break;
+    }
     return ts;
 }
 
@@ -6713,6 +6841,106 @@ TextStream& operator<<(TextStream& ts, RenderLayer::PaintLayerFlag flag)
     case RenderLayer::PaintLayerFlag::PaintingSkipDescendantViewTransition: ts << "PaintingSkipDescendantViewTransition"_s; break;
     }
 
+    return ts;
+}
+
+TextStream& operator<<(TextStream& ts, PaintItemType type)
+    {
+        switch (type) {
+        case PaintItemType::BlockBackground: ts << "block-background"_s; break;
+            case PaintItemType::ChildBlockBackground: ts << "child-block-background"_s; break;
+            case PaintItemType::ChildBlockBackgrounds: ts << "child-block-backgrounds"_s; break;
+            case PaintItemType::Float: ts << "float"_s; break;
+            case PaintItemType::Foreground: ts << "foreground"_s; break;
+            case PaintItemType::Outline: ts << "outline"_s; break;
+            case PaintItemType::ChildOutlines: ts << "child-outlines"_s; break;
+            case PaintItemType::SelfOutline: ts << "self-outline"_s; break;
+            case PaintItemType::Selection: ts << "selection"_s; break;
+            case PaintItemType::CollapsedTableBorders: ts << "collapsed-table-borders"_s; break;
+            case PaintItemType::TextClip: ts << "text-clip"_s; break;
+            case PaintItemType::Mask: ts << "mask"_s; break;
+            case PaintItemType::ClippingMask: ts << "clipping-mask"_s; break;
+            case PaintItemType::EventRegion: ts << "event-region"_s; break;
+            case PaintItemType::Accessibility: ts << "accessibility"_s; break;
+            case PaintItemType::Opacity: ts << "opacity"_s; break;
+        }
+        return ts;
+    }
+
+
+TextStream& operator<<(TextStream& ts, const PaintClip& paintClip)
+{
+    ts << '(';
+    ts << "(rect " << paintClip.m_rect << ") ";
+    ts << "(scroller " << paintClip.m_scroller << ") ";
+    if (paintClip.m_parent)
+        ts << *paintClip.m_parent;
+    ts << ')';
+
+    return ts;
+}
+
+TextStream& operator<<(TextStream& ts, const PaintItem& paintItem)
+{
+    ts << '(';
+
+    if (paintItem.m_phase < PaintItemType::Opacity)
+        ts << "paint item "_s;
+    else
+        ts << paintItem.m_phase << " ";
+
+    ts << "(renderer " << paintItem.m_renderer << ") ";
+    if (paintItem.m_phase < PaintItemType::Opacity)
+        ts << "(phase " << paintItem.m_phase << ") ";
+    ts << "(bounds " << paintItem.m_bounds << ") ";
+    ts << "(scroller " << paintItem.m_scroller << ") ";
+    ts << "(clip " << paintItem.m_clip << ") ";
+    if (paintItem.m_phase < PaintItemType::Opacity) {
+        WTF::TextStream stream(WTF::TextStream::LineMode::SingleLine);
+        stream << std::get<RefPtr<const DisplayList::DisplayList>>(paintItem.m_data);
+        ts << stream.release();
+    } else {
+        ts << std::get<OpacityData>(paintItem.m_data);
+    }
+
+    ts << ')';
+
+    return ts;
+}
+
+TextStream& operator<<(TextStream& ts, const OpacityData& data)
+{
+    ts << "(opacity " << data.opacity << ") ";
+
+    ts.increaseIndent();
+    ts.nextLine();
+    for (auto& item : data.paintItems) {
+        ts << item;
+        ts.nextLine();
+    }
+    ts.decreaseIndent();
+    return ts;
+}
+
+TextStream& operator<<(TextStream& ts, const PaintScroller& paintScroller)
+{
+    ts << "(renderer " << paintScroller.m_element.get();
+    if (paintScroller.m_parent)
+        ts << ", " << *paintScroller.m_parent;
+
+    ts << ')';
+    return ts;
+}
+
+TextStream& operator<<(TextStream& ts, const PaintTreeRecorder& paintTree)
+{
+    ts << "paint tree:"_s;
+    ts.nextLine();
+
+    for (auto& item : paintTree.m_paintItems) {
+        ts << item;
+        ts.nextLine();
+    }
     return ts;
 }
 

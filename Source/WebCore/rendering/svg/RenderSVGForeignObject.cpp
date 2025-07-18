@@ -60,7 +60,7 @@ Ref<SVGForeignObjectElement> RenderSVGForeignObject::protectedForeignObjectEleme
     return foreignObjectElement();
 }
 
-void RenderSVGForeignObject::paint(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
+void RenderSVGForeignObject::paintInternal(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
 {
     if (!shouldPaintSVGRenderer(paintInfo))
         return;
@@ -78,7 +78,7 @@ void RenderSVGForeignObject::paint(PaintInfo& paintInfo, const LayoutPoint& pain
 
     GraphicsContextStateSaver stateSaver(paintInfo.context());
     paintInfo.context().translate(adjustedPaintOffset.x(), adjustedPaintOffset.y());
-    RenderSVGBlock::paint(paintInfo, paintOffset);
+    RenderSVGBlock::paintInternal(paintInfo, paintOffset);
 }
 
 void RenderSVGForeignObject::updateLogicalWidth()

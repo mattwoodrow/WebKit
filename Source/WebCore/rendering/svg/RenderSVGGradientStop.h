@@ -55,7 +55,7 @@ private:
     ASCIILiteral renderName() const override { return "RenderSVGGradientStop"_s; }
 
     bool canHaveChildren() const override { return false; }
-    void paint(PaintInfo&, const LayoutPoint&) override { }
+    void paintInternal(PaintInfo&, const LayoutPoint&) override { }
 
     SVGGradientElement* gradientElement();
 };

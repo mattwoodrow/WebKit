@@ -232,7 +232,7 @@ protected:
 
     ASCIILiteral renderName() const override { return "RenderTable"_s; }
 
-    void paint(PaintInfo&, const LayoutPoint&) final;
+    void paintInternal(PaintInfo&, const LayoutPoint&) final;
     void paintObject(PaintInfo&, const LayoutPoint&) final;
     void paintBoxDecorations(PaintInfo&, const LayoutPoint&) final;
     void paintMask(PaintInfo&, const LayoutPoint&) final;

@@ -45,6 +45,7 @@
 #pragma once
 
 #include "ClipRect.h"
+#include "DisplayListRecorderImpl.h"
 #include "GraphicsLayer.h"
 #include "LayerFragment.h"
 #include "LayoutRect.h"
@@ -54,6 +55,7 @@
 #include "RenderPtr.h"
 #include "RenderSVGModelObject.h"
 #include "ScrollBehavior.h"
+#include <bit>
 #include <memory>
 #include <wtf/CheckedRef.h>
 #include <wtf/Markable.h>
@@ -153,6 +155,31 @@ struct ScrollRectToVisibleOptions {
 
 enum class UpdateBackingSharingFlags {
     DuringCompositingUpdate = 1 << 0,
+};
+
+class PaintScroller : public RefCounted<PaintScroller> {
+public:
+    PaintScroller(RenderElement& element, PaintScroller* parent)
+      : m_element(element)
+      , m_parent(parent)
+    { }
+
+    SingleThreadWeakPtr<RenderElement> m_element;
+    RefPtr<PaintScroller> m_parent;
+};
+
+class PaintClip : public RefCounted<PaintClip>
+{
+public:
+    PaintClip(const FloatRect& rect, PaintScroller* scroller, PaintClip* parent)
+      : m_parent(parent)
+      , m_scroller(scroller)
+      , m_rect(rect)
+    { }
+
+    RefPtr<PaintClip> m_parent;
+    RefPtr<PaintScroller> m_scroller;
+    LayoutRect m_rect;
 };
 
 using ScrollingScope = uint64_t;
@@ -1189,6 +1216,8 @@ private:
     void paintLayer(GraphicsContext&, const LayerPaintingInfo&, OptionSet<PaintLayerFlag>);
     void paintLayerWithEffects(GraphicsContext&, const LayerPaintingInfo&, OptionSet<PaintLayerFlag>);
 
+    void paintLayerWithPaintTree(GraphicsContext&, const LayerPaintingInfo&, OptionSet<PaintLayerFlag>);
+
     void paintLayerContentsAndReflection(GraphicsContext&, const LayerPaintingInfo&, OptionSet<PaintLayerFlag>);
     void paintLayerByApplyingTransform(GraphicsContext&, const LayerPaintingInfo&, OptionSet<PaintLayerFlag>, const LayoutSize& translationOffset = LayoutSize());
     void paintLayerContents(GraphicsContext&, const LayerPaintingInfo&, OptionSet<PaintLayerFlag>);
@@ -1463,7 +1492,76 @@ private:
     std::unique_ptr<RenderLayerBacking> m_backing;
     std::unique_ptr<RenderLayerScrollableArea> m_scrollableArea;
 
+    RefPtr<PaintClip> m_paintClip;
+    RefPtr<PaintScroller> m_paintScroller;
+
     PaintFrequencyTracker m_paintFrequencyTracker;
+};
+
+enum class PaintItemType {
+    //PaintPhase
+    BlockBackground = 0,
+    ChildBlockBackground,
+    ChildBlockBackgrounds,
+    Float,
+    Foreground,
+    Outline,
+    ChildOutlines,
+    SelfOutline,
+    Selection,
+    CollapsedTableBorders,
+    TextClip,
+    Mask,
+    ClippingMask,
+    EventRegion,
+    Accessibility,
+
+    Opacity,
+};
+
+inline PaintItemType painttemTypeFromPhase(PaintPhase phase)
+{
+    if (phase == PaintPhase::BlockBackground)
+        return PaintItemType::BlockBackground;
+    return (PaintItemType)std::countr_zero((uint16_t)phase);
+}
+
+class PaintItem;
+
+struct OpacityData {
+    float opacity;
+    Vector<PaintItem> paintItems;
+};
+
+// Experimenting with variants so that I can create a Vector of paint items inline. Maybe an awful idea.
+// Looks like blink does Vector<int[max-item-size]> with casting to derived display item types.
+// Rather than storing container properties on a display item (like transform, opacity, filter chains)
+// blink builds an effect tree and a transform tree (like I have for scrollers and clips), and stores all
+// 4 tree nodes per-paint-item.
+// Not obvious why that'd be better than just have effects/transforms as container display items with
+// out-of-line storage for the properties.
+class PaintItem {
+public:
+    SingleThreadWeakPtr<RenderElement> m_renderer;
+    PaintItemType m_phase;
+    LayoutRect m_bounds;
+    RefPtr<PaintClip> m_clip;
+    RefPtr<PaintScroller> m_scroller;
+    Variant<RefPtr<const DisplayList::DisplayList>, OpacityData> m_data;
+};
+
+class PaintTreeRecorder : public DisplayList::RecorderImpl
+{
+public:
+    PaintTreeRecorder()
+      : DisplayList::RecorderImpl( { })
+    { }
+
+    PaintTreeRecorder* asRecorder() final { return this; }
+
+    Vector<PaintItem> m_paintItems;
+    RefPtr<PaintClip> m_currentClip;
+    RefPtr<PaintScroller> m_currentScroller;
 };
 
 inline void RenderLayer::clearZOrderLists()
@@ -1534,6 +1632,12 @@ WTF::TextStream& operator<<(WTF::TextStream&, RenderLayer::ClipRectsOption);
 WTF::TextStream& operator<<(WTF::TextStream&, IndirectCompositingReason);
 WTF::TextStream& operator<<(WTF::TextStream&, PaintBehavior);
 WTF::TextStream& operator<<(WTF::TextStream&, RenderLayer::PaintLayerFlag);
+WTF::TextStream& operator<<(WTF::TextStream&, const PaintItem&);
+WTF::TextStream& operator<<(WTF::TextStream&, const PaintClip&);
+WTF::TextStream& operator<<(WTF::TextStream&, const PaintScroller&);
+WTF::TextStream& operator<<(WTF::TextStream&, const PaintTreeRecorder&);
+WTF::TextStream& operator<<(WTF::TextStream&, const OpacityData&);
+WTF::TextStream& operator<<(WTF::TextStream&, PaintItemType);
 
 } // namespace WebCore
 

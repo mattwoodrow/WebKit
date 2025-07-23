@@ -29,6 +29,7 @@
 #include "DrawingArea.h"
 #include "GraphicsLayerCARemote.h"
 #include "RemoteLayerTreeTransaction.h"
+#include "RenderingBackendIdentifier.h"
 #include <WebCore/AnimationFrameRate.h>
 #include <WebCore/GraphicsLayerClient.h>
 #include <WebCore/Timer.h>
@@ -40,6 +41,7 @@
 
 namespace WebCore {
 class PlatformCALayer;
+class ThreadedLayerBuilderClient;
 class ThreadSafeImageBufferFlusher;
 class TiledBacking;
 }
@@ -47,6 +49,7 @@ class TiledBacking;
 namespace WebKit {
 
 class RemoteLayerTreeContext;
+struct RLTDAThreaded;
 
 class RemoteLayerTreeDrawingArea : public DrawingArea, public WebCore::GraphicsLayerClient {
     WTF_MAKE_TZONE_ALLOCATED(RemoteLayerTreeDrawingArea);
@@ -64,6 +67,8 @@ public:
     bool displayDidRefreshIsPending() const { return m_waitingForBackingStoreSwap; }
 
     void gpuProcessConnectionWasDestroyed();
+
+    RefPtr<WebCore::ThreadedLayerBuilderClient> createThreadedLayerBuilderClient(SerialFunctionDispatcher&, RenderingBackendIdentifier);
 
 protected:
     RemoteLayerTreeDrawingArea(WebPage&, const WebPageCreationParameters&);
@@ -167,7 +172,8 @@ private:
     };
 
     const Ref<RemoteLayerTreeContext> m_remoteLayerTreeContext;
-    
+
+    friend struct RLTDAThreaded;
     struct RootLayerInfo {
         const Ref<WebCore::GraphicsLayer> layer;
         RefPtr<WebCore::GraphicsLayer> contentLayer;

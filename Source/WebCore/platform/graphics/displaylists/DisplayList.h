@@ -26,6 +26,7 @@
 #pragma once
 
 #include "DisplayListItems.h"
+#include "RenderingResource.h"
 #include <wtf/Noncopyable.h>
 #include <wtf/TZoneMalloc.h>
 #include <wtf/ThreadSafeRefCounted.h>
@@ -62,7 +63,32 @@ private:
     Vector<Item> m_items;
 };
 
+class RemoteDisplayList final : public ThreadSafeRefCounted<RemoteDisplayList, WTF::DestructionThread::Main> {
+    WTF_MAKE_TZONE_ALLOCATED_EXPORT(RemoteDisplayList, WEBCORE_EXPORT);
+    WTF_MAKE_NONCOPYABLE(RemoteDisplayList);
+public:
+    WEBCORE_EXPORT RemoteDisplayList() = default;
+    WEBCORE_EXPORT ~RemoteDisplayList();
+
+    RenderingResourceIdentifier renderingResourceIdentifier() const
+    {
+        return m_identifier;
+    }
+
+    void addObserver(WeakRef<RenderingResourceObserver>&& observer)
+    {
+        m_observers.add(WTFMove(observer));
+    }
+
+    void dump(WTF::TextStream&) const;
+
+private:
+    WeakHashSet<RenderingResourceObserver> m_observers;
+    RenderingResourceIdentifier m_identifier { RenderingResourceIdentifier::generate() };
+};
+
 WEBCORE_EXPORT WTF::TextStream& operator<<(WTF::TextStream&, const DisplayList&);
+WEBCORE_EXPORT WTF::TextStream& operator<<(WTF::TextStream&, const RemoteDisplayList&);
 
 } // DisplayList
 } // WebCore

@@ -129,6 +129,8 @@ private:
     bool processStreamMessage(Decoder&, StreamMessageReceiver&);
     bool processOutOfStreamMessage(Decoder&);
     bool dispatchStreamMessage(Decoder&, StreamMessageReceiver&);
+    bool processFence(Decoder&);
+    bool processWaitFence(Decoder&);
 
     RefPtr<StreamConnectionWorkQueue> protectedWorkQueue() const;
 
@@ -148,6 +150,8 @@ private:
     uint64_t m_currentDestinationID { 0 };
     Semaphore m_clientWaitSemaphore;
     bool m_didReceiveInvalidMessage { false };
+
+    std::optional<uint64_t> m_waitingFence;
 
     friend class StreamConnectionWorkQueue;
 };

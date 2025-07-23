@@ -41,6 +41,7 @@
 #include "Pattern.h"
 #include "PlatformGraphicsContext.h"
 #include "RenderingMode.h"
+#include "RenderingResourceIdentifier.h"
 #include <wtf/Function.h>
 #include <wtf/Noncopyable.h>
 #include <wtf/OptionSet.h>
@@ -67,6 +68,7 @@ namespace DisplayList {
 class DrawNativeImage;
 class DisplayList;
 class RecorderImpl;
+class RemoteDisplayList;
 }
 
 class GraphicsContext {
@@ -98,7 +100,11 @@ public:
     virtual bool invalidatingImagesWithAsyncDecodes() const { return false; }
     virtual bool detectingContentfulPaint() const { return false; }
 
-    virtual PaintTreeRecorder* asRecorder() { return nullptr; }
+    PaintTreeRecorder* asRecorder() { return m_recorder; }
+    void setRecorder(PaintTreeRecorder* recorder) { m_recorder = recorder; }
+
+    virtual bool hasDisplayList() const { return false; }
+    virtual RefPtr<DisplayList::RemoteDisplayList> tryTakeDisplayList() { return nullptr; }
 
     // Context State
 
@@ -321,6 +327,8 @@ public:
 
     WEBCORE_EXPORT void drawDisplayList(const DisplayList::DisplayList&);
     WEBCORE_EXPORT virtual void drawDisplayList(const DisplayList::DisplayList&, ControlFactory&);
+    virtual void drawDisplayList(const DisplayList::RemoteDisplayList&)
+    { ASSERT_NOT_REACHED(); }
     WEBCORE_EXPORT FloatRect computeUnderlineBoundsForText(const FloatRect&, bool printing);
     WEBCORE_EXPORT void drawLineForText(const FloatRect&, bool isPrinting, bool doubleLines = false, StrokeStyle = StrokeStyle::SolidStroke);
     // The `origin` defines the line origin point.
@@ -415,6 +423,7 @@ protected:
     GraphicsContextState m_state;
 private:
     Vector<GraphicsContextState, 1> m_stack;
+    PaintTreeRecorder* m_recorder { nullptr };
 
     unsigned m_transparencyLayerCount { 0 };
     const IsDeferred m_isDeferred : 1; // NOLINT

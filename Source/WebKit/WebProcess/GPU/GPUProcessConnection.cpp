@@ -429,9 +429,9 @@ void GPUProcessConnection::setMediaEnvironment(WebCore::PageIdentifier pageIdent
 }
 #endif
 
-void GPUProcessConnection::createRenderingBackend(RenderingBackendIdentifier identifier, IPC::StreamServerConnection::Handle&& serverHandle)
+void GPUProcessConnection::createRenderingBackend(RenderingBackendIdentifier identifier, IPC::StreamServerConnection::Handle&& serverHandle, std::optional<RenderingBackendIdentifier> parentIdentifier)
 {
-    m_connection->send(Messages::GPUConnectionToWebProcess::CreateRenderingBackend(identifier, WTFMove(serverHandle)), 0, IPC::SendOption::DispatchMessageEvenWhenWaitingForSyncReply);
+    m_connection->send(Messages::GPUConnectionToWebProcess::CreateRenderingBackend(identifier, WTFMove(serverHandle), parentIdentifier), 0, IPC::SendOption::DispatchMessageEvenWhenWaitingForSyncReply);
 }
 
 void GPUProcessConnection::releaseRenderingBackend(RenderingBackendIdentifier identifier)

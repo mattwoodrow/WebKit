@@ -138,6 +138,21 @@ RefPtr<FontCustomPlatformData> RemoteResourceCache::cachedFontCustomPlatformData
     return m_fontCustomPlatformDatas.get(identifier);
 }
 
+void RemoteResourceCache::cacheDisplayList(RenderingResourceIdentifier identifier, Ref<const WebCore::DisplayList::DisplayList>&& displayList)
+{
+    m_displayLists.add(identifier, WTFMove(displayList));
+}
+
+bool RemoteResourceCache::releaseDisplayList(WebCore::RenderingResourceIdentifier identifier)
+{
+    return m_displayLists.remove(identifier);
+}
+
+RefPtr<const WebCore::DisplayList::DisplayList> RemoteResourceCache::cachedDisplayList(WebCore::RenderingResourceIdentifier identifier) const
+{
+    return m_displayLists.get(identifier);
+}
+
 void RemoteResourceCache::releaseAllResources()
 {
     m_imageBuffers.clear();

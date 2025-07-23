@@ -52,6 +52,11 @@ std::unique_ptr<WorkerClient> ChromeClient::createWorkerClient(SerialFunctionDis
     return nullptr;
 }
 
+RefPtr<ThreadedLayerBuilderClient> ChromeClient::createThreadedLayerBuilderClient(SerialFunctionDispatcher&)
+{
+    return nullptr;
+}
+
 #if ENABLE(WEBGL)
 RefPtr<GraphicsContextGL> ChromeClient::createGraphicsContextGL(const GraphicsContextGLAttributes& attributes) const
 {

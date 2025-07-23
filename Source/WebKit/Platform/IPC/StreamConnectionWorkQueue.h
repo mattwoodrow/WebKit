@@ -55,6 +55,9 @@ public:
     void dispatch(WTF::Function<void()>&&) final;
     bool isCurrent() const final;
 
+    void setFence(uint64_t fence) { m_latestFence = fence; }
+    uint64_t fence() const { return m_latestFence; }
+
 private:
     void startProcessingThread() WTF_REQUIRES_LOCK(m_lock);
     void processStreams();
@@ -69,6 +72,8 @@ private:
     Deque<Function<void()>> m_functions WTF_GUARDED_BY_LOCK(m_lock);
     WTF::Function<void()> m_cleanupFunction WTF_GUARDED_BY_LOCK(m_lock);
     Vector<Ref<StreamServerConnection>> m_connections WTF_GUARDED_BY_LOCK(m_lock);
+
+    uint64_t m_latestFence { 0 };
 };
 
 }

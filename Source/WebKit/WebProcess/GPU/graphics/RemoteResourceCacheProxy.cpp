@@ -34,6 +34,7 @@
 #include "RemoteNativeImageBackendProxy.h"
 #include "RemoteRenderingBackendProxy.h"
 #include "WebProcess.h"
+#include <WebCore/DisplayList.h>
 #include <WebCore/FontCustomPlatformData.h>
 
 namespace WebKit {
@@ -70,6 +71,11 @@ void RemoteResourceCacheProxy::recordFilterUse(Filter& filter)
         filter.addObserver(m_resourceObserverWeakFactory.createWeakPtr(static_cast<RenderingResourceObserver&>(*this)).releaseNonNull());
         m_remoteRenderingBackendProxy->cacheFilter(filter);
     }
+}
+
+void RemoteResourceCacheProxy::recordDisplayListUse(DisplayList::RemoteDisplayList& displayList)
+{
+    displayList.addObserver(m_resourceObserverWeakFactory.createWeakPtr(static_cast<RenderingResourceObserver&>(*this)).releaseNonNull());
 }
 
 void RemoteResourceCacheProxy::recordNativeImageUse(NativeImage& image, const DestinationColorSpace& colorSpace)
@@ -177,6 +183,11 @@ void RemoteResourceCacheProxy::willDestroyFilter(RenderingResourceIdentifier ide
     bool removed = m_filters.remove(identifier);
     RELEASE_ASSERT(removed);
     m_remoteRenderingBackendProxy->releaseFilter(identifier);
+}
+
+void RemoteResourceCacheProxy::willDestroyDisplayList(RenderingResourceIdentifier identifier)
+{
+    m_remoteRenderingBackendProxy->releaseDisplayList(identifier);
 }
 
 void RemoteResourceCacheProxy::releaseNativeImages()

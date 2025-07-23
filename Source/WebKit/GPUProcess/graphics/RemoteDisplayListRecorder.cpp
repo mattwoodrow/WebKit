@@ -54,12 +54,12 @@ using namespace WebCore;
 
 Ref<RemoteDisplayListRecorder> RemoteDisplayListRecorder::create(WebCore::ImageBuffer& imageBuffer, RemoteDisplayListRecorderIdentifier identifier, RemoteRenderingBackend& renderingBackend)
 {
-    auto instance = adoptRef(*new RemoteDisplayListRecorder(imageBuffer, identifier, renderingBackend));
+    auto instance = adoptRef(*new RemoteDisplayListRecorder(&imageBuffer, identifier, renderingBackend));
     instance->startListeningForIPC();
     return instance;
 }
 
-RemoteDisplayListRecorder::RemoteDisplayListRecorder(ImageBuffer& imageBuffer, RemoteDisplayListRecorderIdentifier identifier, RemoteRenderingBackend& renderingBackend)
+RemoteDisplayListRecorder::RemoteDisplayListRecorder(ImageBuffer* imageBuffer, RemoteDisplayListRecorderIdentifier identifier, RemoteRenderingBackend& renderingBackend)
     : m_imageBuffer(imageBuffer)
     , m_identifier(identifier)
     , m_renderingBackend(renderingBackend)
@@ -762,9 +762,49 @@ void RemoteDisplayListRecorder::setURLForRect(const URL& link, const FloatRect& 
     context().setURLForRect(link, destRect);
 }
 
+void RemoteDisplayListRecorder::drawDisplayList(WebCore::RenderingResourceIdentifier identifier)
+{
+    RefPtr displayList = resourceCache().cachedDisplayList(identifier);
+    if (!displayList) {
+        ALWAYS_LOG_WITH_STREAM(stream << "Failed to lookup DL " << identifier);
+        ASSERT_NOT_REACHED();
+        return;
+    }
+    if (!m_controlFactory)
+        m_controlFactory = ControlFactory::create();
+    context().drawDisplayList(*displayList, *m_controlFactory);
+}
+
+#define ALWAYS_LOG_WITH_STREAM_MULTI(commands) do { \
+        WTF::TextStream stream(WTF::TextStream::LineMode::MultipleLine); \
+        commands; \
+        WTFLogAlways("%s", stream.release().utf8().data()); \
+    } while (0)
+
+
+void StandaloneRemoteDisplayListRecorder::cacheDisplayList(WebCore::RenderingResourceIdentifier identifier)
+{
+    auto dl = m_impl.takeDisplayList();
+    ALWAYS_LOG_WITH_STREAM_MULTI(stream << "Caching display list " << identifier << ": " << dl);
+    resourceCache().cacheDisplayList(identifier, WTFMove(dl));
+}
+
 std::optional<SharedPreferencesForWebProcess> RemoteDisplayListRecorder::sharedPreferencesForWebProcess() const
 {
     return m_renderingBackend->sharedPreferencesForWebProcess();
+}
+
+StandaloneRemoteDisplayListRecorder::StandaloneRemoteDisplayListRecorder(RemoteDisplayListRecorderIdentifier identifier, RemoteRenderingBackend& backend)
+    : RemoteDisplayListRecorder(nullptr, identifier, backend)
+    , m_impl({ })
+{
+}
+
+Ref<StandaloneRemoteDisplayListRecorder> StandaloneRemoteDisplayListRecorder::create(RemoteDisplayListRecorderIdentifier identifier, RemoteRenderingBackend& backend)
+{
+    auto instance = adoptRef(*new StandaloneRemoteDisplayListRecorder(identifier, backend));
+    instance->startListeningForIPC();
+    return instance;
 }
 
 } // namespace WebKit

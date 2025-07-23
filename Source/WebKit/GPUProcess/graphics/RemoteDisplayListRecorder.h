@@ -35,6 +35,7 @@
 #include "StreamServerConnection.h"
 #include <WebCore/ControlFactory.h>
 #include <WebCore/DisplayListItems.h>
+#include <WebCore/DisplayListRecorderImpl.h>
 #include <WebCore/ProcessIdentifier.h>
 #include <WebCore/RenderingResourceIdentifier.h>
 #include <wtf/RefCounted.h>
@@ -169,13 +170,16 @@ public:
 
     void setURLForRect(const URL&, const WebCore::FloatRect&);
 
-private:
-    RemoteDisplayListRecorder(WebCore::ImageBuffer&, RemoteDisplayListRecorderIdentifier, RemoteRenderingBackend&);
+    virtual void cacheDisplayList(WebCore::RenderingResourceIdentifier identifier) {}
+    void drawDisplayList(WebCore::RenderingResourceIdentifier identifier);
+
+protected:
+    RemoteDisplayListRecorder(WebCore::ImageBuffer*, RemoteDisplayListRecorderIdentifier, RemoteRenderingBackend&);
 
     void drawFilteredImageBufferInternal(std::optional<WebCore::RenderingResourceIdentifier> sourceImageIdentifier, const WebCore::FloatRect& sourceImageRect, WebCore::Filter&, WebCore::FilterResults&);
 
     RemoteResourceCache& resourceCache() const;
-    WebCore::GraphicsContext& context() { return m_imageBuffer->context(); }
+    virtual WebCore::GraphicsContext& context() { return m_imageBuffer->context(); }
     RefPtr<WebCore::ImageBuffer> imageBuffer(WebCore::RenderingResourceIdentifier) const;
     std::optional<WebCore::SourceImage> sourceImage(WebCore::RenderingResourceIdentifier) const;
 
@@ -188,7 +192,7 @@ private:
     void setSharedVideoFrameMemory(WebCore::SharedMemory::Handle&&);
 #endif
 
-    const Ref<WebCore::ImageBuffer> m_imageBuffer;
+    const RefPtr<WebCore::ImageBuffer> m_imageBuffer;
     const RemoteDisplayListRecorderIdentifier m_identifier;
     const Ref<RemoteRenderingBackend> m_renderingBackend;
     const Ref<RemoteSharedResourceCache> m_sharedResourceCache;
@@ -196,6 +200,21 @@ private:
 #if PLATFORM(COCOA) && ENABLE(VIDEO)
     std::unique_ptr<SharedVideoFrameReader> m_sharedVideoFrameReader;
 #endif
+};
+
+class StandaloneRemoteDisplayListRecorder : public RemoteDisplayListRecorder
+{
+public:
+    static Ref<StandaloneRemoteDisplayListRecorder> create(RemoteDisplayListRecorderIdentifier, RemoteRenderingBackend&);
+
+protected:
+    StandaloneRemoteDisplayListRecorder(RemoteDisplayListRecorderIdentifier, RemoteRenderingBackend&);
+
+    void cacheDisplayList(WebCore::RenderingResourceIdentifier identifier) final;
+
+    WebCore::GraphicsContext& context() final { return m_impl; }
+
+    WebCore::DisplayList::RecorderImpl m_impl;
 };
 
 } // namespace WebKit

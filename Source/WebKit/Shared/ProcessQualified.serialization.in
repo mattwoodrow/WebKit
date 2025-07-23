@@ -25,7 +25,7 @@ additional_forward_declaration: namespace WebCore { using BackForwardFrameItemId
 additional_forward_declaration: namespace WebCore { using BackForwardItemIdentifierID = ObjectIdentifier<BackForwardItemIdentifierType>; }
 additional_forward_declaration: namespace WebCore { using DOMCacheIdentifierID = AtomicObjectIdentifier<DOMCacheIdentifierType>; }
 additional_forward_declaration: namespace WebCore { using OpaqueOriginIdentifier = AtomicObjectIdentifier<OpaqueOriginIdentifierType>; }
-additional_forward_declaration: namespace WebCore { using PlatformLayerIdentifierID = ObjectIdentifier<PlatformLayerIdentifierType>; }
+additional_forward_declaration: namespace WebCore { using PlatformLayerIdentifierID = AtomicObjectIdentifier<PlatformLayerIdentifierType>; }
 additional_forward_declaration: namespace WebCore { using PlaybackTargetClientContextID = ObjectIdentifier<PlaybackTargetClientContextIdentifierType>; }
 additional_forward_declaration: namespace WebCore { using RTCDataChannelLocalIdentifier =  AtomicObjectIdentifier<RTCDataChannelLocalIdentifierType>; }
 additional_forward_declaration: namespace WebCore { using ScrollingNodeIdentifier = ObjectIdentifier<ScrollingNodeIDType>; }

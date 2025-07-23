@@ -95,7 +95,7 @@ enum class PlatformCALayerLayerType : uint8_t {
         LayerTypeHost,
 };
 
-class WEBCORE_EXPORT PlatformCALayer : public ThreadSafeRefCountedAndCanMakeThreadSafeWeakPtr<PlatformCALayer, WTF::DestructionThread::Main> {
+class WEBCORE_EXPORT PlatformCALayer : public ThreadSafeRefCountedAndCanMakeThreadSafeWeakPtr<PlatformCALayer> {
     friend class PlatformCALayerCocoa;
 public:
     static CFTimeInterval currentTimeToMediaTime(MonotonicTime);

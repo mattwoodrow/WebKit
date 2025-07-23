@@ -68,15 +68,16 @@ Ref<RemoteRenderingBackendProxy> RemoteRenderingBackendProxy::create(WebPage& we
     return instance;
 }
 
-Ref<RemoteRenderingBackendProxy> RemoteRenderingBackendProxy::create(SerialFunctionDispatcher& dispatcher)
+Ref<RemoteRenderingBackendProxy> RemoteRenderingBackendProxy::create(SerialFunctionDispatcher& dispatcher, std::optional<RenderingBackendIdentifier> parentIdentifier)
 {
-    Ref instance = adoptRef(*new RemoteRenderingBackendProxy(dispatcher));
+    Ref instance = adoptRef(*new RemoteRenderingBackendProxy(dispatcher, parentIdentifier));
     RELEASE_LOG(RemoteLayerBuffers, "[renderingBackend=%" PRIu64 "] Created rendering backend for a worker", instance->renderingBackendIdentifier().toUInt64());
     return instance;
 }
 
-RemoteRenderingBackendProxy::RemoteRenderingBackendProxy(SerialFunctionDispatcher& dispatcher)
+RemoteRenderingBackendProxy::RemoteRenderingBackendProxy(SerialFunctionDispatcher& dispatcher, std::optional<RenderingBackendIdentifier> parentIdentifier)
     : m_dispatcher(dispatcher)
+    , m_parentIdentifier(parentIdentifier)
     , m_queue(WorkQueue::create("RemoteRenderingBackendProxy"_s, WorkQueue::QOS::UserInteractive))
 {
 }
@@ -115,7 +116,7 @@ void RemoteRenderingBackendProxy::ensureGPUProcessConnection()
     m_isResponsive = true;
     callOnMainRunLoopAndWait([&, serverHandle = WTFMove(serverHandle)]() mutable {
         Ref gpuProcessConnection = WebProcess::singleton().ensureGPUProcessConnection();
-        gpuProcessConnection->createRenderingBackend(m_identifier, WTFMove(serverHandle));
+        gpuProcessConnection->createRenderingBackend(m_identifier, WTFMove(serverHandle), m_parentIdentifier);
         m_gpuProcessConnection = gpuProcessConnection.get();
         m_sharedResourceCache = gpuProcessConnection->sharedResourceCache();
     });
@@ -474,6 +475,13 @@ void RemoteRenderingBackendProxy::releaseFilter(RenderingResourceIdentifier iden
     send(Messages::RemoteRenderingBackend::ReleaseFilter(identifier));
 }
 
+void RemoteRenderingBackendProxy::releaseDisplayList(RenderingResourceIdentifier identifier)
+{
+    if (!m_connection)
+        return;
+    send(Messages::RemoteRenderingBackend::ReleaseDisplayList(identifier));
+}
+
 void RemoteRenderingBackendProxy::releaseMemory()
 {
     m_remoteResourceCacheProxy.releaseMemory();
@@ -666,6 +674,19 @@ bool RemoteRenderingBackendProxy::isCached(const ImageBuffer& imageBuffer) const
         return true;
     }
     return false;
+}
+
+std::unique_ptr<RemoteDisplayListRecorderProxy> RemoteRenderingBackendProxy::createDisplayListRecorder()
+{
+    auto result = makeUnique<RemoteDisplayListRecorderProxy>(DestinationColorSpace::SRGB(), RenderingMode::DisplayList, FloatRect { }, AffineTransform { }, *this, true);
+    send(Messages::RemoteRenderingBackend::CreateDisplayListRecorder(result->identifier()));
+    result->consumeHasDrawn();
+    return result;
+}
+
+void RemoteRenderingBackendProxy::releaseDisplayListRecorder(RemoteDisplayListRecorderIdentifier identifier)
+{
+    send(Messages::RemoteRenderingBackend::ReleaseDisplayListRecorder(identifier));
 }
 
 #if USE(GRAPHICS_LAYER_WC)

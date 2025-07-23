@@ -47,6 +47,7 @@ public:
     virtual void willDestroyGradient(RenderingResourceIdentifier) = 0;
     virtual void willDestroyDecomposedGlyphs(RenderingResourceIdentifier) = 0;
     virtual void willDestroyFilter(RenderingResourceIdentifier) = 0;
+    virtual void willDestroyDisplayList(RenderingResourceIdentifier) = 0;
 protected:
     RenderingResourceObserver() = default;
 };

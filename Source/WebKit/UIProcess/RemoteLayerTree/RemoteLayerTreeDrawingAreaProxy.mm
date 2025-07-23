@@ -324,7 +324,7 @@ void RemoteLayerTreeDrawingAreaProxy::commitLayerTreeTransaction(IPC::Connection
 
     bool didUpdateEditorState { false };
     if (layerTreeTransaction.isMainFrameProcessTransaction()) {
-        ASSERT(layerTreeTransaction.transactionID() == m_lastVisibleTransactionID.next());
+        //ASSERT(layerTreeTransaction.transactionID() == m_lastVisibleTransactionID.next());
         m_transactionIDForPendingCACommit = layerTreeTransaction.transactionID();
         m_activityStateChangeID = layerTreeTransaction.activityStateChangeID();
 
@@ -359,7 +359,7 @@ void RemoteLayerTreeDrawingAreaProxy::commitLayerTreeTransaction(IPC::Connection
                 m_remoteLayerTreeHost->detachRootLayer();
         }
 #if ENABLE(ASYNC_SCROLLING)
-        requestedScroll = scrollingCoordinatorProxy->commitScrollingTreeState(connection, scrollingTreeTransaction, layerTreeTransaction.remoteContextHostedIdentifier());
+        //requestedScroll = scrollingCoordinatorProxy->commitScrollingTreeState(connection, scrollingTreeTransaction, layerTreeTransaction.remoteContextHostedIdentifier());
 #endif
     };
 

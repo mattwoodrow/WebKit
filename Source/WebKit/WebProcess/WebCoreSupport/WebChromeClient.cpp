@@ -51,6 +51,7 @@
 #include "RemoteFaceDetectorProxy.h"
 #include "RemoteGPUProxy.h"
 #include "RemoteImageBufferProxy.h"
+#include "RemoteLayerTreeDrawingArea.h"
 #include "RemoteRenderingBackendProxy.h"
 #include "RemoteTextDetectorProxy.h"
 #include "SharedBufferReference.h"
@@ -1132,6 +1133,17 @@ RefPtr<ImageBuffer> WebChromeClient::createImageBuffer(const FloatSize& size, Re
     return nullptr;
 }
 
+std::unique_ptr<DisplayList::Recorder> WebChromeClient::createDisplayListRecorder() const
+{
+    if (WebProcess::singleton().shouldUseRemoteRenderingFor(RenderingPurpose::DOM)) {
+        RefPtr page = m_page.get();
+        if (!page)
+            return nullptr;
+        return page->ensureRemoteRenderingBackendProxy().createDisplayListRecorder();
+    }
+    return nullptr;
+}
+
 RefPtr<ImageBuffer> WebChromeClient::sinkIntoImageBuffer(std::unique_ptr<SerializedImageBuffer> imageBuffer)
 {
     if (!is<RemoteSerializedImageBufferProxy>(imageBuffer))
@@ -1152,6 +1164,19 @@ std::unique_ptr<WebCore::WorkerClient> WebChromeClient::createWorkerClient(Seria
     if (!page)
         return nullptr;
     return WebWorkerClient::create(*page->corePage(), dispatcher).moveToUniquePtr();
+}
+
+RefPtr<ThreadedLayerBuilderClient> WebChromeClient::createThreadedLayerBuilderClient(SerialFunctionDispatcher& dispatcher)
+{
+    RefPtr page = m_page.get();
+    if (!page)
+        return nullptr;
+
+    if (page->drawingArea()->type() != DrawingAreaType::RemoteLayerTree)
+        return nullptr;
+
+    Ref remoteRenderingBackendProxy = page->ensureRemoteRenderingBackendProxy();
+    return static_cast<RemoteLayerTreeDrawingArea*>(page->drawingArea())->createThreadedLayerBuilderClient(dispatcher, remoteRenderingBackendProxy->renderingBackendIdentifier());
 }
 
 #if ENABLE(WEBGL)

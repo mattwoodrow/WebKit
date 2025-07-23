@@ -124,7 +124,6 @@ template: struct WebCore::MediaSessionIdentifierType
 template: struct WebCore::ModelPlayerIdentifierType
 template: struct WebCore::NavigationIdentifierType
 template: struct WebCore::PageIdentifierType
-template: struct WebCore::PlatformLayerIdentifierType
 template: struct WebCore::PlaybackTargetClientContextIdentifierType
 template: struct WebCore::PushSubscriptionIdentifierType
 template: struct WebCore::ProcessIdentifierType
@@ -150,7 +149,6 @@ template: struct WebKit::PDFPluginIdentifierType
 template: struct WebKit::PageGroupIdentifierType
 template: struct WebKit::RemoteAudioDestinationIdentifierType
 template: struct WebKit::RemoteAudioHardwareListenerIdentifierType
-template: struct WebKit::RemoteImageBufferSetIdentifierType
 template: struct WebKit::RemoteMediaResourceIdentifierType
 template: struct WebKit::RemoteRemoteCommandListenerIdentifierType
 template: struct WebKit::SampleBufferDisplayLayerIdentifierType
@@ -202,6 +200,7 @@ template: struct WebKit::GPUProcessConnectionIdentifierType
 template: enum class WebKit::LegacyCustomProtocolIDType
 template: struct WebKit::LibWebRTCResolverIdentifierType
 template: struct WebKit::LogStreamIdentifierType
+template: struct WebCore::PlatformLayerIdentifierType
 template: struct WebKit::RemoteDisplayListRecorderIdentifierType
 template: struct WebKit::RemoteSerializedImageBufferIdentifierType
 template: struct WebKit::RemoteVideoFrameIdentifierType
@@ -214,6 +213,7 @@ template: struct WebCore::FileSystemSyncAccessHandleIdentifierType
 template: struct WebCore::WebSocketIdentifierType
 template: struct WebKit::GraphicsContextGLIdentifierType
 template: struct WebKit::QuotaIncreaseRequestIdentifierType
+template: struct WebKit::RemoteImageBufferSetIdentifierType
 template: struct WebKit::RenderingBackendIdentifierType
 template: struct WebKit::StorageAreaIdentifierType
 template: struct WebKit::WebGPUIdentifierType

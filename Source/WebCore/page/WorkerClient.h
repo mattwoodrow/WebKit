@@ -25,12 +25,17 @@
 
 #pragma once
 
+#include "FrameIdentifier.h"
 #include "GraphicsClient.h"
 #include <wtf/FunctionDispatcher.h>
+#include <wtf/ThreadSafeRefCounted.h>
 #include <wtf/TZoneMallocInlines.h>
 #include <wtf/UniqueRef.h>
 
 namespace WebCore {
+
+class GraphicsLayer;
+class GraphicsLayerFactory;
 
 class WorkerClient : public GraphicsClient {
     WTF_MAKE_TZONE_ALLOCATED_INLINE(WorkerClient);
@@ -40,6 +45,18 @@ public:
     virtual UniqueRef<WorkerClient> createNestedWorkerClient(SerialFunctionDispatcher&) = 0;
 
     virtual ~WorkerClient() = default;
+};
+
+class ThreadedLayerBuilderClient : public ThreadSafeRefCounted<ThreadedLayerBuilderClient> {
+    WTF_MAKE_TZONE_ALLOCATED_INLINE(ThreadedLayerBuilderClient);
+public:
+
+    virtual GraphicsLayerFactory* beginTransaction(FrameIdentifier) = 0;
+    virtual void endTransaction(GraphicsLayer*) = 0;
+
+    virtual void waitOnDisplayLists(uint64_t fence) = 0;
+
+    virtual ~ThreadedLayerBuilderClient() = default;
 };
 
 } // namespace WebCore

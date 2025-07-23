@@ -3455,7 +3455,7 @@ void RenderLayer::paintLayerWithPaintTree(GraphicsContext& context, const LayerP
         // block for fixed we could clip here and then reset clipping for descendants. Or we could detect
         // that no descendants escape (with precomputed RenderLayer flags?).
         // We could probably also walk up the clip chain and find a subset that does apply.
-        context.asRecorder()->m_paintItems.append({ &renderer(), PaintItemType::Opacity, { }, nullptr, context.asRecorder()->m_currentScroller });
+        context.asRecorder()->m_paintItems.append(PaintItem { renderer(), PaintItemType::Opacity, { }, nullptr, context.asRecorder()->m_currentScroller.get() });
         context.asRecorder()->m_paintItems.last().m_data.emplace<OpacityData>(WTFMove(data));
     }
 }
@@ -6889,16 +6889,16 @@ TextStream& operator<<(TextStream& ts, const PaintItem& paintItem)
     else
         ts << paintItem.m_phase << " ";
 
-    ts << "(renderer " << paintItem.m_renderer << ") ";
+#ifndef NDEBUG
+    ts << "(renderer " << paintItem.m_rendererName << ") ";
+#endif
     if (paintItem.m_phase < PaintItemType::Opacity)
         ts << "(phase " << paintItem.m_phase << ") ";
     ts << "(bounds " << paintItem.m_bounds << ") ";
     ts << "(scroller " << paintItem.m_scroller << ") ";
     ts << "(clip " << paintItem.m_clip << ") ";
     if (paintItem.m_phase < PaintItemType::Opacity) {
-        WTF::TextStream stream(WTF::TextStream::LineMode::SingleLine);
-        stream << std::get<RefPtr<const DisplayList::DisplayList>>(paintItem.m_data);
-        ts << stream.release();
+        ts << std::get<RefPtr<DisplayList::RemoteDisplayList>>(paintItem.m_data);
     } else {
         ts << std::get<OpacityData>(paintItem.m_data);
     }
@@ -6924,7 +6924,9 @@ TextStream& operator<<(TextStream& ts, const OpacityData& data)
 
 TextStream& operator<<(TextStream& ts, const PaintScroller& paintScroller)
 {
-    ts << "(renderer " << paintScroller.m_element.get();
+#ifndef NDEBUG
+    ts << "(renderer " << paintScroller.m_rendererName;
+#endif
     if (paintScroller.m_parent)
         ts << ", " << *paintScroller.m_parent;
 

@@ -41,11 +41,15 @@ class ImageBuffer;
 class NativeImage;
 struct FontCustomPlatformData;
 
+namespace DisplayList {
+class DisplayList;
+}
+
 }
 
 namespace WebKit {
 
-class RemoteResourceCache {
+class RemoteResourceCache : public RefCounted<RemoteResourceCache> {
 public:
     RemoteResourceCache();
     ~RemoteResourceCache();
@@ -74,6 +78,10 @@ public:
     bool releaseFontCustomPlatformData(WebCore::RenderingResourceIdentifier);
     RefPtr<WebCore::FontCustomPlatformData> cachedFontCustomPlatformData(WebCore::RenderingResourceIdentifier) const;
 
+    void cacheDisplayList(WebCore::RenderingResourceIdentifier, Ref<const WebCore::DisplayList::DisplayList>&&);
+    bool releaseDisplayList(WebCore::RenderingResourceIdentifier);
+    RefPtr<const WebCore::DisplayList::DisplayList> cachedDisplayList(WebCore::RenderingResourceIdentifier) const;
+
     void releaseAllResources();
     void releaseMemory();
     void releaseNativeImages();
@@ -86,6 +94,7 @@ private:
     HashMap<WebCore::RenderingResourceIdentifier, Ref<WebCore::Filter>> m_filters;
     HashMap<WebCore::RenderingResourceIdentifier, Ref<WebCore::Font>> m_fonts;
     HashMap<WebCore::RenderingResourceIdentifier, Ref<WebCore::FontCustomPlatformData>> m_fontCustomPlatformDatas;
+    HashMap<WebCore::RenderingResourceIdentifier, Ref<const WebCore::DisplayList::DisplayList>> m_displayLists;
 };
 
 } // namespace WebKit

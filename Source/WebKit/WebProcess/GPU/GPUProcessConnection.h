@@ -119,7 +119,7 @@ public:
 
     void configureLoggingChannel(const String&, WTFLogChannelState, WTFLogLevel);
 
-    void createRenderingBackend(RenderingBackendIdentifier, IPC::StreamServerConnection::Handle&&);
+    void createRenderingBackend(RenderingBackendIdentifier, IPC::StreamServerConnection::Handle&&, std::optional<RenderingBackendIdentifier> = std::nullopt);
     void releaseRenderingBackend(RenderingBackendIdentifier);
 #if ENABLE(WEBGL)
     void createGraphicsContextGL(GraphicsContextGLIdentifier, const WebCore::GraphicsContextGLAttributes&, RenderingBackendIdentifier, IPC::StreamServerConnection::Handle&&);

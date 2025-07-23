@@ -132,6 +132,9 @@ messages -> RemoteDisplayListRecorder Stream {
     EndPage()
     SetURLForRect(URL link, WebCore::FloatRect destRect)
 
+    CacheDisplayList(WebCore::RenderingResourceIdentifier identifier)
+    DrawDisplayList(WebCore::RenderingResourceIdentifier identifier)
+
 #if PLATFORM(COCOA) && ENABLE(VIDEO)
     DrawVideoFrame(struct WebKit::SharedVideoFrame frame, WebCore::FloatRect rect, struct WebCore::ImageOrientation orientation, bool shouldDiscardAlpha) NotStreamEncodable
     SetSharedVideoFrameSemaphore(IPC::Semaphore semaphore) NotStreamEncodable

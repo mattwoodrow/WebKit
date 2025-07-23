@@ -30,6 +30,6 @@
 namespace WebCore {
 
 struct PlatformLayerIdentifierType;
-using PlatformLayerIdentifier = ProcessQualified<ObjectIdentifier<PlatformLayerIdentifierType>>;
+using PlatformLayerIdentifier = ProcessQualified<AtomicObjectIdentifier<PlatformLayerIdentifierType>>;
 
 } // namespace WebCore

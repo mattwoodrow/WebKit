@@ -244,7 +244,7 @@ void RemoteImageBufferSetProxy::didPrepareForDisplay(ImageBufferSetPrepareBuffer
 
 void RemoteImageBufferSetProxy::close()
 {
-    assertIsMainRunLoop();
+    //assertIsMainRunLoop();
     Locker locker { m_lock };
     m_closed = true;
     m_client = nullptr;

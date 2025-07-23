@@ -72,6 +72,8 @@ public:
     }
     WEBCORE_EXPORT virtual ~Recorder();
 
+    virtual uint64_t flushDisplayLists() { return 0; }
+
 protected:
     WEBCORE_EXPORT Recorder(IsDeferred, const GraphicsContextState&, const FloatRect& initialClip, const AffineTransform&, const DestinationColorSpace&, DrawGlyphsMode);
 

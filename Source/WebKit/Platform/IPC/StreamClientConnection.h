@@ -96,6 +96,9 @@ public:
     template<typename>
     Error waitForAsyncReplyAndDispatchImmediately(AsyncReplyID);
 
+    Error fence(uint64_t fence);
+    Error waitFence(uint64_t fence);
+
     // Ensures batched messages are processed sometime in the future. FIXME: Currently distinct from flushSentMessages().
     void flushBatch() { wakeUpServer(WakeUpServer::No); }
 
@@ -370,6 +373,38 @@ inline void StreamClientConnection::sendProcessOutOfStreamMessage(std::span<uint
     auto result = m_buffer.release(encoder.size());
     UNUSED_VARIABLE(result);
     m_batchSize = 0;
+}
+
+inline Error StreamClientConnection::fence(uint64_t fence)
+{
+    auto span = m_buffer.tryAcquire(defaultTimeout());
+    if (!span)
+        return Error::FailedToAcquireBufferSpan;
+
+    StreamConnectionEncoder encoder { MessageName::StreamFence, *span };
+    if (!(encoder << fence)) {
+        ASSERT_NOT_REACHED(); // Size of the minimum allocation is incorrect. Likely an alignment issue.
+        return Error::StreamConnectionEncodingError;
+    }
+    auto wakeUpResult = m_buffer.release(encoder.size());
+    wakeUpServerBatched(wakeUpResult);
+    return Error::NoError;
+}
+
+inline Error StreamClientConnection::waitFence(uint64_t fence)
+{
+    auto span = m_buffer.tryAcquire(defaultTimeout());
+    if (!span)
+        return Error::FailedToAcquireBufferSpan;
+
+    StreamConnectionEncoder encoder { MessageName::StreamWaitFence, *span };
+    if (!(encoder << fence)) {
+        ASSERT_NOT_REACHED(); // Size of the minimum allocation is incorrect. Likely an alignment issue.
+        return Error::StreamConnectionEncodingError;
+    }
+    auto wakeUpResult = m_buffer.release(encoder.size());
+    wakeUpServerBatched(wakeUpResult);
+    return Error::NoError;
 }
 
 }

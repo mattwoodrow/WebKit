@@ -83,6 +83,7 @@ namespace WebKit {
 class GPUConnectionToWebProcess;
 class RemoteImageBuffer;
 class RemoteImageBufferSet;
+class StandaloneRemoteDisplayListRecorder;
 struct BufferIdentifierSet;
 struct ImageBufferSetPrepareBufferForDisplayInputData;
 struct ImageBufferSetPrepareBufferForDisplayOutputData;
@@ -96,6 +97,7 @@ class ObjectHeap;
 class RemoteRenderingBackend : private IPC::MessageSender, public IPC::StreamMessageReceiver, public CanMakeWeakPtr<RemoteRenderingBackend> {
 public:
     static Ref<RemoteRenderingBackend> create(GPUConnectionToWebProcess&, RenderingBackendIdentifier, Ref<IPC::StreamServerConnection>&&);
+    static Ref<RemoteRenderingBackend> create(GPUConnectionToWebProcess&, RenderingBackendIdentifier, Ref<IPC::StreamServerConnection>&&, Ref<IPC::StreamConnectionWorkQueue>&&, Ref<RemoteResourceCache>&&);
     virtual ~RemoteRenderingBackend();
     void stopListeningForIPC();
 
@@ -128,6 +130,7 @@ public:
 private:
     friend class RemoteImageBufferSet;
     RemoteRenderingBackend(GPUConnectionToWebProcess&, RenderingBackendIdentifier, Ref<IPC::StreamServerConnection>&&);
+    RemoteRenderingBackend(GPUConnectionToWebProcess&, RenderingBackendIdentifier, Ref<IPC::StreamServerConnection>&&, Ref<IPC::StreamConnectionWorkQueue>&& workQueue, Ref<RemoteResourceCache>&& resourceCache);
     void startListeningForIPC();
     void workQueueInitialize();
     void workQueueUninitialize();
@@ -153,6 +156,7 @@ private:
     void releaseGradient(WebCore::RenderingResourceIdentifier);
     void cacheFilter(Ref<WebCore::Filter>&&);
     void releaseFilter(WebCore::RenderingResourceIdentifier);
+    void releaseDisplayList(WebCore::RenderingResourceIdentifier);
     void cacheFont(const WebCore::Font::Attributes&, WebCore::FontPlatformDataAttributes, std::optional<WebCore::RenderingResourceIdentifier>);
     void releaseFont(WebCore::RenderingResourceIdentifier);
     void cacheFontCustomPlatformData(WebCore::FontCustomPlatformSerializedData&&);
@@ -163,6 +167,9 @@ private:
     void markSurfacesVolatile(MarkSurfacesAsVolatileRequestIdentifier, const Vector<std::pair<RemoteImageBufferSetIdentifier, OptionSet<BufferInSetType>>>&, bool forcePurge);
     void createImageBufferSet(WebKit::RemoteImageBufferSetIdentifier, RemoteDisplayListRecorderIdentifier);
     void releaseImageBufferSet(WebKit::RemoteImageBufferSetIdentifier);
+
+    void createDisplayListRecorder(RemoteDisplayListRecorderIdentifier identifier);
+    void releaseDisplayListRecorder(RemoteDisplayListRecorderIdentifier identifier);
 
 #if USE(GRAPHICS_LAYER_WC)
     void flush(IPC::Semaphore&&);
@@ -190,13 +197,15 @@ private:
     const Ref<IPC::StreamServerConnection> m_streamConnection;
     const Ref<GPUConnectionToWebProcess> m_gpuConnectionToWebProcess;
     const Ref<RemoteSharedResourceCache> m_sharedResourceCache;
-    RemoteResourceCache m_remoteResourceCache;
+    const Ref<RemoteResourceCache> m_remoteResourceCache;
     WebCore::ProcessIdentity m_resourceOwner;
     RenderingBackendIdentifier m_renderingBackendIdentifier;
     RefPtr<WebCore::SharedMemory> m_getPixelBufferSharedMemory;
 
     HashMap<WebCore::RenderingResourceIdentifier, IPC::ScopedActiveMessageReceiveQueue<RemoteImageBuffer>> m_remoteImageBuffers WTF_GUARDED_BY_CAPABILITY(workQueue());
     HashMap<RemoteImageBufferSetIdentifier, IPC::ScopedActiveMessageReceiveQueue<RemoteImageBufferSet>> m_remoteImageBufferSets WTF_GUARDED_BY_CAPABILITY(workQueue());
+
+    HashMap<RemoteDisplayListRecorderIdentifier, IPC::ScopedActiveMessageReceiveQueue<StandaloneRemoteDisplayListRecorder>> m_remoteDisplayListRecorders WTF_GUARDED_BY_CAPABILITY(workQueue());
     const Ref<ShapeDetection::ObjectHeap> m_shapeDetectionObjectHeap;
 };
 

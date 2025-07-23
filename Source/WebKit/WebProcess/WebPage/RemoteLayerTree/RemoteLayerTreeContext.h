@@ -28,6 +28,7 @@
 #include "LayerTreeContext.h"
 #include "RemoteLayerBackingStoreCollection.h"
 #include "RemoteLayerTreeTransaction.h"
+#include "RemoteRenderingBackendProxy.h"
 #include <WebCore/FloatSize.h>
 #include <WebCore/FrameIdentifier.h>
 #include <WebCore/GraphicsLayerFactory.h>
@@ -60,6 +61,11 @@ public:
         return adoptRef(*new RemoteLayerTreeContext(webpage));
     }
 
+    static Ref<RemoteLayerTreeContext> create(SerialFunctionDispatcher& dispatcher, DrawingAreaIdentifier identifier, float deviceScaleFactor, RenderingBackendIdentifier mainThreadIdentifier)
+    {
+        return adoptRef(*new RemoteLayerTreeContext(dispatcher, identifier, deviceScaleFactor, mainThreadIdentifier));
+    }
+
     ~RemoteLayerTreeContext();
 
     void layerDidEnterContext(PlatformCALayerRemote&, WebCore::PlatformCALayer::LayerType);
@@ -71,7 +77,7 @@ public:
     void graphicsLayerDidEnterContext(GraphicsLayerCARemote&);
     void graphicsLayerWillLeaveContext(GraphicsLayerCARemote&);
 
-    WebCore::LayerPool& layerPool() { return m_layerPool; }
+    //WebCore::LayerPool& layerPool() { return m_layerPool; }
 
     float deviceScaleFactor() const;
     
@@ -110,16 +116,24 @@ public:
     bool canShowWhileLocked() const;
 #endif
 
-    WebPage& webPage();
-    Ref<WebPage> protectedWebPage();
 
 private:
     explicit RemoteLayerTreeContext(WebPage&);
+    RemoteLayerTreeContext(SerialFunctionDispatcher& dispatcher, DrawingAreaIdentifier identifier, float deviceScaleFactor, RenderingBackendIdentifier mainThreadIdentifier);
+
+    WebPage& webPage();
+    Ref<WebPage> protectedWebPage();
 
     // WebCore::GraphicsLayerFactory
     Ref<WebCore::GraphicsLayer> createGraphicsLayer(WebCore::GraphicsLayer::Type, WebCore::GraphicsLayerClient&) override;
 
-    WeakRef<WebPage> m_webPage;
+    WeakPtr<WebPage> m_webPage;
+
+    RefPtr<SerialFunctionDispatcher> m_dispatcher;
+    std::optional<DrawingAreaIdentifier> m_identifier;
+    float m_deviceScaleFactor;
+    std::optional<RenderingBackendIdentifier> m_mainThreadIdentifier;
+    mutable RefPtr<RemoteRenderingBackendProxy> m_remoteRenderingBackendProxy;
 
     HashMap<WebCore::PlatformLayerIdentifier, RemoteLayerTreeTransaction::LayerCreationProperties> m_createdLayers;
     Vector<WebCore::PlatformLayerIdentifier> m_destroyedLayers;
@@ -134,7 +148,7 @@ private:
 
     const UniqueRef<RemoteLayerBackingStoreCollection> m_backingStoreCollection;
 
-    WebCore::LayerPool m_layerPool;
+    //WebCore::LayerPool m_layerPool;
 
     CheckedPtr<RemoteLayerTreeTransaction> m_currentTransaction;
 

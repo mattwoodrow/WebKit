@@ -59,6 +59,15 @@ RemoteLayerTreeContext::RemoteLayerTreeContext(WebPage& webPage)
 {
 }
 
+RemoteLayerTreeContext::RemoteLayerTreeContext(SerialFunctionDispatcher& dispatcher, DrawingAreaIdentifier identifier, float deviceScaleFactor, RenderingBackendIdentifier mainThreadIdentifier)
+    : m_dispatcher(dispatcher)
+    , m_identifier(identifier)
+    , m_deviceScaleFactor(deviceScaleFactor)
+    , m_mainThreadIdentifier(mainThreadIdentifier)
+    , m_backingStoreCollection(makeUniqueRefWithoutRefCountedCheck<RemoteLayerBackingStoreCollection>(*this))
+{
+}
+
 RemoteLayerTreeContext::~RemoteLayerTreeContext()
 {
     // Make sure containers are empty before destruction to avoid hitting the assertion in CanMakeCheckedPtr.
@@ -80,18 +89,22 @@ void RemoteLayerTreeContext::adoptLayersFromContext(RemoteLayerTreeContext& oldC
 
 float RemoteLayerTreeContext::deviceScaleFactor() const
 {
-    return m_webPage->deviceScaleFactor();
+    // FIXME: Need to track changes to this.
+    return m_webPage ? m_webPage->deviceScaleFactor() : m_deviceScaleFactor;
 }
 
 std::optional<DrawingAreaIdentifier> RemoteLayerTreeContext::drawingAreaIdentifier() const
 {
-    if (!m_webPage->drawingArea())
-        return std::nullopt;
+    if (!m_webPage || !m_webPage->drawingArea())
+        return m_identifier;
     return m_webPage->drawingArea()->identifier();
 }
 
 std::optional<WebCore::DestinationColorSpace> RemoteLayerTreeContext::displayColorSpace() const
 {
+    // FIXME: this.
+    if (!m_webPage)
+        return { };
     if (RefPtr drawingArea = m_webPage->drawingArea())
         return drawingArea->displayColorSpace();
     
@@ -139,7 +152,7 @@ void RemoteLayerTreeContext::layerDidEnterContext(PlatformCALayerRemote& layer, 
         videoElement.naturalSize()
     };
 
-    protectedWebPage()->protectedVideoPresentationManager()->setupRemoteLayerHosting(videoElement);
+    //protectedWebPage()->protectedVideoPresentationManager()->setupRemoteLayerHosting(videoElement);
     m_videoLayers.add(layerID, videoElement.identifier());
 
     m_createdLayers.add(layerID, WTFMove(creationProperties));
@@ -149,12 +162,12 @@ void RemoteLayerTreeContext::layerDidEnterContext(PlatformCALayerRemote& layer, 
 
 WebPage& RemoteLayerTreeContext::webPage()
 {
-    return m_webPage.get();
+    return *m_webPage.get();
 }
 
 Ref<WebPage> RemoteLayerTreeContext::protectedWebPage()
 {
-    return m_webPage.get();
+    return *m_webPage.get();
 }
 
 void RemoteLayerTreeContext::layerWillLeaveContext(PlatformCALayerRemote& layer)
@@ -164,7 +177,7 @@ void RemoteLayerTreeContext::layerWillLeaveContext(PlatformCALayerRemote& layer)
 #if HAVE(AVKIT)
     auto videoLayerIter = m_videoLayers.find(layerID);
     if (videoLayerIter != m_videoLayers.end()) {
-        protectedWebPage()->protectedVideoPresentationManager()->willRemoveLayerForID(videoLayerIter->value);
+        //protectedWebPage()->protectedVideoPresentationManager()->willRemoveLayerForID(videoLayerIter->value);
         m_videoLayers.remove(videoLayerIter);
     }
 #endif
@@ -199,8 +212,8 @@ void RemoteLayerTreeContext::buildTransaction(RemoteLayerTreeTransaction& transa
 
     PlatformCALayerRemote& rootLayerRemote = downcast<PlatformCALayerRemote>(rootLayer);
     transaction.setRootLayerID(rootLayerRemote.layerID());
-    if (RefPtr rootFrame = WebProcess::singleton().webFrame(rootFrameID))
-        transaction.setRemoteContextHostedIdentifier(rootFrame->layerHostingContextIdentifier());
+    //if (RefPtr rootFrame = WebProcess::singleton().webFrame(rootFrameID))
+    //    transaction.setRemoteContextHostedIdentifier(rootFrame->layerHostingContextIdentifier());
 
     m_currentTransaction = &transaction;
     rootLayerRemote.recursiveBuildTransaction(*this, transaction);
@@ -243,7 +256,14 @@ void RemoteLayerTreeContext::animationDidEnd(WebCore::PlatformLayerIdentifier la
 
 RemoteRenderingBackendProxy& RemoteLayerTreeContext::ensureRemoteRenderingBackendProxy()
 {
-    return protectedWebPage()->ensureRemoteRenderingBackendProxy();
+    if (m_webPage)
+        return protectedWebPage()->ensureRemoteRenderingBackendProxy();
+    RefPtr dispatcher = m_dispatcher;
+    RELEASE_ASSERT(dispatcher);
+    assertIsCurrent(*dispatcher);
+    if (!m_remoteRenderingBackendProxy)
+        m_remoteRenderingBackendProxy = RemoteRenderingBackendProxy::create(*dispatcher, *m_mainThreadIdentifier);
+    return *m_remoteRenderingBackendProxy;
 }
 
 Ref<RemoteRenderingBackendProxy> RemoteLayerTreeContext::ensureProtectedRemoteRenderingBackendProxy()

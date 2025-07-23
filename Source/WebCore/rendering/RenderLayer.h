@@ -157,18 +157,25 @@ enum class UpdateBackingSharingFlags {
     DuringCompositingUpdate = 1 << 0,
 };
 
-class PaintScroller : public RefCounted<PaintScroller> {
+class PaintScroller : public ThreadSafeRefCounted<PaintScroller> {
 public:
     PaintScroller(RenderElement& element, PaintScroller* parent)
-      : m_element(element)
-      , m_parent(parent)
-    { }
+        : m_parent(parent)
+    {
+#ifndef NDEBUG
+        TextStream stream;
+        stream << element;
+        m_rendererName = stream.release();
+#endif
+    }
 
-    SingleThreadWeakPtr<RenderElement> m_element;
+#ifndef NDEBUG
+    String m_rendererName;
+#endif
     RefPtr<PaintScroller> m_parent;
 };
 
-class PaintClip : public RefCounted<PaintClip>
+class PaintClip : public ThreadSafeRefCounted<PaintClip>
 {
 public:
     PaintClip(const FloatRect& rect, PaintScroller* scroller, PaintClip* parent)
@@ -1519,7 +1526,7 @@ enum class PaintItemType {
     Opacity,
 };
 
-inline PaintItemType painttemTypeFromPhase(PaintPhase phase)
+inline PaintItemType paintItemTypeFromPhase(PaintPhase phase)
 {
     if (phase == PaintPhase::BlockBackground)
         return PaintItemType::BlockBackground;
@@ -1542,22 +1549,38 @@ struct OpacityData {
 // out-of-line storage for the properties.
 class PaintItem {
 public:
-    SingleThreadWeakPtr<RenderElement> m_renderer;
+    PaintItem(RenderElement& renderer, PaintItemType type, LayoutRect bounds, PaintClip* clip, PaintScroller* scroller)
+        : m_id(uintptr_t(&renderer))
+        , m_phase(type)
+        , m_bounds(bounds)
+        , m_clip(clip)
+        , m_scroller(scroller)
+    {
+#ifndef NDEBUG
+        TextStream stream;
+        stream << renderer;
+        m_rendererName = stream.release();
+#endif
+    }
+
+    // I think we're going to need a threadsafe way to track identity across
+    // paints/instances. This is not a good solution to that.
+    uintptr_t m_id;
+#ifndef NDEBUG
+    String m_rendererName;
+#endif
     PaintItemType m_phase;
     LayoutRect m_bounds;
     RefPtr<PaintClip> m_clip;
     RefPtr<PaintScroller> m_scroller;
-    Variant<RefPtr<const DisplayList::DisplayList>, OpacityData> m_data;
+    Variant<std::monostate, RefPtr<DisplayList::RemoteDisplayList>, OpacityData> m_data;
 };
 
-class PaintTreeRecorder : public DisplayList::RecorderImpl
+class PaintTreeRecorder
 {
 public:
     PaintTreeRecorder()
-      : DisplayList::RecorderImpl( { })
     { }
-
-    PaintTreeRecorder* asRecorder() final { return this; }
 
     Vector<PaintItem> m_paintItems;
     RefPtr<PaintClip> m_currentClip;

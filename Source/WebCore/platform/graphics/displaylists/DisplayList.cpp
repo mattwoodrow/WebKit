@@ -77,5 +77,24 @@ TextStream& operator<<(TextStream& ts, const DisplayList& displayList)
     return ts;
 }
 
+WTF_MAKE_TZONE_ALLOCATED_IMPL(RemoteDisplayList);
+
+void RemoteDisplayList::dump(TextStream& ts) const
+{
+    ts << "(remote-display-list " << m_identifier << ")";
+}
+
+TextStream& operator<<(TextStream& ts, const RemoteDisplayList& displayList)
+{
+    displayList.dump(ts);
+    return ts;
+}
+
+RemoteDisplayList::~RemoteDisplayList()
+{
+    for (auto& observer : m_observers)
+        observer.willDestroyDisplayList(renderingResourceIdentifier());
+}
+
 } // namespace DisplayList
 } // namespace WebCore

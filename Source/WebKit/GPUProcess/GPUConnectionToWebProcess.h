@@ -293,7 +293,7 @@ private:
     Ref<RemoteAudioMediaStreamTrackRendererInternalUnitManager> protectedAudioMediaStreamTrackRendererInternalUnitManager();
 #endif
 
-    void createRenderingBackend(RenderingBackendIdentifier, IPC::StreamServerConnection::Handle&&);
+    void createRenderingBackend(RenderingBackendIdentifier, IPC::StreamServerConnection::Handle&&, std::optional<RenderingBackendIdentifier>);
     void releaseRenderingBackend(RenderingBackendIdentifier);
 
 #if ENABLE(WEBGL)

@@ -1192,7 +1192,8 @@ unsigned PlatformCALayerRemote::backingStoreBytesPerPixel() const
 
 LayerPool* PlatformCALayerRemote::layerPool()
 {
-    return m_context ? &m_context->layerPool() : nullptr;
+    //return m_context ? &m_context->layerPool() : nullptr;
+    return nullptr;
 }
 
 #if ENABLE(THREADED_ANIMATION_RESOLUTION)

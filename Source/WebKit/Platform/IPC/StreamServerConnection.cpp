@@ -141,6 +141,12 @@ StreamServerConnection::DispatchResult StreamServerConnection::dispatchStreamMes
     uint8_t currentReceiverName = static_cast<uint8_t>(ReceiverName::Invalid);
 
     for (size_t i = 0; i < messageLimit; ++i) {
+        if (m_waitingFence) {
+            if (*m_waitingFence <= protectedWorkQueue()->fence()) {
+                m_waitingFence = std::nullopt;
+            } else
+                return DispatchResult::HasNoMessages;
+        }
         auto span = m_buffer.tryAcquire();
         if (!span)
             return DispatchResult::HasNoMessages;
@@ -156,6 +162,17 @@ StreamServerConnection::DispatchResult StreamServerConnection::dispatchStreamMes
         }
         if (decoder.messageName() == MessageName::ProcessOutOfStreamMessage) {
             if (!processOutOfStreamMessage(decoder))
+                return DispatchResult::HasNoMessages;
+            continue;
+        }
+        if (decoder.messageName() == MessageName::StreamFence) {
+            if (!processFence(decoder))
+                return DispatchResult::HasNoMessages;
+            // Always interupt now to give waiting queues a go.
+            return DispatchResult::HasMoreMessages;
+        }
+        if (decoder.messageName() == MessageName::StreamWaitFence) {
+            if (!processWaitFence(decoder))
                 return DispatchResult::HasNoMessages;
             continue;
         }
@@ -199,6 +216,38 @@ bool StreamServerConnection::processSetStreamDestinationID(Decoder& decoder, Ref
         m_currentDestinationID = *destinationID;
         currentReceiver = nullptr;
     }
+    auto result = m_buffer.release(decoder.currentBufferOffset());
+    if (result == WakeUpClient::Yes)
+        m_clientWaitSemaphore.signal();
+    return true;
+}
+
+bool StreamServerConnection::processFence(Decoder& decoder)
+{
+    auto fence = decoder.decode<uint64_t>();
+    if (!fence) {
+        protectedConnection()->dispatchDidReceiveInvalidMessage(decoder.messageName(), decoder.indexOfObjectFailingDecoding());
+        return false;
+    }
+
+    protectedWorkQueue()->setFence(*fence);
+
+    auto result = m_buffer.release(decoder.currentBufferOffset());
+    if (result == WakeUpClient::Yes)
+        m_clientWaitSemaphore.signal();
+    return true;
+}
+
+bool StreamServerConnection::processWaitFence(Decoder& decoder)
+{
+    auto fence = decoder.decode<uint64_t>();
+    if (!fence) {
+        protectedConnection()->dispatchDidReceiveInvalidMessage(decoder.messageName(), decoder.indexOfObjectFailingDecoding());
+        return false;
+    }
+
+    m_waitingFence = fence;
+
     auto result = m_buffer.release(decoder.currentBufferOffset());
     if (result == WakeUpClient::Yes)
         m_clientWaitSemaphore.signal();

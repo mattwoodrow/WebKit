@@ -57,11 +57,12 @@ using namespace WebCore;
 
 WTF_MAKE_TZONE_ALLOCATED_IMPL(RemoteDisplayListRecorderProxy);
 
-RemoteDisplayListRecorderProxy::RemoteDisplayListRecorderProxy(const DestinationColorSpace& colorSpace, RenderingMode renderingMode, const FloatRect& initialClip, const AffineTransform& initialCTM, RemoteRenderingBackendProxy& renderingBackend)
+RemoteDisplayListRecorderProxy::RemoteDisplayListRecorderProxy(const DestinationColorSpace& colorSpace, RenderingMode renderingMode, const FloatRect& initialClip, const AffineTransform& initialCTM, RemoteRenderingBackendProxy& renderingBackend, bool manualRelease)
     : DisplayList::Recorder(IsDeferred::No, { }, initialClip, initialCTM, colorSpace, DrawGlyphsMode::Deconstruct)
     , m_renderingMode(renderingMode)
     , m_identifier(RemoteDisplayListRecorderIdentifier::generate())
     , m_renderingBackend(renderingBackend)
+    , m_requiresRelease(manualRelease)
 {
 }
 
@@ -74,7 +75,13 @@ RemoteDisplayListRecorderProxy::RemoteDisplayListRecorderProxy(const Destination
 {
 }
 
-RemoteDisplayListRecorderProxy::~RemoteDisplayListRecorderProxy() = default;
+RemoteDisplayListRecorderProxy::~RemoteDisplayListRecorderProxy()
+{
+    if (m_requiresRelease) {
+        if (RefPtr backend = m_renderingBackend.get())
+            backend->releaseDisplayListRecorder(m_identifier);
+    }
+}
 
 template<typename T>
 ALWAYS_INLINE void RemoteDisplayListRecorderProxy::send(T&& message)
@@ -623,6 +630,12 @@ void RemoteDisplayListRecorderProxy::setURLForRect(const URL& link, const FloatR
     send(Messages::RemoteDisplayListRecorder::SetURLForRect(link, destRect));
 }
 
+void RemoteDisplayListRecorderProxy::drawDisplayList(const DisplayList::RemoteDisplayList& displayList)
+{
+    appendStateChangeItemIfNecessary();
+    send(Messages::RemoteDisplayListRecorder::DrawDisplayList(displayList.renderingResourceIdentifier()));
+}
+
 bool RemoteDisplayListRecorderProxy::recordResourceUse(NativeImage& image)
 {
     RefPtr renderingBackend = m_renderingBackend.get();
@@ -876,6 +889,44 @@ void RemoteDisplayListRecorderProxy::disconnect()
         m_sharedVideoFrameWriter = nullptr;
     }
 #endif
+}
+
+RefPtr<DisplayList::RemoteDisplayList> RemoteDisplayListRecorderProxy::tryTakeDisplayList()
+{
+    if (!m_hasDrawn)
+        return nullptr;
+
+    RefPtr renderingBackend = m_renderingBackend.get();
+    if (!renderingBackend) [[unlikely]] {
+        ASSERT_NOT_REACHED();
+        return nullptr;
+    }
+
+    RefPtr displayList = adoptRef(new DisplayList::RemoteDisplayList);
+    renderingBackend->remoteResourceCacheProxy().recordDisplayListUse(*displayList);
+
+    appendStateChangeItemIfNecessary();
+    send(Messages::RemoteDisplayListRecorder::CacheDisplayList(displayList->renderingResourceIdentifier()));
+
+    consumeHasDrawn();
+    return displayList;
+}
+
+uint64_t RemoteDisplayListRecorderProxy::flushDisplayLists()
+{
+    static uint64_t gFence = 0;
+
+    RefPtr connection = m_connection;
+    if (!connection) [[unlikely]] {
+        if (RefPtr backend = m_renderingBackend.get())
+            connection = backend->connection();
+        if (!connection)
+            return 0;
+        m_connection = connection;
+    }
+
+    connection->fence(++gFence);
+    return gFence;
 }
 
 void RemoteDisplayListRecorderProxy::abandon()

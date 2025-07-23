@@ -78,6 +78,7 @@
 #include "TranslateTransformOperation.h"
 #include "ViewTransition.h"
 #include "WillChangeData.h"
+#include "WorkerClient.h"
 #include <wtf/HexNumber.h>
 #include <wtf/MemoryPressureHandler.h>
 #include <wtf/ObjectIdentifier.h>
@@ -608,6 +609,10 @@ RenderLayerCompositor::~RenderLayerCompositor()
 #endif
 
     ASSERT(m_rootLayerAttachment == RootLayerUnattached);
+
+    if (m_threadRunLoop) {
+        m_threadRunLoop->dispatch([paintBuilder = std::exchange(m_paintBuilder, nullptr), client = std::exchange(m_layerBuilderClient, nullptr)]() {});
+    }
 }
 
 void RenderLayerCompositor::enableCompositingMode(bool enable /* = true */)
@@ -835,7 +840,7 @@ static PaintClip* scrolledClip(PaintItem& item)
     return clip.get();
 }
 
-class PaintLayerBuilder : public RefCounted<PaintLayerBuilder>
+class PaintLayerBuilder : public ThreadSafeRefCounted<PaintLayerBuilder>
 {
 public:
     struct DisplayListLayer;
@@ -920,7 +925,7 @@ public:
         {
             for (auto& item : items) {
                 if (item.m_phase < PaintItemType::Opacity)
-                    context.drawDisplayList(*std::get<RefPtr<const DisplayList::DisplayList>>(item.m_data));
+                    context.drawDisplayList(*std::get<RefPtr<DisplayList::RemoteDisplayList>>(item.m_data));
                 else {
                     switch (item.m_phase) {
                         case PaintItemType::Opacity:
@@ -1085,12 +1090,13 @@ void RenderLayerCompositor::flushPendingLayerChanges(bool isFlushRoot)
         auto paintFlags = RenderLayer::paintLayerPaintingCompositingAllPhasesFlags();
         //paintFlags.add(RenderLayer::PaintLayerFlag::TemporaryClipRects);
         PaintTreeRecorder recorder;
-        m_renderView.layer()->paint(recorder, m_renderView.frameRect(), { }, m_renderView.frameView().paintBehavior(), nullptr, paintFlags);
+        auto context = page().chrome().client().createDisplayListRecorder();
+        context->setRecorder(&recorder);
+        m_renderView.layer()->paint(*context, m_renderView.frameRect(), { }, m_renderView.frameView().paintBehavior(), nullptr, paintFlags);
+
+        uint64_t fence = context->flushDisplayLists();
 
         m_renderView.frameView().setPaintBehavior(oldPaintBehavior);
-
-        if (!m_paintBuilder)
-            m_paintBuilder = adoptRef(new PaintLayerBuilder);
 
         {
             WTF::TextStream stream;
@@ -1098,19 +1104,52 @@ void RenderLayerCompositor::flushPendingLayerChanges(bool isFlushRoot)
             WTFLogAlways("%s", stream.release().utf8().data());
         }
 
-        // FIXME: Ideally the paint tree would be threadsafe/immutable, and we can dispatch
-        // to worker/taskqueue at this point.
-        m_paintBuilder->build(WTFMove(recorder.m_paintItems), graphicsLayerFactory());
-
-        {
-            WTF::TextStream stream;
-            stream << *m_paintBuilder;
-            WTFLogAlways("%s", stream.release().utf8().data());
+        if (!m_threadRunLoop) {
+            m_threadRunLoop = RunLoop::create("WebCore: Compositing?"_s, ThreadType::Graphics, Thread::QOS::UserInteractive);
+            m_layerBuilderClient = page().chrome().client().createThreadedLayerBuilderClient(*m_threadRunLoop);
         }
 
-        if (RefPtr rootContentsLayer = m_rootContentsLayer)
-            rootContentsLayer->setChildren(m_paintBuilder->graphicsLayers());
+        if (!m_paintBuilder)
+            m_paintBuilder = adoptRef(new PaintLayerBuilder);
+
+        m_threadRunLoop->dispatch([layerBuilderClient = m_layerBuilderClient, paintBuilder = m_paintBuilder, items = WTFMove(recorder.m_paintItems), id = m_renderView.frameView().frame().frameID(), overflowRect = m_renderView.layoutOverflowRect(), visibleRect = visibleRectForLayerFlushing(), isFlushRoot, fence]() mutable {
+
+            GraphicsLayerFactory* factory = layerBuilderClient->beginTransaction(id);
+
+            static PaintLayerBuilder::PaintLayer& layer = *new PaintLayerBuilder::PaintLayer(nullptr, nullptr);
+            RefPtr rootContentsLayer = GraphicsLayer::create(factory, layer);
+            rootContentsLayer->setName(MAKE_STATIC_STRING_IMPL("content root"));
+            IntRect intOverflowRect = snappedIntRect(overflowRect);
+            RefPtr { rootContentsLayer }->setSize(FloatSize(intOverflowRect.maxX(), intOverflowRect.maxY()));
+            rootContentsLayer->setPosition(FloatPoint());
+
+            paintBuilder->build(WTFMove(items), factory);
+
+            {
+                WTF::TextStream stream;
+                stream << *paintBuilder;
+                WTFLogAlways("%s", stream.release().utf8().data());
+            }
+
+            rootContentsLayer->setChildren(paintBuilder->graphicsLayers());
+
+            LOG_WITH_STREAM(Compositing,  stream << "\nRenderLayerCompositor " << " flushPendingLayerChanges (is root " << isFlushRoot << ") visible rect " << visibleRect);
+            rootContentsLayer->flushCompositingState(visibleRect);
+
+#if ENABLE(TREE_DEBUGGING)
+            if (layersLogEnabled()) {
+                LOG(Layers, "RenderLayerCompositor::flushPendingLayerChanges");
+                showGraphicsLayerTree(rootContentsLayer.get());
+            }
+#endif
+
+            if (fence)
+                layerBuilderClient->waitOnDisplayLists(fence);
+            layerBuilderClient->endTransaction(rootContentsLayer.get());
+        });
     }
+
+    return;
 
     ASSERT(!m_flushingLayers);
     {

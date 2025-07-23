@@ -44,10 +44,14 @@ messages -> RemoteRenderingBackend Stream {
     ReleaseGradient(WebCore::RenderingResourceIdentifier identifier)
     CacheFilter(Ref<WebCore::Filter> filter) NotStreamEncodable
     ReleaseFilter(WebCore::RenderingResourceIdentifier identifier)
+    ReleaseDisplayList(WebCore::RenderingResourceIdentifier identifier)
     ReleaseMemory()
     ReleaseNativeImages()
     CreateImageBufferSet(WebKit::RemoteImageBufferSetIdentifier identifier, WebKit::RemoteDisplayListRecorderIdentifier contextIdentifier)
     ReleaseImageBufferSet(WebKit::RemoteImageBufferSetIdentifier identifier)
+
+    CreateDisplayListRecorder(WebKit::RemoteDisplayListRecorderIdentifier identifier)
+    ReleaseDisplayListRecorder(WebKit::RemoteDisplayListRecorderIdentifier identifier)
 
 #if PLATFORM(COCOA)
     // These messages also result in the 'DidPrepareForDisplay' message being

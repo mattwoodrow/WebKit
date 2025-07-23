@@ -43,7 +43,7 @@ public:
     }
     WEBCORE_EXPORT virtual ~RecorderImpl();
 
-    bool hasDisplayList() const;
+    bool hasDisplayList() const final;
     WEBCORE_EXPORT Ref<const DisplayList> takeDisplayList();
     // This function is deprecated and sign that caller is doing something incorrect. This will be
     // removed once all clients are fixed.

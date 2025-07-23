@@ -40,6 +40,10 @@ class Filter;
 class Font;
 class ImageBuffer;
 struct FontCustomPlatformData;
+
+namespace DisplayList {
+class RemoteDisplayList;
+}
 }
 
 namespace WebKit {
@@ -60,6 +64,8 @@ public:
     void recordFilterUse(WebCore::Filter&);
     void recordFontCustomPlatformDataUse(const WebCore::FontCustomPlatformData&);
 
+    void recordDisplayListUse(WebCore::DisplayList::RemoteDisplayList&);
+
     void didPaintLayers();
 
     void releaseMemory();
@@ -73,6 +79,7 @@ private:
     void willDestroyGradient(WebCore::RenderingResourceIdentifier) override;
     void willDestroyDecomposedGlyphs(WebCore::RenderingResourceIdentifier) override;
     void willDestroyFilter(WebCore::RenderingResourceIdentifier) override;
+    void willDestroyDisplayList(WebCore::RenderingResourceIdentifier) override;
 
     void finalizeRenderingUpdateForFonts();
     void prepareForNextRenderingUpdate();

@@ -53,6 +53,7 @@
 #import <WebCore/ScrollView.h>
 #import <WebCore/Settings.h>
 #import <WebCore/TiledBacking.h>
+#import <WebCore/WorkerClient.h>
 #import <pal/spi/cocoa/QuartzCoreSPI.h>
 #import <wtf/BlockPtr.h>
 #import <wtf/SetForScope.h>
@@ -166,6 +167,130 @@ void RemoteLayerTreeDrawingArea::setRootCompositingLayer(WebCore::Frame& frame, 
     }
     updateRootLayers();
     triggerRenderingUpdate();
+}
+
+struct RLTDAThreaded : public WebCore::ThreadedLayerBuilderClient, public WebCore::GraphicsLayerClient
+{
+    RLTDAThreaded(SerialFunctionDispatcher& dispatcher, DrawingAreaIdentifier identifier, float deviceScaleFactor, RenderingBackendIdentifier mainThreadIdentifier)
+      : m_dispatcher(dispatcher)
+      , m_identifier(identifier)
+      , m_deviceScaleFactor(deviceScaleFactor)
+      , m_mainThreadIdentifier(mainThreadIdentifier)
+    { }
+
+    RefPtr<SerialFunctionDispatcher> m_dispatcher;
+    DrawingAreaIdentifier m_identifier;
+    float m_deviceScaleFactor;
+    RenderingBackendIdentifier m_mainThreadIdentifier;
+
+    RefPtr<RemoteLayerTreeContext> m_remoteLayerTreeContext;
+    Vector<RemoteLayerTreeDrawingArea::RootLayerInfo, 1> m_rootLayers;
+    TransactionID m_currentTransactionID { TransactionID::generateMonotonic() };
+    RefPtr<RemoteLayerTreeDrawingArea::BackingStoreFlusher> m_backingStoreFlusher;
+
+    TransactionID takeNextTransactionID() { return m_currentTransactionID.increment(); }
+
+    GraphicsLayerFactory* beginTransaction(FrameIdentifier frameID) final
+    {
+        if (!m_remoteLayerTreeContext)
+            m_remoteLayerTreeContext = RemoteLayerTreeContext::create(*m_dispatcher, m_identifier, m_deviceScaleFactor, m_mainThreadIdentifier);
+        if (!m_backingStoreFlusher)
+            m_backingStoreFlusher = RemoteLayerTreeDrawingArea::BackingStoreFlusher::create(*WebProcess::singleton().parentProcessConnection());
+        if (m_rootLayers.isEmpty()) {
+            auto layer = GraphicsLayer::create(m_remoteLayerTreeContext.get(), *this);
+            layer->setName(makeString("drawing area root "_s, frameID));
+            m_rootLayers.append(RemoteLayerTreeDrawingArea::RootLayerInfo {
+                WTFMove(layer),
+                nullptr,
+                nullptr,
+                frameID
+            });
+        }
+
+        return m_remoteLayerTreeContext.get();
+    }
+
+    void endTransaction(GraphicsLayer* rootLayer) final
+    {
+        m_rootLayers[0].contentLayer = rootLayer;
+        Vector<Ref<GraphicsLayer>> children;
+        children.append(Ref { *rootLayer });
+        m_rootLayers[0].layer->setChildren(WTFMove(children));
+
+        Ref backingStoreCollection = m_remoteLayerTreeContext->backingStoreCollection();
+        backingStoreCollection->willFlushLayers();
+
+        // FIXME: Minimize these transactions if nothing changed.
+        auto transactionID = takeNextTransactionID();
+        auto transactions = WTF::map(m_rootLayers, [&](auto& rootLayer) -> std::pair<RemoteLayerTreeTransaction, RemoteScrollingCoordinatorTransaction> {
+            backingStoreCollection->willBuildTransaction();
+            rootLayer.layer->flushCompositingStateForThisLayerOnly();
+
+            RemoteLayerTreeTransaction layerTransaction(transactionID);
+            // FIXME: Send these across from RLTDA
+            //layerTransaction.setCallbackIDs(WTFMove(m_pendingCallbackIDs));
+
+            RefPtr layer = downcast<GraphicsLayerCARemote>(rootLayer.layer.get()).platformCALayer();
+            m_remoteLayerTreeContext->buildTransaction(layerTransaction, *layer, rootLayer.frameID);
+
+            // FIXME: Send these across from RLTDA
+            // FIXME: Investigate whether this needs to be done multiple times in a page with multiple root frames. <rdar://116202678>
+            //webPage->willCommitLayerTree(layerTransaction, rootLayer.frameID);
+
+            // FIXME: Send these across from RLTDA?
+            //layerTransaction.setNewlyReachedPaintingMilestones(std::exchange(m_pendingNewlyReachedPaintingMilestones, { }));
+            //layerTransaction.setActivityStateChangeID(std::exchange(m_activityStateChangeID, ActivityStateChangeAsynchronous));
+
+           // willCommitLayerTree(layerTransaction);
+
+            //m_waitingForBackingStoreSwap = true;
+
+            //send(Messages::RemoteLayerTreeDrawingAreaProxy::WillCommitLayerTree(layerTransaction.transactionID()));
+
+            RemoteScrollingCoordinatorTransaction scrollingTransaction;
+    #if ENABLE(ASYNC_SCROLLING)
+            //if (webPage->scrollingCoordinator())
+            //    scrollingTransaction = downcast<RemoteScrollingCoordinator>(*webPage->scrollingCoordinator()).buildTransaction(rootLayer.frameID);
+            //scrollingTransaction.setFrameIdentifier(rootLayer.frameID);
+    #endif
+
+            return { WTFMove(layerTransaction), WTFMove(scrollingTransaction) };
+        });
+
+        for (auto& transaction : transactions)
+            backingStoreCollection->willCommitLayerTree(transaction.first);
+
+        auto commitEncoder = makeUniqueRef<IPC::Encoder>(Messages::RemoteLayerTreeDrawingAreaProxy::CommitLayerTree::name(), m_remoteLayerTreeContext->drawingAreaIdentifier()->toUInt64());
+        commitEncoder.get() << transactions;
+
+        Vector<std::unique_ptr<ThreadSafeImageBufferSetFlusher>> flushers;
+        for (auto& transaction : transactions)
+            flushers.appendVector(backingStoreCollection->didFlushLayers(transaction.first));
+
+        OptionSet<WebPage::DidUpdateRenderingFlags> didUpdateRenderingFlags;
+        if (flushers.size())
+            didUpdateRenderingFlags.add(WebPage::DidUpdateRenderingFlags::PaintedLayers);
+        //webPage->didUpdateRendering(didUpdateRenderingFlags);
+
+        m_backingStoreFlusher->markHasPendingFlush();
+
+        /* bool flushSucceeded = */ m_backingStoreFlusher->flush(WTFMove(commitEncoder), WTFMove(flushers));
+
+        // Dispatch back to RLTDA
+        //didCompleteRenderingUpdateDisplayFlush(flushSucceeded);
+        //didCompleteRenderingFrame();
+    }
+
+    void waitOnDisplayLists(uint64_t fence) final {
+        Ref backend = m_remoteLayerTreeContext->ensureRemoteRenderingBackendProxy();
+        if (RefPtr connection = backend->connection())
+            connection->waitFence(fence);
+    }
+};
+
+RefPtr<ThreadedLayerBuilderClient> RemoteLayerTreeDrawingArea::createThreadedLayerBuilderClient(SerialFunctionDispatcher& dispatcher, RenderingBackendIdentifier mainThreadIdentifier)
+{
+    return adoptRef(new RLTDAThreaded(dispatcher, identifier(), m_webPage->deviceScaleFactor(), mainThreadIdentifier));
 }
 
 void RemoteLayerTreeDrawingArea::updateGeometry(const IntSize& viewSize, bool flushSynchronously, const WTF::MachSendRight&, CompletionHandler<void()>&& completionHandler)
@@ -365,6 +490,8 @@ void RemoteLayerTreeDrawingArea::updateRendering()
             rootLayer.viewOverlayRootLayer->flushCompositingState(visibleRect);
     }
 
+#if 0
+
     Ref backingStoreCollection = m_remoteLayerTreeContext->backingStoreCollection();
     backingStoreCollection->willFlushLayers();
 
@@ -432,6 +559,8 @@ void RemoteLayerTreeDrawingArea::updateRendering()
             }
         });
     });
+
+#endif
 }
 
 void RemoteLayerTreeDrawingArea::didCompleteRenderingUpdateDisplayFlush(bool flushSucceeded)

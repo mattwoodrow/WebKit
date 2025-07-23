@@ -49,7 +49,7 @@ class SharedVideoFrameWriter;
 class RemoteDisplayListRecorderProxy : public WebCore::DisplayList::Recorder {
     WTF_MAKE_TZONE_ALLOCATED(RemoteDisplayListRecorderProxy);
 public:
-    RemoteDisplayListRecorderProxy(const WebCore::DestinationColorSpace&, WebCore::RenderingMode, const WebCore::FloatRect& initialClip, const WebCore::AffineTransform&, RemoteRenderingBackendProxy&);
+    RemoteDisplayListRecorderProxy(const WebCore::DestinationColorSpace&, WebCore::RenderingMode, const WebCore::FloatRect& initialClip, const WebCore::AffineTransform&, RemoteRenderingBackendProxy&, bool manualRelease = false);
     RemoteDisplayListRecorderProxy(const WebCore::DestinationColorSpace&, WebCore::ContentsFormat, WebCore::RenderingMode, const WebCore::FloatRect& initialClip, const WebCore::AffineTransform&, RemoteDisplayListRecorderIdentifier, RemoteRenderingBackendProxy&);
     ~RemoteDisplayListRecorderProxy();
     RemoteDisplayListRecorderIdentifier identifier() const { return m_identifier; }
@@ -60,11 +60,15 @@ public:
     // Called when rendering backend gets discarded but reference to the owning image buffer is still referenced.
     void abandon();
 
+    bool hasDisplayList() const final { return m_hasDrawn; }
+    RefPtr<WebCore::DisplayList::RemoteDisplayList> tryTakeDisplayList() final;
 
     void setClient(ThreadSafeWeakPtr<RemoteImageBufferProxy>&& client) { m_client = WTFMove(client); }
     // Returns false if there has not been any potential draws since last call.
     // Returns true if there has been potential draws since last call.
     bool consumeHasDrawn();
+
+    uint64_t flushDisplayLists() final;
 
 private:
     template<typename T> void send(T&& message);
@@ -129,6 +133,8 @@ private:
     void drawGlyphsImmediate(const WebCore::Font&, std::span<const WebCore::GlyphBufferGlyph>, std::span<const WebCore::GlyphBufferAdvance>, const WebCore::FloatPoint& localAnchor, WebCore::FontSmoothingMode) final;
     void drawDecomposedGlyphs(const WebCore::Font&, const WebCore::DecomposedGlyphs&) final;
 
+    void drawDisplayList(const WebCore::DisplayList::RemoteDisplayList&) final;
+
 #if USE(CG)
     void applyStrokePattern() final;
     void applyFillPattern() final;
@@ -183,6 +189,7 @@ private:
 #endif
     // Flag for pending draws. Start with true because we do not know what commands have been scheduled to the context.
     bool m_hasDrawn { true };
+    bool m_requiresRelease { false };
 };
 
 inline bool RemoteDisplayListRecorderProxy::consumeHasDrawn()

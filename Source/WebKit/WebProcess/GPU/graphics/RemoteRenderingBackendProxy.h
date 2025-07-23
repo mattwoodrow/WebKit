@@ -83,7 +83,7 @@ class RemoteRenderingBackendProxy
     WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(RemoteRenderingBackendProxy);
 public:
     static Ref<RemoteRenderingBackendProxy> create(WebPage&);
-    static Ref<RemoteRenderingBackendProxy> create(SerialFunctionDispatcher&);
+    static Ref<RemoteRenderingBackendProxy> create(SerialFunctionDispatcher&, std::optional<RenderingBackendIdentifier> = std::nullopt);
 
     void ref() const final { RefCounted::ref(); }
     void deref() const final { RefCounted::deref(); }
@@ -119,6 +119,7 @@ public:
     void releaseGradient(WebCore::RenderingResourceIdentifier);
     void cacheFilter(Ref<WebCore::Filter>&&);
     void releaseFilter(WebCore::RenderingResourceIdentifier);
+    void releaseDisplayList(WebCore::RenderingResourceIdentifier);
     void releaseMemory();
     void releaseNativeImages();
     void markSurfacesVolatile(Vector<std::pair<Ref<RemoteImageBufferSetProxy>, OptionSet<BufferInSetType>>>&&, CompletionHandler<void(bool madeAllVolatile)>&&, bool forcePurge);
@@ -130,7 +131,8 @@ public:
     Function<bool()> flushImageBuffers();
 #endif
 
-    std::unique_ptr<RemoteDisplayListRecorderProxy> createDisplayListRecorder(WebCore::RenderingResourceIdentifier, const WebCore::FloatSize&, WebCore::RenderingMode, WebCore::RenderingPurpose, float resolutionScale, const WebCore::DestinationColorSpace&, WebCore::ContentsFormat, WebCore::ImageBufferPixelFormat);
+    std::unique_ptr<RemoteDisplayListRecorderProxy> createDisplayListRecorder();
+    void releaseDisplayListRecorder(RemoteDisplayListRecorderIdentifier);
 
     struct BufferSet {
         RefPtr<WebCore::ImageBuffer> front;
@@ -178,7 +180,7 @@ public:
 
     unsigned nativeImageCountForTesting() const;
 private:
-    explicit RemoteRenderingBackendProxy(SerialFunctionDispatcher&);
+    explicit RemoteRenderingBackendProxy(SerialFunctionDispatcher&, std::optional<RenderingBackendIdentifier> = std::nullopt);
 
     template<typename T, typename U, typename V, typename W> auto send(T&& message, ObjectIdentifierGeneric<U, V, W>);
     template<typename T> auto send(T&& message) { return send(std::forward<T>(message), renderingBackendIdentifier()); }
@@ -220,6 +222,7 @@ private:
     RefPtr<IPC::StreamClientConnection> m_connection;
     RefPtr<RemoteSharedResourceCacheProxy> m_sharedResourceCache;
     RenderingBackendIdentifier m_identifier { RenderingBackendIdentifier::generate() };
+    std::optional<RenderingBackendIdentifier> m_parentIdentifier;
     RemoteResourceCacheProxy m_remoteResourceCacheProxy { *this };
     RefPtr<WebCore::SharedMemory> m_getPixelBufferSharedMemory;
     WebCore::Timer m_destroyGetPixelBufferSharedMemoryTimer { *this, &RemoteRenderingBackendProxy::destroyGetPixelBufferSharedMemory };

@@ -700,7 +700,7 @@ Ref<RemoteImageDecoderAVFProxy> GPUConnectionToWebProcess::protectedImageDecoder
 }
 #endif
 
-void GPUConnectionToWebProcess::createRenderingBackend(RenderingBackendIdentifier identifier, IPC::StreamServerConnection::Handle&& connectionHandle)
+void GPUConnectionToWebProcess::createRenderingBackend(RenderingBackendIdentifier identifier, IPC::StreamServerConnection::Handle&& connectionHandle, std::optional<RenderingBackendIdentifier> parentIdentifier)
 {
     IPC::StreamServerConnectionParameters params;
 #if ENABLE(IPC_TESTING_API)
@@ -709,12 +709,29 @@ void GPUConnectionToWebProcess::createRenderingBackend(RenderingBackendIdentifie
     auto streamConnection = IPC::StreamServerConnection::tryCreate(WTFMove(connectionHandle), params);
     MESSAGE_CHECK(streamConnection);
 
-    auto addResult = m_remoteRenderingBackendMap.ensure(identifier, [&] {
-        return IPC::ScopedActiveMessageReceiveQueue { RemoteRenderingBackend::create(*this, identifier, streamConnection.releaseNonNull()) };
-    });
-    if (!addResult.isNewEntry) {
-        streamConnection->invalidate();
-        MESSAGE_CHECK(false);
+    if (parentIdentifier) {
+        auto it = m_remoteRenderingBackendMap.find(*parentIdentifier);
+        MESSAGE_CHECK(it != m_remoteRenderingBackendMap.end());
+
+        Ref workQueue = it->value->workQueue();
+        Ref resourceCache = it->value->remoteResourceCache();
+
+        auto addResult = m_remoteRenderingBackendMap.ensure(identifier, [&] {
+            return IPC::ScopedActiveMessageReceiveQueue { RemoteRenderingBackend::create(*this, identifier, streamConnection.releaseNonNull(), WTFMove(workQueue), WTFMove(resourceCache)) };
+        });
+        if (!addResult.isNewEntry) {
+            streamConnection->invalidate();
+            MESSAGE_CHECK(false);
+        }
+    } else {
+
+        auto addResult = m_remoteRenderingBackendMap.ensure(identifier, [&] {
+            return IPC::ScopedActiveMessageReceiveQueue { RemoteRenderingBackend::create(*this, identifier, streamConnection.releaseNonNull()) };
+        });
+        if (!addResult.isNewEntry) {
+            streamConnection->invalidate();
+            MESSAGE_CHECK(false);
+        }
     }
 }
 

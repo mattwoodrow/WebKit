@@ -682,8 +682,6 @@ private:
     RefPtr<GraphicsLayer> m_layerForFooter;
 #endif
 
-    RefPtr<PaintLayerBuilder> m_paintBuilder;
-
     bool m_viewBackgroundIsTransparent { false };
 
 #if !LOG_DISABLED
@@ -702,6 +700,10 @@ private:
 #if PLATFORM(IOS_FAMILY)
     std::unique_ptr<LegacyWebKitScrollingLayerCoordinator> m_legacyScrollingLayerCoordinator;
 #endif
+
+    RefPtr<RunLoop> m_threadRunLoop;
+    RefPtr<ThreadedLayerBuilderClient> m_layerBuilderClient;
+    RefPtr<PaintLayerBuilder> m_paintBuilder;
 };
 
 void paintScrollbar(Scrollbar*, GraphicsContext&, const IntRect& clip, const Color& backgroundColor = Color());

@@ -127,6 +127,7 @@ class SVGImageElement;
 class ScrollingCoordinator;
 class SecurityOrigin;
 class SecurityOriginData;
+class ThreadedLayerBuilderClient;
 class ViewportConstraints;
 class Widget;
 class WorkerClient;
@@ -177,6 +178,10 @@ enum class TextAnimationRunMode : uint8_t;
 
 enum class MediaProducerMediaState : uint32_t;
 using MediaProducerMediaStateFlags = OptionSet<MediaProducerMediaState>;
+
+namespace DisplayList {
+class Recorder;
+}
 
 namespace ShapeDetection {
 class BarcodeDetector;
@@ -341,6 +346,7 @@ public:
     virtual void reachedApplicationCacheOriginQuota(SecurityOrigin&, int64_t) { }
 
     WEBCORE_EXPORT virtual std::unique_ptr<WorkerClient> createWorkerClient(SerialFunctionDispatcher&);
+    WEBCORE_EXPORT virtual RefPtr<ThreadedLayerBuilderClient> createThreadedLayerBuilderClient(SerialFunctionDispatcher&);
 
 #if ENABLE(IOS_TOUCH_EVENTS)
     virtual void didPreventDefaultForEvent() = 0;
@@ -432,6 +438,7 @@ public:
     virtual DisplayRefreshMonitorFactory* displayRefreshMonitorFactory() const { return nullptr; }
 
     virtual RefPtr<ImageBuffer> createImageBuffer(const FloatSize&, RenderingMode, RenderingPurpose, float, const DestinationColorSpace&, ImageBufferFormat) const { return nullptr; }
+    virtual std::unique_ptr<DisplayList::Recorder> createDisplayListRecorder() const { return nullptr; }
     WEBCORE_EXPORT virtual RefPtr<WebCore::ImageBuffer> sinkIntoImageBuffer(std::unique_ptr<WebCore::SerializedImageBuffer>);
 
 #if ENABLE(WEBGL)

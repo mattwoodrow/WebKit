@@ -93,6 +93,8 @@ ipc_receiver = MessageReceiver(name="IPC", superclass=None, attributes=[BUILTIN_
     Message('LegacySessionState', [], [], attributes=[BUILTIN_ATTRIBUTE], condition=None),
     Message('SetStreamDestinationID', [], [], attributes=[BUILTIN_ATTRIBUTE], condition=None),
     Message('ProcessOutOfStreamMessage', [], [], attributes=[BUILTIN_ATTRIBUTE], condition=None),
+    Message('StreamFence', [], [], attributes=[BUILTIN_ATTRIBUTE], condition=None),
+    Message('StreamWaitFence', [], [], attributes=[BUILTIN_ATTRIBUTE], condition=None),
 ], condition=None, namespace="WebKit", wants_send_cancel_reply=False)
 
 

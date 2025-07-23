@@ -904,7 +904,7 @@ public:
     };
 
     struct DisplayListLayer : public PaintLayer {
-        Vector<PaintItem> m_items;
+        Vector<PaintItems> m_items;
 
         DisplayListLayer(PaintScroller* scroller, PaintClip* clip)
         : PaintLayer(scroller, clip)
@@ -918,34 +918,21 @@ public:
             context.translate(-bounds.location());
             // FIXME: Apply painted clips
             paintItemList(context, m_items);
-
         }
 
-        void paintItemList(GraphicsContext& context, const Vector<PaintItem>& items)
+        void paintItemList(GraphicsContext& context, const Vector<PaintItems>& items)
         {
             for (auto& item : items) {
-                if (item.m_phase < PaintItemType::Opacity)
-                    context.drawDisplayList(*std::get<RefPtr<DisplayList::RemoteDisplayList>>(item.m_data));
-                else {
-                    switch (item.m_phase) {
-                        case PaintItemType::Opacity:
-                            // FIXME: We have no clip or bounds on the opacity item, which will push
-                            // a big surface. Not good.
-                            paintOpacity(context, item);
-                            break;
-                        default:
-                            ASSERT(false);
-                    }
-                }
+                WTF::switchOn(item,
+                    [&](const DisplayListPaintItem& item) {
+                        context.drawDisplayList(*item.displayList);
+                    },
+                    [&](const OpacityPaintItem& item) {
+                        context.beginTransparencyLayer(item.m_opacity);
+                        paintItemList(context, item.paintItems);
+                        context.endTransparencyLayer();
+                    });
             }
-        }
-
-        void paintOpacity(GraphicsContext& context, const PaintItem& item)
-        {
-            const OpacityData& data = std::get<OpacityData>(item.m_data);
-            context.beginTransparencyLayer(data.opacity);
-            paintItemList(context, data.paintItems);
-            context.endTransparencyLayer();
         }
     };
 
@@ -959,53 +946,53 @@ public:
         ContainerLayer* asContainerLayer() final { return this; }
     };
 
-    void build(Vector<PaintItem>&& items, GraphicsLayerFactory* factory)
+    void build(Vector<PaintItems>&& items, GraphicsLayerFactory* factory)
     {
         build(m_layers, WTFMove(items), factory);
     }
 
-    Ref<ContainerLayer> buildContainerLayer(PaintItem& item, GraphicsLayerFactory* factory)
+    Ref<ContainerLayer> buildContainerLayer(ContainerPaintItem& item, GraphicsLayerFactory* factory)
     {
         Ref container = adoptRef(*new ContainerLayer(item.m_scroller.get(), scrolledClip(item)));
         container->finalize(factory);
 
-        OpacityData& data = std::get<OpacityData>(item.m_data);
-
-        build(container->m_layers, WTFMove(data.paintItems), factory);
-
+        build(container->m_layers, WTFMove(item.paintItems), factory);
         container->m_graphicsLayer->setChildren(graphicsLayers(container->m_layers));
-        container->m_graphicsLayer->setOpacity(data.opacity);
+
         return container;
     }
 
-    void build(Vector<Ref<PaintLayer>>& layers, Vector<PaintItem>&& items, GraphicsLayerFactory* factory)
+    void build(Vector<Ref<PaintLayer>>& layers, Vector<PaintItems>&& items, GraphicsLayerFactory* factory)
     {
         layers.clear();
         for (auto& item : items) {
-            // FIXME: We shouldn't unconditionally build a layer for containers.
-            // Probably track during paint tree building if the container itself wants compositing
-            // (RenderLayerCompositor::requiresCompositingFor<X>?), or if any descendant paint items
-            // want compositing, or have a different scroller.
-            if (item.m_phase >= PaintItemType::Opacity) {
-                if (layers.size() && !layers.last()->m_graphicsLayer)
-                    layers.last()->finalize(factory);
-                layers.append(buildContainerLayer(item, factory));
-                continue;
-            }
+            WTF::switchOn(item,
+                [&](DisplayListPaintItem& item) {
+                    // FIXME: We need an overlap map equivalent here. Rather than trying to append to the
+                    // last layer, we could append into something further back if the overlap aligns.
+                    // I think for each layer we want to skip-over, we need to find the nearest common ancestor
+                    // scroller, compute the clipped extents of each in that space and check if they intersect.
+                    if (!layers.size() || !layers.last()->asDisplayListLayer() || layers.last()->m_scroller != item.m_scroller || layers.last()->m_clip != scrolledClip(item)) {
+                        if (layers.size() && !layers.last()->m_graphicsLayer)
+                            layers.last()->finalize(factory);
+                        layers.append(adoptRef(*new DisplayListLayer(item.m_scroller.get(), scrolledClip(item))));
+                    }
 
-            // FIXME: We need an overlap map equivalent here. Rather than trying to append to the
-            // last layer, we could append into something further back if the overlap aligns.
-            // I think for each layer we want to skip-over, we need to find the nearest common ancestor
-            // scroller, compute the clipped extents of each in that space and check if they intersect.
-            if (!layers.size() || !layers.last()->asDisplayListLayer() || layers.last()->m_scroller != item.m_scroller || layers.last()->m_clip != scrolledClip(item)) {
-                if (layers.size() && !layers.last()->m_graphicsLayer)
-                    layers.last()->finalize(factory);
-                layers.append(adoptRef(*new DisplayListLayer(item.m_scroller.get(), scrolledClip(item))));
-            }
-
-            layers.last()->m_bounds.uniteIfNonZero(item.m_bounds);
-            // FIXME: Copying items is likely way too slow.
-            layers.last()->asDisplayListLayer()->m_items.append(item);
+                    layers.last()->m_bounds.uniteIfNonZero(item.m_bounds);
+                    // FIXME: Copying items is likely way too slow.
+                    layers.last()->asDisplayListLayer()->m_items.append(item);
+                },
+                [&](OpacityPaintItem& item) {
+                    // FIXME: We shouldn't unconditionally build a layer for containers.
+                    // Probably track during paint tree building if the container itself wants compositing
+                    // (RenderLayerCompositor::requiresCompositingFor<X>?), or if any descendant paint items
+                    // want compositing, or have a different scroller.
+                    if (layers.size() && !layers.last()->m_graphicsLayer)
+                        layers.last()->finalize(factory);
+                    Ref container = buildContainerLayer(item, factory);
+                    container->m_graphicsLayer->setOpacity(item.m_opacity);
+                    layers.append(WTFMove(container));
+                });
         }
         if (layers.size() && !layers.last()->m_graphicsLayer)
             layers.last()->finalize(factory);
@@ -1112,7 +1099,7 @@ void RenderLayerCompositor::flushPendingLayerChanges(bool isFlushRoot)
         if (!m_paintBuilder)
             m_paintBuilder = adoptRef(new PaintLayerBuilder);
 
-        m_threadRunLoop->dispatch([layerBuilderClient = m_layerBuilderClient, paintBuilder = m_paintBuilder, items = WTFMove(recorder.m_paintItems), id = m_renderView.frameView().frame().frameID(), overflowRect = m_renderView.layoutOverflowRect(), visibleRect = visibleRectForLayerFlushing(), isFlushRoot, fence]() mutable {
+        m_threadRunLoop->dispatch([layerBuilderClient = m_layerBuilderClient, paintBuilder = m_paintBuilder, items = WTFMove(recorder.m_rootPaintItems), id = m_renderView.frameView().frame().frameID(), overflowRect = m_renderView.layoutOverflowRect(), visibleRect = visibleRectForLayerFlushing(), isFlushRoot, fence]() mutable {
 
             GraphicsLayerFactory* factory = layerBuilderClient->beginTransaction(id);
 

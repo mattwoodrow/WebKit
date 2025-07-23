@@ -1533,12 +1533,11 @@ inline PaintItemType paintItemTypeFromPhase(PaintPhase phase)
     return (PaintItemType)std::countr_zero((uint16_t)phase);
 }
 
-class PaintItem;
-
-struct OpacityData {
-    float opacity;
-    Vector<PaintItem> paintItems;
-};
+inline PaintPhase paintPhaseFromPaintItemType(PaintItemType type)
+{
+    ASSERT(type < PaintItemType::Opacity);
+    return (PaintPhase)(1 << (uint16_t)type);
+}
 
 // Experimenting with variants so that I can create a Vector of paint items inline. Maybe an awful idea.
 // Looks like blink does Vector<int[max-item-size]> with casting to derived display item types.
@@ -1573,18 +1572,84 @@ public:
     LayoutRect m_bounds;
     RefPtr<PaintClip> m_clip;
     RefPtr<PaintScroller> m_scroller;
-    Variant<std::monostate, RefPtr<DisplayList::RemoteDisplayList>, OpacityData> m_data;
+};
+
+class DisplayListPaintItem : public PaintItem {
+public:
+    DisplayListPaintItem(RenderElement& renderer, PaintPhase phase, LayoutRect bounds, PaintClip* clip, PaintScroller* scroller)
+        : PaintItem(renderer, paintItemTypeFromPhase(phase), bounds, clip, scroller)
+    {}
+
+    RefPtr<DisplayList::RemoteDisplayList> displayList;
+};
+
+class OpacityPaintItem;
+typedef Variant<DisplayListPaintItem, OpacityPaintItem> PaintItems;
+
+class ContainerPaintItem : public PaintItem {
+public:
+    ContainerPaintItem(RenderElement& renderer, PaintItemType type, LayoutRect bounds, PaintClip* clip, PaintScroller* scroller, Vector<PaintItems>&& items)
+        : PaintItem(renderer, type, bounds, clip, scroller)
+        , paintItems(WTFMove(items))
+    {}
+
+    Vector<PaintItems> paintItems;
+};
+
+class OpacityPaintItem : public ContainerPaintItem {
+public:
+    OpacityPaintItem(RenderElement& renderer, float opacity, LayoutRect bounds, PaintClip* clip, PaintScroller* scroller, Vector<PaintItems>&& items)
+        : ContainerPaintItem(renderer, PaintItemType::Opacity, bounds, clip, scroller, WTFMove(items))
+        , m_opacity(opacity)
+    {}
+
+    float m_opacity;
 };
 
 class PaintTreeRecorder
 {
 public:
     PaintTreeRecorder()
+        : m_currentPaintItems(&m_rootPaintItems)
     { }
 
-    Vector<PaintItem> m_paintItems;
+    template <typename T>
+    void append(T&& item)
+    {
+        m_currentPaintItems->append(WTFMove(item));
+    }
+
+    void storeDisplayListOnTopItem(RefPtr<DisplayList::RemoteDisplayList>&&, RenderElement* = nullptr, PaintPhase = PaintPhase::BlockBackground);
+
+    Vector<PaintItems> m_rootPaintItems;
+    Vector<PaintItems>* m_currentPaintItems;
     RefPtr<PaintClip> m_currentClip;
     RefPtr<PaintScroller> m_currentScroller;
+};
+
+class ContainerPaintItemScope
+{
+public:
+    ContainerPaintItemScope(PaintTreeRecorder& recorder)
+        : m_recorder(recorder)
+        , m_previousPaintItems(recorder.m_currentPaintItems)
+    {
+    }
+    ~ContainerPaintItemScope()
+    {
+        m_recorder.m_currentPaintItems = m_previousPaintItems;
+    }
+
+    void emplace(Vector<PaintItems>& items)
+    {
+        m_recorder.m_currentPaintItems = &items;
+    }
+
+private:
+    PaintTreeRecorder& m_recorder;
+    Vector<PaintItems>* m_previousPaintItems;
+    Vector<PaintItems> m_paintItems;
+
 };
 
 inline void RenderLayer::clearZOrderLists()
@@ -1655,11 +1720,11 @@ WTF::TextStream& operator<<(WTF::TextStream&, RenderLayer::ClipRectsOption);
 WTF::TextStream& operator<<(WTF::TextStream&, IndirectCompositingReason);
 WTF::TextStream& operator<<(WTF::TextStream&, PaintBehavior);
 WTF::TextStream& operator<<(WTF::TextStream&, RenderLayer::PaintLayerFlag);
-WTF::TextStream& operator<<(WTF::TextStream&, const PaintItem&);
+WTF::TextStream& operator<<(WTF::TextStream&, const OpacityPaintItem&);
+WTF::TextStream& operator<<(WTF::TextStream&, const DisplayListPaintItem&);
 WTF::TextStream& operator<<(WTF::TextStream&, const PaintClip&);
 WTF::TextStream& operator<<(WTF::TextStream&, const PaintScroller&);
 WTF::TextStream& operator<<(WTF::TextStream&, const PaintTreeRecorder&);
-WTF::TextStream& operator<<(WTF::TextStream&, const OpacityData&);
 WTF::TextStream& operator<<(WTF::TextStream&, PaintItemType);
 
 } // namespace WebCore

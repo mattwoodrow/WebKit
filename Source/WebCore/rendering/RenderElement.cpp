@@ -2748,13 +2748,6 @@ static LayoutRect rendererVisualOverflowRect(RenderElement& renderer)
     return { };
 }
 
-#define ALWAYS_LOG_WITH_STREAM_MULTI(commands) do { \
-        WTF::TextStream stream(WTF::TextStream::LineMode::MultipleLine); \
-        commands; \
-        WTFLogAlways("%s", stream.release().utf8().data()); \
-    } while (0)
-
-
 void RenderElement::paint(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
 {
     PaintTreeRecorder* recorder = nullptr;
@@ -2763,44 +2756,20 @@ void RenderElement::paint(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
         ASSERT(recorder);
 
         // Close out the top item if it's open, either by storing the current display list
-        // or just removing it.
-        if (paintInfo.context().hasDisplayList()) {
-            ASSERT(recorder->m_paintItems.size());
-            auto displayList = paintInfo.context().tryTakeDisplayList();
-            if (std::holds_alternative<RefPtr<DisplayList::RemoteDisplayList>>(recorder->m_paintItems.last().m_data)) {
-                ALWAYS_LOG_WITH_STREAM_MULTI(stream << "No home for: " << displayList);
-                ALWAYS_LOG_WITH_STREAM_MULTI(stream << *recorder);
-                ASSERT(false);
-            }
-
-            recorder->m_paintItems.last().m_data.emplace<RefPtr<DisplayList::RemoteDisplayList>>(displayList);
-        } else if (recorder->m_paintItems.size() && !std::holds_alternative<RefPtr<DisplayList::RemoteDisplayList>>(recorder->m_paintItems.last().m_data))
-            recorder->m_paintItems.removeLast();
+        // if it exists, or just removing it.
+        recorder->storeDisplayListOnTopItem(paintInfo.context().tryTakeDisplayList());
 
         LayoutRect overflow = rendererVisualOverflowRect(*this);
         overflow.moveBy(paintOffset);
 
         // FIXME: This creates a lot of items for paint phases that don't have any content (which then
         // get popped again). Can we defer some work, seems like ref churn might be a problem.
-        recorder->m_paintItems.append(PaintItem { *this, paintItemTypeFromPhase(paintInfo.phase), overflow, recorder->m_currentClip.get(), recorder->m_currentScroller.get() });
+        recorder->append(DisplayListPaintItem { *this, paintInfo.phase, overflow, recorder->m_currentClip.get(), recorder->m_currentScroller.get() });
     }
     paintInternal(paintInfo, paintOffset);
 
-    if (recorder) {
-        if (recorder->m_paintItems.last().m_id == (uintptr_t)this && recorder->m_paintItems.last().m_phase == paintItemTypeFromPhase(paintInfo.phase)) {
-            if (paintInfo.context().hasDisplayList())
-                recorder->m_paintItems.last().m_data.emplace<RefPtr<DisplayList::RemoteDisplayList>>(paintInfo.context().tryTakeDisplayList());
-            else
-                recorder->m_paintItems.removeLast();
-        } else if (paintInfo.context().hasDisplayList()) {
-            auto displayList = paintInfo.context().tryTakeDisplayList();
-            ALWAYS_LOG_WITH_STREAM_MULTI(stream << "Dangling: " << displayList);
-            ALWAYS_LOG_WITH_STREAM_MULTI(stream << *recorder);
-            ASSERT(false);
-        }
-    }
+    if (recorder)
+        recorder->storeDisplayListOnTopItem(paintInfo.context().tryTakeDisplayList(), this, paintInfo.phase);
 }
-
-#undef ALWAYS_LOG_WITH_STREAM_MULTI
 
 }

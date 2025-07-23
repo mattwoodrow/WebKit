@@ -309,6 +309,32 @@ public:
     RefPtr<PaintScroller> m_savedScroller;
 };
 
+#define ALWAYS_LOG_WITH_STREAM_MULTI(commands) do { \
+        WTF::TextStream stream(WTF::TextStream::LineMode::MultipleLine); \
+        commands; \
+        WTFLogAlways("%s", stream.release().utf8().data()); \
+    } while (0)
+
+void PaintTreeRecorder::storeDisplayListOnTopItem(RefPtr<DisplayList::RemoteDisplayList>&& displayList,  RenderElement* element, PaintPhase phase)
+{
+    if (!displayList) {
+        if (m_currentPaintItems->size() && std::holds_alternative<DisplayListPaintItem>(m_currentPaintItems->last()) && !std::get<DisplayListPaintItem>(m_currentPaintItems->last()).displayList)
+            m_currentPaintItems->removeLast();
+        return;
+    }
+    if (!m_currentPaintItems->size() || !std::holds_alternative<DisplayListPaintItem>(m_currentPaintItems->last())) {
+        ALWAYS_LOG_WITH_STREAM(stream << "No home for: " << *displayList);
+        ALWAYS_LOG_WITH_STREAM_MULTI(stream << *this);
+        ASSERT(false);
+    }
+    DisplayListPaintItem& dlItem = std::get<DisplayListPaintItem>(m_currentPaintItems->last());
+    if (element)
+        ASSERT(dlItem.m_id == (uintptr_t)element && dlItem.m_phase == paintItemTypeFromPhase(phase));
+    dlItem.displayList = WTFMove(displayList);
+}
+
+#undef ALWAYS_LOG_WITH_STREAM_MULTI
+
 void makeMatrixRenderable(TransformationMatrix& matrix, bool has3DRendering)
 {
     if (!has3DRendering)
@@ -3415,10 +3441,9 @@ void RenderLayer::paintLayerWithPaintTree(GraphicsContext& context, const LayerP
         }
     }
 
-    // FIXME: clip/clip-path clipping
+    // FIXME: clip/clip-path clipping (but not in RenderLayer)
 
-    // FIXME: Container effects: transform/opacity etc
-    size_t currentCount = context.asRecorder()->m_paintItems.size();
+    // FIXME: More container effects: transform etc
 
     // FIXME: RenderView layer should clip to the viewport
     if (renderer().hasNonVisibleOverflow()) {
@@ -3435,28 +3460,27 @@ void RenderLayer::paintLayerWithPaintTree(GraphicsContext& context, const LayerP
     // incorrectly), this should be a function of renderer traversal.
     // FIXME: Can we build these trees (scrolls and clips) in advance, similar to how we do
     // for RenderLayer trees. Having these largely be constant between paints would be useful I think.
-    if (usesCompositedScrolling() || isRenderViewLayer()) {
+    if (usesCompositedScrolling() || isRenderViewLayer())
         m_paintScroller = adoptRef(new PaintScroller(renderer(),  context.asRecorder()->m_currentScroller.get()));
-        //context.asRecorder()->m_currentScroller = paintScroller;
+
+    Vector<PaintItems> childItems;
+    {
+        ContainerPaintItemScope childScope(*context.asRecorder());
+        if (renderer().opacity() != 1)
+            childScope.emplace(childItems);
+
+        auto localPaintFlags = paintFlags - OptionSet<PaintLayerFlag> { PaintLayerFlag::AppliedTransform, PaintLayerFlag::PaintingOverflowContentsRoot };
+        localPaintFlags.add(paintLayerPaintingCompositingAllPhasesFlags());
+        paintLayerContents(context, paintingInfo, localPaintFlags);
     }
 
-    auto localPaintFlags = paintFlags - OptionSet<PaintLayerFlag> { PaintLayerFlag::AppliedTransform, PaintLayerFlag::PaintingOverflowContentsRoot };
-    localPaintFlags.add(paintLayerPaintingCompositingAllPhasesFlags());
-    paintLayerContents(context, paintingInfo, localPaintFlags);
-
     if (renderer().opacity() != 1) {
-        OpacityData data;
-        data.opacity = renderer().opacity();
-        data.paintItems = context.asRecorder()->m_paintItems.subvector(currentCount);
-        context.asRecorder()->m_paintItems.shrink(currentCount);
-
         // Start with no clip on the container. Just because clips affect this element doesn't
         // mean they'll affect all descendants (like position:fixed ones). If this element is a containing
         // block for fixed we could clip here and then reset clipping for descendants. Or we could detect
         // that no descendants escape (with precomputed RenderLayer flags?).
         // We could probably also walk up the clip chain and find a subset that does apply.
-        context.asRecorder()->m_paintItems.append(PaintItem { renderer(), PaintItemType::Opacity, { }, nullptr, context.asRecorder()->m_currentScroller.get() });
-        context.asRecorder()->m_paintItems.last().m_data.emplace<OpacityData>(WTFMove(data));
+        context.asRecorder()->append(OpacityPaintItem { renderer(), renderer().opacity(), { }, nullptr, context.asRecorder()->m_currentScroller.get(), WTFMove(childItems) });
     }
 }
 
@@ -6880,47 +6904,50 @@ TextStream& operator<<(TextStream& ts, const PaintClip& paintClip)
     return ts;
 }
 
-TextStream& operator<<(TextStream& ts, const PaintItem& paintItem)
+static void dumpPaintItemProperties(TextStream& ts, const PaintItem& paintItem)
 {
-    ts << '(';
-
-    if (paintItem.m_phase < PaintItemType::Opacity)
-        ts << "paint item "_s;
-    else
-        ts << paintItem.m_phase << " ";
-
 #ifndef NDEBUG
     ts << "(renderer " << paintItem.m_rendererName << ") ";
 #endif
-    if (paintItem.m_phase < PaintItemType::Opacity)
-        ts << "(phase " << paintItem.m_phase << ") ";
     ts << "(bounds " << paintItem.m_bounds << ") ";
     ts << "(scroller " << paintItem.m_scroller << ") ";
     ts << "(clip " << paintItem.m_clip << ") ";
-    if (paintItem.m_phase < PaintItemType::Opacity) {
-        ts << std::get<RefPtr<DisplayList::RemoteDisplayList>>(paintItem.m_data);
-    } else {
-        ts << std::get<OpacityData>(paintItem.m_data);
-    }
-
-    ts << ')';
-
-    return ts;
 }
 
-TextStream& operator<<(TextStream& ts, const OpacityData& data)
+static void dumpPaintItemChildren(TextStream& ts, const ContainerPaintItem& paintItem)
 {
-    ts << "(opacity " << data.opacity << ") ";
-
     ts.increaseIndent();
     ts.nextLine();
-    for (auto& item : data.paintItems) {
+    for (auto& item : paintItem.paintItems) {
         ts << item;
         ts.nextLine();
     }
     ts.decreaseIndent();
+}
+
+TextStream& operator<<(TextStream& ts, const OpacityPaintItem& item)
+{
+    ts << '(';
+    ts << "(opacity " << item.m_opacity << ") ";
+    dumpPaintItemProperties(ts, item);
+
+    ts << ')';
+
+    dumpPaintItemChildren(ts, item);
     return ts;
 }
+
+TextStream& operator<<(TextStream& ts, const DisplayListPaintItem& item)
+{
+    ts << '(';
+    ts << "(phase " << paintPhaseFromPaintItemType(item.m_phase) << ") ";
+    ts << "(display-list " << item.displayList << ") ";
+    dumpPaintItemProperties(ts, item);
+
+    ts << ')';
+    return ts;
+}
+
 
 TextStream& operator<<(TextStream& ts, const PaintScroller& paintScroller)
 {
@@ -6939,7 +6966,7 @@ TextStream& operator<<(TextStream& ts, const PaintTreeRecorder& paintTree)
     ts << "paint tree:"_s;
     ts.nextLine();
 
-    for (auto& item : paintTree.m_paintItems) {
+    for (auto& item : paintTree.m_rootPaintItems) {
         ts << item;
         ts.nextLine();
     }

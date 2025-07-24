@@ -871,6 +871,7 @@ public:
             layer->setAnchorPoint({ });
             layer->setPosition(bounds.location());
             layer->setSize(bounds.size());
+            layer->setName(debugDescription());
 
             if (parent)
                 parent->addChild(Ref { *layer });
@@ -888,6 +889,11 @@ public:
             RefPtr<GraphicsLayer> parentClip = createClipLayers(factory, clip->m_parent.get(), offset);
 
             RefPtr<GraphicsLayer> clipLayer = createLayer(factory, parentClip.get(), clip->m_rect);
+
+            TextStream ts;
+            ts << "PaintClip: " << *clip;
+            clipLayer->setName(ts.release());
+
             offset += clipLayer->position();
             clipLayer->setMasksToBounds(true);
             return clipLayer;
@@ -913,6 +919,20 @@ public:
                 layer->tiledBacking()->setIsInWindow(true);
         }
         float deviceScaleFactor() const final { return 2; }
+
+        String debugDescription() {
+            TextStream ts;
+            if (asDisplayListLayer())
+                ts << "(displaylist layer "_s;
+            else
+                ts << "(container layer "_s;
+
+            ts << "(bounds " << m_bounds << ") ";
+            ts << "(scroller " << m_scroller << ") ";
+            ts << "(clip " << m_clip << ") ";
+
+            return ts.release();
+        }
 
         RefPtr<GraphicsLayer> m_graphicsLayer;
     };
@@ -978,7 +998,6 @@ public:
 
         build(container->m_layers, WTFMove(item.paintItems), factory);
         container->m_graphicsLayer->setChildren(graphicsLayers(container->m_layers));
-
         return container;
     }
 
@@ -1057,14 +1076,7 @@ public:
 
 static TextStream& operator<<(TextStream& ts, PaintLayerBuilder::PaintLayer& layer)
 {
-    if (layer.asDisplayListLayer())
-        ts << "(displaylist layer "_s;
-    else
-        ts << "(container layer "_s;
-
-    ts << "(bounds " << layer.m_bounds << ") ";
-    ts << "(scroller " << layer.m_scroller << ") ";
-    ts << "(clip " << layer.m_clip << ") ";
+    ts << layer.debugDescription();
 
     ts.increaseIndent();
     ts.nextLine();

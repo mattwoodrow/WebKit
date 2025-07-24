@@ -3431,7 +3431,8 @@ void RenderLayer::paintLayerWithPaintTree(GraphicsContext& context, const LayerP
         overflowClipRect.move(paintingInfo.subpixelOffset);
         //auto snappedClipRect = snapRectToDevicePixelsIfNeeded(overflowClipRect, renderer());
         m_paintClip = recordingStateSaver.pushClip(overflowClipRect);
-    }
+    } else
+        m_paintClip = context.asRecorder()->m_currentClip;
 
     // FIXME: Scrollers shouldn't require a RenderLayer (since it affects the paint order
     // incorrectly), this should be a function of renderer traversal.
@@ -3439,6 +3440,8 @@ void RenderLayer::paintLayerWithPaintTree(GraphicsContext& context, const LayerP
     // for RenderLayer trees. Having these largely be constant between paints would be useful I think.
     if (usesCompositedScrolling() || isRenderViewLayer())
         m_paintScroller = adoptRef(new PaintScroller(renderer(),  context.asRecorder()->m_currentScroller.get()));
+    else
+        m_paintScroller = context.asRecorder()->m_currentScroller;
 
     ContainerPaintItemScope childScope(context, renderer().opacity() != 1);
 

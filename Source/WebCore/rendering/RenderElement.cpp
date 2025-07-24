@@ -2743,9 +2743,12 @@ static LayoutRect rendererVisualOverflowRect(RenderElement& renderer)
         overflow.moveBy(box->location());
         return overflow;
     }
-    if (auto* svgModelObject = dynamicDowncast<RenderSVGModelObject>(renderer))
-        return svgModelObject->visualOverflowRectEquivalent();
-    return { };
+    if (auto* svgModelObject = dynamicDowncast<RenderSVGModelObject>(renderer)) {
+        LayoutRect overflow = svgModelObject->visualOverflowRectEquivalent();
+        overflow.move(svgModelObject->locationOffsetEquivalent());
+        return overflow;
+    }
+    return enclosingLayoutRect(renderer.repaintRectInLocalCoordinates());
 }
 
 void RenderElement::paint(PaintInfo& paintInfo, const LayoutPoint& paintOffset)

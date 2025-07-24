@@ -795,10 +795,11 @@ void RenderTable::paintInternal(PaintInfo& paintInfo, const LayoutPoint& paintOf
             return;
     }
 
-    bool pushedClip = pushContentsClip(paintInfo, adjustedPaintOffset);
+    RecordingClipStateSaver recordingStateSaver(paintInfo.context());
+    bool pushedClip = pushContentsClip(paintInfo, adjustedPaintOffset, recordingStateSaver);
     paintObject(paintInfo, adjustedPaintOffset);
     if (pushedClip)
-        popContentsClip(paintInfo, paintPhase, adjustedPaintOffset);
+        popContentsClip(paintInfo, paintPhase, adjustedPaintOffset, recordingStateSaver);
 }
 
 void RenderTable::paintObject(PaintInfo& paintInfo, const LayoutPoint& paintOffset)

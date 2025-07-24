@@ -284,12 +284,15 @@ void LegacyRenderSVGRoot::paintReplaced(PaintInfo& paintInfo, const LayoutPoint&
 
     // Make a copy of the PaintInfo because applyTransform will modify the damage rect.
     PaintInfo childPaintInfo(paintInfo);
-    childPaintInfo.context().save();
+    RecordingClipStateSaver recordingStateSaver(context);
+    if (!context.asRecorder())
+        childPaintInfo.context().save();
 
     // Apply initial viewport clip
     if (clipViewport) {
         auto clipRect = snappedIntRect(overflowClipRect(paintOffset));
-        childPaintInfo.context().clip(clipRect);
+        if (!recordingStateSaver.pushClip(overflowClipRect(paintOffset)))
+            childPaintInfo.context().clip(clipRect);
         if (paintInfo.phase == PaintPhase::EventRegion && childPaintInfo.eventRegionContext())
             childPaintInfo.eventRegionContext()->pushClip(clipRect);
     }
@@ -298,7 +301,10 @@ void LegacyRenderSVGRoot::paintReplaced(PaintInfo& paintInfo, const LayoutPoint&
     // Transform from our paint container's coordinate system to our local coords.
     IntPoint adjustedPaintOffset = roundedIntPoint(paintOffset);
     auto transform = AffineTransform::makeTranslation(toFloatSize(adjustedPaintOffset)) * localToBorderBoxTransform();
-    childPaintInfo.applyTransform(transform);
+
+    ContainerPaintItemScope childScope(context);
+
+    childPaintInfo.applyTransform(transform, !context.asRecorder());
     if (paintInfo.phase == PaintPhase::EventRegion && childPaintInfo.eventRegionContext())
         childPaintInfo.eventRegionContext()->pushTransform(transform);
 
@@ -324,7 +330,12 @@ void LegacyRenderSVGRoot::paintReplaced(PaintInfo& paintInfo, const LayoutPoint&
         if (clipViewport)
             childPaintInfo.eventRegionContext()->popClip();
     }
-    childPaintInfo.context().restore();
+
+    if (childScope.isValid())
+        childScope.finish(context, AffineTransformPaintItem { *this, transform, { }, context.asRecorder()->m_currentClip.get(), context.asRecorder()->m_currentScroller.get(), childScope.takePaintItems() });
+
+    if (!context.asRecorder())
+        childPaintInfo.context().restore();
 }
 
 void LegacyRenderSVGRoot::willBeDestroyed()

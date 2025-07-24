@@ -2755,16 +2755,12 @@ void RenderElement::paint(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
         recorder = paintInfo.context().asRecorder();
         ASSERT(recorder);
 
-        // Close out the top item if it's open, either by storing the current display list
-        // if it exists, or just removing it.
-        recorder->storeDisplayListOnTopItem(paintInfo.context().tryTakeDisplayList());
-
         LayoutRect overflow = rendererVisualOverflowRect(*this);
         overflow.moveBy(paintOffset);
 
         // FIXME: This creates a lot of items for paint phases that don't have any content (which then
         // get popped again). Can we defer some work, seems like ref churn might be a problem.
-        recorder->append(DisplayListPaintItem { *this, paintInfo.phase, overflow, recorder->m_currentClip.get(), recorder->m_currentScroller.get() });
+        recorder->append(paintInfo.context(), DisplayListPaintItem { *this, paintInfo.phase, overflow, recorder->m_currentClip.get(), recorder->m_currentScroller.get() });
     }
     paintInternal(paintInfo, paintOffset);
 

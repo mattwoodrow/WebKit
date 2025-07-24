@@ -850,6 +850,11 @@ public:
           : m_scroller(scroller)
           , m_clip(clip)
         { }
+        ~PaintLayer()
+        {
+            if (m_graphicsLayer)
+                m_graphicsLayer->removeFromParent();
+        }
         RefPtr<PaintScroller> m_scroller;
         RefPtr<PaintClip> m_clip;
         LayoutRect m_bounds;
@@ -892,6 +897,8 @@ public:
         {
             // FIXME: Sibling layers will frequently have clips in common, we should try
             // to not build a bespoke set of clip layers each time.
+            // We should also track what clip was applied to our ancestor, and only clip up
+            // to that.
             FloatPoint offset;
             RefPtr<GraphicsLayer> clipLayer = createClipLayers(factory, m_clip.get(), offset);
 
@@ -899,6 +906,13 @@ public:
             contentLayer->setDrawsContent(true);
             contentLayer->setAcceleratesDrawing(true);
         }
+
+        void tiledBackingUsageChanged(const GraphicsLayer* layer, bool usingTiledBacking) final
+        {
+            if (usingTiledBacking)
+                layer->tiledBacking()->setIsInWindow(true);
+        }
+        float deviceScaleFactor() const final { return 2; }
 
         RefPtr<GraphicsLayer> m_graphicsLayer;
     };
@@ -931,6 +945,11 @@ public:
                         context.beginTransparencyLayer(item.m_opacity);
                         paintItemList(context, item.paintItems);
                         context.endTransparencyLayer();
+                    },
+                    [&](const AffineTransformPaintItem& item) {
+                        context.save();
+                        context.concatCTM(item.m_transform);
+                        context.restore();
                     });
             }
         }
@@ -948,6 +967,7 @@ public:
 
     void build(Vector<PaintItems>&& items, GraphicsLayerFactory* factory)
     {
+        m_layers.clear();
         build(m_layers, WTFMove(items), factory);
     }
 
@@ -964,7 +984,6 @@ public:
 
     void build(Vector<Ref<PaintLayer>>& layers, Vector<PaintItems>&& items, GraphicsLayerFactory* factory)
     {
-        layers.clear();
         for (auto& item : items) {
             WTF::switchOn(item,
                 [&](DisplayListPaintItem& item) {
@@ -991,6 +1010,13 @@ public:
                         layers.last()->finalize(factory);
                     Ref container = buildContainerLayer(item, factory);
                     container->m_graphicsLayer->setOpacity(item.m_opacity);
+                    layers.append(WTFMove(container));
+                },
+                [&](AffineTransformPaintItem& item) {
+                    if (layers.size() && !layers.last()->m_graphicsLayer)
+                        layers.last()->finalize(factory);
+                    Ref container = buildContainerLayer(item, factory);
+                    container->m_graphicsLayer->setTransform(item.m_transform);
                     layers.append(WTFMove(container));
                 });
         }

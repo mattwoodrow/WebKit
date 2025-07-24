@@ -284,31 +284,6 @@ private:
     std::array<RefPtr<ClipRects>, NumCachedClipRectsTypes * 2> m_clipRects;
 };
 
-class RecordingClipStateSaver
-{
-public:
-    RecordingClipStateSaver(GraphicsContext& context)
-      : m_context(context)
-    {
-        if (auto *recorder = context.asRecorder()) {
-            m_savedClip = recorder->m_currentClip;
-            m_savedScroller = recorder->m_currentScroller;
-        }
-    }
-
-    ~RecordingClipStateSaver()
-    {
-        if (auto *recorder = m_context.asRecorder()) {
-            recorder->m_currentClip = m_savedClip;
-            recorder->m_currentScroller = m_savedScroller;
-        }
-    }
-
-    GraphicsContext& m_context;
-    RefPtr<PaintClip> m_savedClip;
-    RefPtr<PaintScroller> m_savedScroller;
-};
-
 #define ALWAYS_LOG_WITH_STREAM_MULTI(commands) do { \
         WTF::TextStream stream(WTF::TextStream::LineMode::MultipleLine); \
         commands; \
@@ -328,8 +303,11 @@ void PaintTreeRecorder::storeDisplayListOnTopItem(RefPtr<DisplayList::RemoteDisp
         ASSERT(false);
     }
     DisplayListPaintItem& dlItem = std::get<DisplayListPaintItem>(m_currentPaintItems->last());
-    if (element)
-        ASSERT(dlItem.m_id == (uintptr_t)element && dlItem.m_phase == paintItemTypeFromPhase(phase));
+    if (element && !(dlItem.m_id == (uintptr_t)element && dlItem.m_phase == paintItemTypeFromPhase(phase))) {
+        ALWAYS_LOG_WITH_STREAM(stream << "No home for: " << *displayList);
+        ALWAYS_LOG_WITH_STREAM_MULTI(stream << *this);
+        ASSERT(false);
+    }
     dlItem.displayList = WTFMove(displayList);
 }
 
@@ -3452,8 +3430,7 @@ void RenderLayer::paintLayerWithPaintTree(GraphicsContext& context, const LayerP
         LayoutRect overflowClipRect = rendererOverflowClipRect(toLayoutPoint(offsetFromRoot), OverlayScrollbarSizeRelevancy::IncludeOverlayScrollbarSize);
         overflowClipRect.move(paintingInfo.subpixelOffset);
         //auto snappedClipRect = snapRectToDevicePixelsIfNeeded(overflowClipRect, renderer());
-        m_paintClip = adoptRef(new PaintClip(overflowClipRect, context.asRecorder()->m_currentScroller.get(), context.asRecorder()->m_currentClip.get()));
-        context.asRecorder()->m_currentClip = m_paintClip;
+        m_paintClip = recordingStateSaver.pushClip(overflowClipRect);
     }
 
     // FIXME: Scrollers shouldn't require a RenderLayer (since it affects the paint order
@@ -3463,25 +3440,19 @@ void RenderLayer::paintLayerWithPaintTree(GraphicsContext& context, const LayerP
     if (usesCompositedScrolling() || isRenderViewLayer())
         m_paintScroller = adoptRef(new PaintScroller(renderer(),  context.asRecorder()->m_currentScroller.get()));
 
-    Vector<PaintItems> childItems;
-    {
-        ContainerPaintItemScope childScope(*context.asRecorder());
-        if (renderer().opacity() != 1)
-            childScope.emplace(childItems);
+    ContainerPaintItemScope childScope(context, renderer().opacity() != 1);
 
-        auto localPaintFlags = paintFlags - OptionSet<PaintLayerFlag> { PaintLayerFlag::AppliedTransform, PaintLayerFlag::PaintingOverflowContentsRoot };
-        localPaintFlags.add(paintLayerPaintingCompositingAllPhasesFlags());
-        paintLayerContents(context, paintingInfo, localPaintFlags);
-    }
+    auto localPaintFlags = paintFlags - OptionSet<PaintLayerFlag> { PaintLayerFlag::AppliedTransform, PaintLayerFlag::PaintingOverflowContentsRoot };
+    localPaintFlags.add(paintLayerPaintingCompositingAllPhasesFlags());
+    paintLayerContents(context, paintingInfo, localPaintFlags);
 
-    if (renderer().opacity() != 1) {
-        // Start with no clip on the container. Just because clips affect this element doesn't
-        // mean they'll affect all descendants (like position:fixed ones). If this element is a containing
-        // block for fixed we could clip here and then reset clipping for descendants. Or we could detect
-        // that no descendants escape (with precomputed RenderLayer flags?).
-        // We could probably also walk up the clip chain and find a subset that does apply.
-        context.asRecorder()->append(OpacityPaintItem { renderer(), renderer().opacity(), { }, nullptr, context.asRecorder()->m_currentScroller.get(), WTFMove(childItems) });
-    }
+    // Start with no clip on the container. Just because clips affect this element doesn't
+    // mean they'll affect all descendants (like position:fixed ones). If this element is a containing
+    // block for fixed we could clip here and then reset clipping for descendants. Or we could detect
+    // that no descendants escape (with precomputed RenderLayer flags?).
+    // We could probably also walk up the clip chain and find a subset that does apply.
+    if (childScope.isValid())
+        childScope.finish(context, OpacityPaintItem { renderer(), renderer().opacity(), { }, nullptr, context.asRecorder()->m_currentScroller.get(), childScope.takePaintItems() });
 }
 
 void RenderLayer::paintLayerWithEffects(GraphicsContext& context, const LayerPaintingInfo& paintingInfo, OptionSet<PaintLayerFlag> paintFlags)
@@ -6887,6 +6858,7 @@ TextStream& operator<<(TextStream& ts, PaintItemType type)
             case PaintItemType::EventRegion: ts << "event-region"_s; break;
             case PaintItemType::Accessibility: ts << "accessibility"_s; break;
             case PaintItemType::Opacity: ts << "opacity"_s; break;
+            case PaintItemType::AffineTransform: ts << "affine-transform"_s; break;
         }
         return ts;
     }
@@ -6929,6 +6901,18 @@ TextStream& operator<<(TextStream& ts, const OpacityPaintItem& item)
 {
     ts << '(';
     ts << "(opacity " << item.m_opacity << ") ";
+    dumpPaintItemProperties(ts, item);
+
+    ts << ')';
+
+    dumpPaintItemChildren(ts, item);
+    return ts;
+}
+
+TextStream& operator<<(TextStream& ts, const AffineTransformPaintItem& item)
+{
+    ts << '(';
+    ts << "(transform " << item.m_transform << ") ";
     dumpPaintItemProperties(ts, item);
 
     ts << ')';

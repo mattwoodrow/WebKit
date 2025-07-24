@@ -30,6 +30,6 @@
 namespace WebCore {
 
 enum class TileGridIdentifierType { };
-using TileGridIdentifier = ObjectIdentifier<TileGridIdentifierType>;
+using TileGridIdentifier = AtomicObjectIdentifier<TileGridIdentifierType>;
 
 } // namespace WebCore

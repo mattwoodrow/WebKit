@@ -73,7 +73,7 @@ TileGrid::TileGrid(TileController& controller)
 
 TileGrid::~TileGrid()
 {
-    ASSERT(isMainThread());
+    //ASSERT(isMainThread());
 
     for (auto& tile : m_tiles.values())
         tile.layer->setOwner(nullptr);

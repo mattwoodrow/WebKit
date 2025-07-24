@@ -107,12 +107,13 @@ struct PaintInfo {
 
     const RenderLayer* enclosingSelfPaintingLayer() const { return m_enclosingSelfPaintingLayer; }
 
-    void applyTransform(const AffineTransform& localToAncestorTransform)
+    void applyTransform(const AffineTransform& localToAncestorTransform, bool applyToContext = true)
     {
         if (localToAncestorTransform.isIdentity())
             return;
 
-        context().concatCTM(localToAncestorTransform);
+        if (applyToContext)
+            context().concatCTM(localToAncestorTransform);
 
         if (rect.isInfinite())
             return;

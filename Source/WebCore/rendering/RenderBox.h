@@ -35,6 +35,7 @@
 namespace WebCore {
 
 class LayoutRoundedRectRadii;
+class RecordingClipStateSaver;
 class RenderBlockFlow;
 class RenderBoxFragmentInfo;
 class RenderFragmentContainer;
@@ -482,8 +483,8 @@ public:
     LayoutRect clipRect(const LayoutPoint& location) const;
     virtual bool hasControlClip() const { return false; }
     virtual LayoutRect controlClipRect(const LayoutPoint&) const { return LayoutRect(); }
-    bool pushContentsClip(PaintInfo&, const LayoutPoint& accumulatedOffset);
-    void popContentsClip(PaintInfo&, PaintPhase originalPhase, const LayoutPoint& accumulatedOffset);
+    bool pushContentsClip(PaintInfo&, const LayoutPoint& accumulatedOffset, RecordingClipStateSaver&);
+    void popContentsClip(PaintInfo&, PaintPhase originalPhase, const LayoutPoint& accumulatedOffset, RecordingClipStateSaver&);
 
     ControlPart* ensureControlPart();
     ControlPart* ensureControlPartForRenderer();

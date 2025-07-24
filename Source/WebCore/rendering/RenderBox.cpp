@@ -2164,7 +2164,7 @@ void RenderBox::clipToContentBoxShape(GraphicsContext& context, const LayoutPoin
     borderShape.clipToInnerShape(context, deviceScaleFactor);
 }
 
-bool RenderBox::pushContentsClip(PaintInfo& paintInfo, const LayoutPoint& accumulatedOffset)
+bool RenderBox::pushContentsClip(PaintInfo& paintInfo, const LayoutPoint& accumulatedOffset, RecordingClipStateSaver& recordingStateSaver)
 {
     if (paintInfo.phase == PaintPhase::BlockBackground || paintInfo.phase == PaintPhase::SelfOutline || paintInfo.phase == PaintPhase::Mask)
         return false;
@@ -2183,12 +2183,18 @@ bool RenderBox::pushContentsClip(PaintInfo& paintInfo, const LayoutPoint& accumu
         paintInfo.phase = PaintPhase::ChildBlockBackgrounds;
     }
     float deviceScaleFactor = document().deviceScaleFactor();
-    FloatRect clipRect = snapRectToDevicePixels((isControlClip ? controlClipRect(accumulatedOffset) : overflowClipRect(accumulatedOffset, OverlayScrollbarSizeRelevancy::IgnoreOverlayScrollbarSize, paintInfo.phase)), deviceScaleFactor);
-    paintInfo.context().save();
-    if (style().hasBorderRadius())
-        clipToPaddingBoxShape(paintInfo.context(), accumulatedOffset, deviceScaleFactor);
+    LayoutRect layoutRect = isControlClip ? controlClipRect(accumulatedOffset) : overflowClipRect(accumulatedOffset, OverlayScrollbarSizeRelevancy::IgnoreOverlayScrollbarSize, paintInfo.phase);
+    FloatRect clipRect = snapRectToDevicePixels(layoutRect, deviceScaleFactor);
 
-    paintInfo.context().clip(clipRect);
+    if (!paintInfo.context().asRecorder()) {
+        paintInfo.context().save();
+        if (style().hasBorderRadius())
+            clipToPaddingBoxShape(paintInfo.context(), accumulatedOffset, deviceScaleFactor);
+
+        paintInfo.context().clip(clipRect);
+    } else {
+        recordingStateSaver.pushClip(layoutRect);
+    }
 
     if (paintInfo.phase == PaintPhase::EventRegion || paintInfo.phase == PaintPhase::Accessibility)
         paintInfo.regionContext->pushClip(enclosingIntRect(clipRect));
@@ -2196,14 +2202,17 @@ bool RenderBox::pushContentsClip(PaintInfo& paintInfo, const LayoutPoint& accumu
     return true;
 }
 
-void RenderBox::popContentsClip(PaintInfo& paintInfo, PaintPhase originalPhase, const LayoutPoint& accumulatedOffset)
+void RenderBox::popContentsClip(PaintInfo& paintInfo, PaintPhase originalPhase, const LayoutPoint& accumulatedOffset,RecordingClipStateSaver& recordingStateSaver)
 {
     ASSERT(hasControlClip() || (hasNonVisibleOverflow() && !layer()->isSelfPaintingLayer()));
 
     if (paintInfo.phase == PaintPhase::EventRegion || paintInfo.phase == PaintPhase::Accessibility)
         paintInfo.regionContext->popClip();
 
-    paintInfo.context().restore();
+    recordingStateSaver.reset();
+    if (!paintInfo.context().asRecorder())
+        paintInfo.context().restore();
+
     if (originalPhase == PaintPhase::Outline) {
         paintInfo.phase = PaintPhase::SelfOutline;
         paintObject(paintInfo, accumulatedOffset);

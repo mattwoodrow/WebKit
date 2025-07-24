@@ -36,6 +36,7 @@
 #include "RenderBoxInlines.h"
 #include "RenderBoxModelObjectInlines.h"
 #include "RenderChildIterator.h"
+#include "RenderLayer.h"
 #include "RenderLayoutState.h"
 #include "RenderObjectInlines.h"
 #include "RenderTableCellInlines.h"
@@ -942,10 +943,13 @@ void RenderTableSection::paintInternal(PaintInfo& paintInfo, const LayoutPoint& 
     LayoutPoint adjustedPaintOffset = paintOffset + location();
 
     PaintPhase phase = paintInfo.phase;
-    bool pushedClip = pushContentsClip(paintInfo, adjustedPaintOffset);
-    paintObject(paintInfo, adjustedPaintOffset);
-    if (pushedClip)
-        popContentsClip(paintInfo, phase, adjustedPaintOffset);
+    {
+        RecordingClipStateSaver recordingStateSaver(paintInfo.context());
+        bool pushedClip = pushContentsClip(paintInfo, adjustedPaintOffset, recordingStateSaver);
+        paintObject(paintInfo, adjustedPaintOffset);
+        if (pushedClip)
+            popContentsClip(paintInfo, phase, adjustedPaintOffset, recordingStateSaver);
+    }
 
     if ((phase == PaintPhase::Outline || phase == PaintPhase::SelfOutline) && style().usedVisibility() == Visibility::Visible)
         paintOutline(paintInfo, LayoutRect(adjustedPaintOffset, size()));

@@ -1524,6 +1524,7 @@ enum class PaintItemType {
     Accessibility,
 
     Opacity,
+    AffineTransform,
 };
 
 inline PaintItemType paintItemTypeFromPhase(PaintPhase phase)
@@ -1584,7 +1585,8 @@ public:
 };
 
 class OpacityPaintItem;
-typedef Variant<DisplayListPaintItem, OpacityPaintItem> PaintItems;
+class AffineTransformPaintItem;
+typedef Variant<DisplayListPaintItem, OpacityPaintItem, AffineTransformPaintItem> PaintItems;
 
 class ContainerPaintItem : public PaintItem {
 public:
@@ -1606,6 +1608,16 @@ public:
     float m_opacity;
 };
 
+class AffineTransformPaintItem : public ContainerPaintItem {
+public:
+    AffineTransformPaintItem(RenderElement& renderer, const AffineTransform& transform, LayoutRect bounds, PaintClip* clip, PaintScroller* scroller, Vector<PaintItems>&& items)
+        : ContainerPaintItem(renderer, PaintItemType::Opacity, bounds, clip, scroller, WTFMove(items))
+        , m_transform(transform)
+    {}
+
+    AffineTransform m_transform;
+};
+
 class PaintTreeRecorder
 {
 public:
@@ -1614,8 +1626,12 @@ public:
     { }
 
     template <typename T>
-    void append(T&& item)
+    void append(GraphicsContext& context, T&& item)
     {
+        // Close out the top item if it's open, either by storing the current display list
+        // if it exists, or just removing it.
+        storeDisplayListOnTopItem(context.tryTakeDisplayList());
+
         m_currentPaintItems->append(WTFMove(item));
     }
 
@@ -1630,26 +1646,83 @@ public:
 class ContainerPaintItemScope
 {
 public:
-    ContainerPaintItemScope(PaintTreeRecorder& recorder)
-        : m_recorder(recorder)
-        , m_previousPaintItems(recorder.m_currentPaintItems)
+    ContainerPaintItemScope(GraphicsContext& context, bool emplace = true)
+        : m_recorder(context.asRecorder())
+        , m_previousPaintItems(m_recorder ? m_recorder->m_currentPaintItems : nullptr)
     {
+        if (m_recorder && emplace)
+            m_recorder->m_currentPaintItems = &m_paintItems;
+        else
+            m_recorder = nullptr;
     }
     ~ContainerPaintItemScope()
     {
-        m_recorder.m_currentPaintItems = m_previousPaintItems;
+        ASSERT(!m_recorder);
+        ASSERT(!m_paintItems.size());
     }
 
-    void emplace(Vector<PaintItems>& items)
+    bool isValid()
     {
-        m_recorder.m_currentPaintItems = &items;
+        return m_recorder && m_paintItems.size();
+    }
+
+    Vector<PaintItems> takePaintItems()
+    {
+        return WTFMove(m_paintItems);
+    }
+
+    template <typename T>
+    void finish(GraphicsContext& context, T&& item)
+    {
+        m_recorder->m_currentPaintItems = m_previousPaintItems;
+        m_recorder->append(context, WTFMove(item));
+        m_recorder = nullptr;
     }
 
 private:
-    PaintTreeRecorder& m_recorder;
+    PaintTreeRecorder* m_recorder;
     Vector<PaintItems>* m_previousPaintItems;
     Vector<PaintItems> m_paintItems;
 
+};
+
+class RecordingClipStateSaver
+{
+public:
+    RecordingClipStateSaver(GraphicsContext& context)
+      : m_context(context)
+    {
+        if (auto *recorder = context.asRecorder()) {
+            m_savedClip = recorder->m_currentClip;
+            m_savedScroller = recorder->m_currentScroller;
+        }
+    }
+
+    ~RecordingClipStateSaver()
+    {
+        reset();
+    }
+
+    void reset()
+    {
+        if (auto *recorder = m_context.asRecorder()) {
+            recorder->m_currentClip = m_savedClip;
+            recorder->m_currentScroller = m_savedScroller;
+        }
+    }
+
+    PaintClip* pushClip(const LayoutRect& rect)
+    {
+        if (auto *recorder = m_context.asRecorder()) {
+            recorder->m_currentClip = adoptRef(new PaintClip(rect, recorder->m_currentScroller.get(), recorder->m_currentClip.get()));
+            return recorder->m_currentClip.get();
+        }
+        return nullptr;
+    }
+
+    GraphicsContext& m_context;
+    RefPtr<PaintClip> m_savedClip;
+    RefPtr<PaintScroller> m_savedScroller;
 };
 
 inline void RenderLayer::clearZOrderLists()
@@ -1721,6 +1794,7 @@ WTF::TextStream& operator<<(WTF::TextStream&, IndirectCompositingReason);
 WTF::TextStream& operator<<(WTF::TextStream&, PaintBehavior);
 WTF::TextStream& operator<<(WTF::TextStream&, RenderLayer::PaintLayerFlag);
 WTF::TextStream& operator<<(WTF::TextStream&, const OpacityPaintItem&);
+WTF::TextStream& operator<<(WTF::TextStream&, const AffineTransformPaintItem&);
 WTF::TextStream& operator<<(WTF::TextStream&, const DisplayListPaintItem&);
 WTF::TextStream& operator<<(WTF::TextStream&, const PaintClip&);
 WTF::TextStream& operator<<(WTF::TextStream&, const PaintScroller&);

@@ -995,10 +995,13 @@ void RenderBlock::paintInternal(PaintInfo& paintInfo, const LayoutPoint& paintOf
     if (visualContentIsClippedOut(paintInfo.rect))
         return;
 
-    bool pushedClip = pushContentsClip(paintInfo, adjustedPaintOffset);
-    paintObject(paintInfo, adjustedPaintOffset);
-    if (pushedClip)
-        popContentsClip(paintInfo, phase, adjustedPaintOffset);
+    {
+        RecordingClipStateSaver recordingStateSaver(paintInfo.context());
+        bool pushedClip = pushContentsClip(paintInfo, adjustedPaintOffset, recordingStateSaver);
+        paintObject(paintInfo, adjustedPaintOffset);
+        if (pushedClip)
+            popContentsClip(paintInfo, phase, adjustedPaintOffset, recordingStateSaver);
+    }
 
     // Our scrollbar widgets paint exactly when we tell them to, so that they work properly with
     // z-index. We paint after we painted the background/border, so that the scrollbars will

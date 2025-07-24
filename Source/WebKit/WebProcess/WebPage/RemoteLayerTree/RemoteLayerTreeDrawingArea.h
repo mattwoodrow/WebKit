@@ -207,6 +207,7 @@ private:
     std::optional<WebCore::FramesPerSecond> m_preferredFramesPerSecond;
     Seconds m_preferredRenderingUpdateInterval;
     bool m_isScheduled { false };
+    bool m_usingThreadedMode { false };
 };
 
 inline bool RemoteLayerTreeDrawingArea::addMilestonesToDispatch(OptionSet<WebCore::LayoutMilestone> paintMilestones)

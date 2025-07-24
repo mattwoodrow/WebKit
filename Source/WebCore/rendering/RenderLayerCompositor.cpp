@@ -89,6 +89,7 @@
 #include <wtf/text/CString.h>
 #include <wtf/text/MakeString.h>
 #include <wtf/text/StringBuilder.h>
+#include <wtf/text/StringToIntegerConversion.h>
 #include <wtf/text/TextStream.h>
 
 #if PLATFORM(IOS_FAMILY)
@@ -969,6 +970,7 @@ public:
                     [&](const AffineTransformPaintItem& item) {
                         context.save();
                         context.concatCTM(item.m_transform);
+                        paintItemList(context, item.paintItems);
                         context.restore();
                     });
             }
@@ -1003,28 +1005,33 @@ public:
 
     void build(Vector<Ref<PaintLayer>>& layers, Vector<PaintItems>&& items, GraphicsLayerFactory* factory)
     {
+        auto addPaintedItem = [&](auto& item) {
+            // FIXME: We need an overlap map equivalent here. Rather than trying to append to the
+            // last layer, we could append into something further back if the overlap aligns.
+            // I think for each layer we want to skip-over, we need to find the nearest common ancestor
+            // scroller, compute the clipped extents of each in that space and check if they intersect.
+            if (!layers.size() || !layers.last()->asDisplayListLayer() || layers.last()->m_scroller != item.m_scroller || layers.last()->m_clip != scrolledClip(item)) {
+                if (layers.size() && !layers.last()->m_graphicsLayer)
+                    layers.last()->finalize(factory);
+                layers.append(adoptRef(*new DisplayListLayer(item.m_scroller.get(), scrolledClip(item))));
+            }
+
+            layers.last()->m_bounds.uniteIfNonZero(item.m_bounds);
+            // FIXME: Copying items is likely way too slow.
+            layers.last()->asDisplayListLayer()->m_items.append(item);
+        };
+
         for (auto& item : items) {
             WTF::switchOn(item,
                 [&](DisplayListPaintItem& item) {
-                    // FIXME: We need an overlap map equivalent here. Rather than trying to append to the
-                    // last layer, we could append into something further back if the overlap aligns.
-                    // I think for each layer we want to skip-over, we need to find the nearest common ancestor
-                    // scroller, compute the clipped extents of each in that space and check if they intersect.
-                    if (!layers.size() || !layers.last()->asDisplayListLayer() || layers.last()->m_scroller != item.m_scroller || layers.last()->m_clip != scrolledClip(item)) {
-                        if (layers.size() && !layers.last()->m_graphicsLayer)
-                            layers.last()->finalize(factory);
-                        layers.append(adoptRef(*new DisplayListLayer(item.m_scroller.get(), scrolledClip(item))));
-                    }
-
-                    layers.last()->m_bounds.uniteIfNonZero(item.m_bounds);
-                    // FIXME: Copying items is likely way too slow.
-                    layers.last()->asDisplayListLayer()->m_items.append(item);
+                    addPaintedItem(item);
                 },
                 [&](OpacityPaintItem& item) {
-                    // FIXME: We shouldn't unconditionally build a layer for containers.
-                    // Probably track during paint tree building if the container itself wants compositing
-                    // (RenderLayerCompositor::requiresCompositingFor<X>?), or if any descendant paint items
-                    // want compositing, or have a different scroller.
+                    if (!item.m_needsCompositing) {
+                        addPaintedItem(item);
+                        return;
+                    }
+
                     if (layers.size() && !layers.last()->m_graphicsLayer)
                         layers.last()->finalize(factory);
                     Ref container = buildContainerLayer(item, factory);
@@ -1032,6 +1039,11 @@ public:
                     layers.append(WTFMove(container));
                 },
                 [&](AffineTransformPaintItem& item) {
+                    if (!item.m_needsCompositing) {
+                        addPaintedItem(item);
+                        return;
+                    }
+
                     if (layers.size() && !layers.last()->m_graphicsLayer)
                         layers.last()->finalize(factory);
                     Ref container = buildContainerLayer(item, factory);
@@ -1109,6 +1121,20 @@ static TextStream& operator<<(TextStream& ts, PaintLayerBuilder& builder)
     return ts;
 }
 
+static bool isPaintTreeEnabled()
+{
+    static bool flag = false;
+    static std::once_flag onceKey;
+    std::call_once(onceKey, [&] {
+        const char* value = getenv("WebKitPaintTreeEnabled");
+        if (value) {
+            if (auto result = parseInteger<int>(StringView::fromLatin1(value)); result && result.value())
+                flag = true;
+        }
+    });
+    return flag;
+}
+
 void RenderLayerCompositor::flushPendingLayerChanges(bool isFlushRoot)
 {
     // LocalFrameView::flushCompositingStateIncludingSubframes() flushes each subframe,
@@ -1123,7 +1149,7 @@ void RenderLayerCompositor::flushPendingLayerChanges(bool isFlushRoot)
         return;
     }
 
-    if (true) {
+    if (isPaintTreeEnabled()) {
         auto oldPaintBehavior = m_renderView.frameView().paintBehavior();
         m_renderView.frameView().setPaintBehavior(oldPaintBehavior | PaintBehavior::FlattenCompositingLayers | PaintBehavior::Snapshotting | PaintBehavior::BuildPaintTree);
 

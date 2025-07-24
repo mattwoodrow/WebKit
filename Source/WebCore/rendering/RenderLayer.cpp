@@ -3431,7 +3431,9 @@ void RenderLayer::paintLayerWithPaintTree(GraphicsContext& context, const LayerP
         overflowClipRect.move(paintingInfo.subpixelOffset);
         //auto snappedClipRect = snapRectToDevicePixelsIfNeeded(overflowClipRect, renderer());
         m_paintClip = recordingStateSaver.pushClip(overflowClipRect);
-    } else
+    } else if (isRenderViewLayer())
+        m_paintClip = recordingStateSaver.pushClip(renderer().view().layoutOverflowRect());
+    else
         m_paintClip = context.asRecorder()->m_currentClip;
 
     // FIXME: Scrollers shouldn't require a RenderLayer (since it affects the paint order
@@ -6887,6 +6889,8 @@ static void dumpPaintItemProperties(TextStream& ts, const PaintItem& paintItem)
     ts << "(bounds " << paintItem.m_bounds << ") ";
     ts << "(scroller " << paintItem.m_scroller << ") ";
     ts << "(clip " << paintItem.m_clip << ") ";
+    if (paintItem.m_needsCompositing)
+        ts << "(explicit-compositing) ";
 }
 
 static void dumpPaintItemChildren(TextStream& ts, const ContainerPaintItem& paintItem)

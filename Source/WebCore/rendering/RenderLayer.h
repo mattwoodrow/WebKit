@@ -1573,6 +1573,7 @@ public:
     LayoutRect m_bounds;
     RefPtr<PaintClip> m_clip;
     RefPtr<PaintScroller> m_scroller;
+    bool m_needsCompositing { false };
 };
 
 class DisplayListPaintItem : public PaintItem {
@@ -1632,6 +1633,9 @@ public:
         // if it exists, or just removing it.
         storeDisplayListOnTopItem(context.tryTakeDisplayList());
 
+        if ((m_commonScroller && item.m_scroller != *m_commonScroller) || item.m_needsCompositing)
+            m_commonScroller = std::nullopt;
+
         m_currentPaintItems->append(WTFMove(item));
     }
 
@@ -1639,6 +1643,7 @@ public:
 
     Vector<PaintItems> m_rootPaintItems;
     Vector<PaintItems>* m_currentPaintItems;
+    std::optional<RefPtr<PaintScroller>> m_commonScroller { nullptr };
     RefPtr<PaintClip> m_currentClip;
     RefPtr<PaintScroller> m_currentScroller;
 };
@@ -1649,10 +1654,12 @@ public:
     ContainerPaintItemScope(GraphicsContext& context, bool emplace = true)
         : m_recorder(context.asRecorder())
         , m_previousPaintItems(m_recorder ? m_recorder->m_currentPaintItems : nullptr)
+        , m_previousCommonScroller(m_recorder ? m_recorder->m_commonScroller : std::nullopt)
     {
-        if (m_recorder && emplace)
+        if (m_recorder && emplace) {
             m_recorder->m_currentPaintItems = &m_paintItems;
-        else
+            m_recorder->m_commonScroller = m_recorder->m_currentScroller;
+        } else
             m_recorder = nullptr;
     }
     ~ContainerPaintItemScope()
@@ -1674,6 +1681,11 @@ public:
     template <typename T>
     void finish(GraphicsContext& context, T&& item)
     {
+        if (!m_recorder->m_commonScroller)
+            item.m_needsCompositing = true;
+        else
+            m_recorder->m_commonScroller = m_previousCommonScroller;
+
         m_recorder->m_currentPaintItems = m_previousPaintItems;
         m_recorder->append(context, WTFMove(item));
         m_recorder = nullptr;
@@ -1682,6 +1694,7 @@ public:
 private:
     PaintTreeRecorder* m_recorder;
     Vector<PaintItems>* m_previousPaintItems;
+    std::optional<RefPtr<PaintScroller>> m_previousCommonScroller;
     Vector<PaintItems> m_paintItems;
 
 };

@@ -290,6 +290,7 @@ struct RLTDAThreaded : public WebCore::ThreadedLayerBuilderClient, public WebCor
 
 RefPtr<ThreadedLayerBuilderClient> RemoteLayerTreeDrawingArea::createThreadedLayerBuilderClient(SerialFunctionDispatcher& dispatcher, RenderingBackendIdentifier mainThreadIdentifier)
 {
+    m_usingThreadedMode = true;
     return adoptRef(new RLTDAThreaded(dispatcher, identifier(), m_webPage->deviceScaleFactor(), mainThreadIdentifier));
 }
 
@@ -490,7 +491,8 @@ void RemoteLayerTreeDrawingArea::updateRendering()
             rootLayer.viewOverlayRootLayer->flushCompositingState(visibleRect);
     }
 
-#if 0
+    if (m_usingThreadedMode)
+        return;
 
     Ref backingStoreCollection = m_remoteLayerTreeContext->backingStoreCollection();
     backingStoreCollection->willFlushLayers();
@@ -559,8 +561,6 @@ void RemoteLayerTreeDrawingArea::updateRendering()
             }
         });
     });
-
-#endif
 }
 
 void RemoteLayerTreeDrawingArea::didCompleteRenderingUpdateDisplayFlush(bool flushSucceeded)

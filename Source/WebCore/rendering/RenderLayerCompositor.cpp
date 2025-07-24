@@ -1037,6 +1037,21 @@ public:
         return result;
     }
 
+    void setDebugBorders(Vector<Ref<PaintLayer>>& layers, bool showDebugBorders)
+    {
+        for (const auto& layer : layers) {
+            if (layer->m_graphicsLayer)
+                layer->m_graphicsLayer->setShowDebugBorder(showDebugBorders);
+            if (auto* container = layer->asContainerLayer())
+                setDebugBorders(container->m_layers, showDebugBorders);
+        }
+    }
+    void setDebugBorders(bool showDebugBorders)
+    {
+        setDebugBorders(m_layers, showDebugBorders);
+    }
+
+
     Vector<Ref<PaintLayer>> m_layers;
 };
 
@@ -1125,7 +1140,7 @@ void RenderLayerCompositor::flushPendingLayerChanges(bool isFlushRoot)
         if (!m_paintBuilder)
             m_paintBuilder = adoptRef(new PaintLayerBuilder);
 
-        m_threadRunLoop->dispatch([layerBuilderClient = m_layerBuilderClient, paintBuilder = m_paintBuilder, items = WTFMove(recorder.m_rootPaintItems), id = m_renderView.frameView().frame().frameID(), overflowRect = m_renderView.layoutOverflowRect(), visibleRect = visibleRectForLayerFlushing(), contentsPosition = positionForClipLayer(), isFlushRoot, fence]() mutable {
+        m_threadRunLoop->dispatch([layerBuilderClient = m_layerBuilderClient, paintBuilder = m_paintBuilder, items = WTFMove(recorder.m_rootPaintItems), id = m_renderView.frameView().frame().frameID(), overflowRect = m_renderView.layoutOverflowRect(), visibleRect = visibleRectForLayerFlushing(), contentsPosition = positionForClipLayer(), isFlushRoot, showDebugBorders = m_showDebugBorders, fence]() mutable {
 
             GraphicsLayerFactory* factory = layerBuilderClient->beginTransaction(id);
 
@@ -1138,6 +1153,7 @@ void RenderLayerCompositor::flushPendingLayerChanges(bool isFlushRoot)
             rootContentsLayer->setAnchorPoint({ });
 
             paintBuilder->build(WTFMove(items), factory);
+            paintBuilder->setDebugBorders(showDebugBorders);
 
             {
                 WTF::TextStream stream;

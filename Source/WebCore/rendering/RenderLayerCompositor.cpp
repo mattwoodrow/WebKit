@@ -1125,7 +1125,7 @@ void RenderLayerCompositor::flushPendingLayerChanges(bool isFlushRoot)
         if (!m_paintBuilder)
             m_paintBuilder = adoptRef(new PaintLayerBuilder);
 
-        m_threadRunLoop->dispatch([layerBuilderClient = m_layerBuilderClient, paintBuilder = m_paintBuilder, items = WTFMove(recorder.m_rootPaintItems), id = m_renderView.frameView().frame().frameID(), overflowRect = m_renderView.layoutOverflowRect(), visibleRect = visibleRectForLayerFlushing(), isFlushRoot, fence]() mutable {
+        m_threadRunLoop->dispatch([layerBuilderClient = m_layerBuilderClient, paintBuilder = m_paintBuilder, items = WTFMove(recorder.m_rootPaintItems), id = m_renderView.frameView().frame().frameID(), overflowRect = m_renderView.layoutOverflowRect(), visibleRect = visibleRectForLayerFlushing(), contentsPosition = positionForClipLayer(), isFlushRoot, fence]() mutable {
 
             GraphicsLayerFactory* factory = layerBuilderClient->beginTransaction(id);
 
@@ -1134,7 +1134,8 @@ void RenderLayerCompositor::flushPendingLayerChanges(bool isFlushRoot)
             rootContentsLayer->setName(MAKE_STATIC_STRING_IMPL("content root"));
             IntRect intOverflowRect = snappedIntRect(overflowRect);
             RefPtr { rootContentsLayer }->setSize(FloatSize(intOverflowRect.maxX(), intOverflowRect.maxY()));
-            rootContentsLayer->setPosition(FloatPoint());
+            rootContentsLayer->setPosition(contentsPosition);
+            rootContentsLayer->setAnchorPoint({ });
 
             paintBuilder->build(WTFMove(items), factory);
 
@@ -1160,9 +1161,9 @@ void RenderLayerCompositor::flushPendingLayerChanges(bool isFlushRoot)
                 layerBuilderClient->waitOnDisplayLists(fence);
             layerBuilderClient->endTransaction(rootContentsLayer.get());
         });
-    }
 
-    return;
+        return;
+    }
 
     ASSERT(!m_flushingLayers);
     {

@@ -272,7 +272,8 @@ void RenderWidget::paintContents(PaintInfo& paintInfo, const LayoutPoint& paintO
     // When painting widgets into compositing layers, tx and ty are relative to the enclosing compositing layer,
     // not the root. In this case, shift the CTM and adjust the paintRect to be root-relative to fix plug-in drawing.
     if (!widgetPaintOffset.isZero()) {
-        paintInfo.context().translate(widgetPaintOffset);
+        if (!(paintInfo.paintBehavior & PaintBehavior::BuildPaintTree))
+            paintInfo.context().translate(widgetPaintOffset);
         paintRect.move(-widgetPaintOffset.width(), -widgetPaintOffset.height());
     }
 
@@ -282,13 +283,22 @@ void RenderWidget::paintContents(PaintInfo& paintInfo, const LayoutPoint& paintO
         paintInfo.regionContext->pushTransform(transform);
     }
 
+    ContainerPaintItemScope childScope(paintInfo.context());
+
     // FIXME: Remove repaintrect enclosing/integral snapping when RenderWidget becomes device pixel snapped.
     m_widget->paint(paintInfo.context(), enclosingIntRect(paintRect), paintInfo.requireSecurityOriginAccessForWidgets ? Widget::SecurityOriginPaintPolicy::AccessibleOriginOnly : Widget::SecurityOriginPaintPolicy::AnyOrigin, paintInfo.regionContext);
+
+    if (childScope.isValid()) {
+        AffineTransform transform;
+        transform.translate(widgetPaintOffset);
+        transform.translate(m_widget->paintingOffset());
+        childScope.finish(paintInfo.context(), AffineTransformPaintItem { *this, transform, { }, paintInfo.context().asRecorder()->m_currentClip.get(), paintInfo.context().asRecorder()->m_currentScroller.get(), childScope.takePaintItems() });
+    }
 
     if (paintInfo.regionContext)
         paintInfo.regionContext->popTransform();
 
-    if (!widgetPaintOffset.isZero())
+    if (!widgetPaintOffset.isZero() && !(paintInfo.paintBehavior & PaintBehavior::BuildPaintTree))
         paintInfo.context().translate(-widgetPaintOffset);
 
     if (RefPtr frameView = dynamicDowncast<LocalFrameView>(m_widget)) {

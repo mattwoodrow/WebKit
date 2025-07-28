@@ -2753,10 +2753,16 @@ static LayoutRect rendererVisualOverflowRect(RenderElement& renderer)
 
 void RenderElement::paint(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
 {
+    RecordingClipStateSaver recordingStateSaver(paintInfo.context());
+
     PaintTreeRecorder* recorder = nullptr;
     if (paintInfo.paintBehavior.contains(PaintBehavior::BuildPaintTree)) {
         recorder = paintInfo.context().asRecorder();
         ASSERT(recorder);
+
+        if (parent() && parent()->hasLayer()) {
+            recorder->m_currentScroller = downcast<RenderLayerModelObject>(*parent()).layer()->paintScroller();
+        }
 
         LayoutRect overflow = rendererVisualOverflowRect(*this);
         overflow.moveBy(paintOffset);

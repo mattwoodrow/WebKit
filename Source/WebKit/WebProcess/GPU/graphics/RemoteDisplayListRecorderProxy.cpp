@@ -893,12 +893,15 @@ void RemoteDisplayListRecorderProxy::disconnect()
 
 RefPtr<DisplayList::RemoteDisplayList> RemoteDisplayListRecorderProxy::tryTakeDisplayList()
 {
-    if (!m_hasDrawn)
+    if (!m_hasDrawn) {
+        currentState() = { };
         return nullptr;
+    }
 
     RefPtr renderingBackend = m_renderingBackend.get();
     if (!renderingBackend) [[unlikely]] {
         ASSERT_NOT_REACHED();
+        currentState() = { };
         return nullptr;
     }
 
@@ -909,6 +912,7 @@ RefPtr<DisplayList::RemoteDisplayList> RemoteDisplayListRecorderProxy::tryTakeDi
     send(Messages::RemoteDisplayListRecorder::CacheDisplayList(displayList->renderingResourceIdentifier()));
 
     consumeHasDrawn();
+    currentState() = { };
     return displayList;
 }
 

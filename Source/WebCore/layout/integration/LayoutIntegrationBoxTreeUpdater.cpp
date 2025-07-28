@@ -539,6 +539,32 @@ void showInlineContent(TextStream& stream, const InlineContent& inlineContent, s
 #endif
 
 }
+
+WTF::TextStream& operator<<(WTF::TextStream& ts, const InlineDisplay::Box& box)
+{
+    if (box.isNonRootInlineBox()) {
+        auto rect = box.visualRectIgnoringBlockDirection();
+        ts << "Inline box at (" << rect.x() << "," << rect.y() << ") size (" << rect.width() << "x" << rect.height() << ")";
+         ts << " renderer->(" << box.layoutBox().rendererForIntegration() << ")";
+    } else {
+        if (box.isText())
+            ts << "Text";
+        else if (box.isWordSeparator())
+            ts << "Word separator";
+        else if (box.isLineBreak())
+            ts << "Line break";
+        else if (box.isAtomicInlineBox())
+            ts << "Atomic box";
+        else if (box.isGenericInlineLevelBox())
+            ts << "Generic inline level box";
+        ts << " at (" << box.left() << "," << box.top() << ") size " << box.width() << "x" << box.height();
+        if (box.isText())
+            ts << " run(" << box.text().start() << ", " << box.text().end() << ")";
+        ts << " renderer->(" << box.layoutBox().rendererForIntegration() << ")";
+    }
+    return ts;
+}
+
 }
 
 

@@ -35,6 +35,7 @@
 #include "Logging.h"
 #include "PlatformMouseEvent.h"
 #include "PlatformWheelEvent.h"
+#include "RenderLayer.h"
 #include "ScrollAnimator.h"
 #include "Scrollbar.h"
 #include "ScrollbarTheme.h"
@@ -1399,6 +1400,14 @@ void ScrollView::paintPanScrollIcon(GraphicsContext& context)
     context.drawImage(panScrollIcon, iconGCPoint);
 }
 
+IntPoint ScrollView::paintingOffset()
+{
+    IntPoint location = locationOfContents();
+    if (!paintsEntireContents())
+        location.moveBy(-scrollPosition());
+    return location;
+}
+
 void ScrollView::paint(GraphicsContext& context, const IntRect& rect, SecurityOriginPaintPolicy securityOriginPaintPolicy, RegionContext* regionContext)
 {
     if (platformWidget()) {
@@ -1416,17 +1425,21 @@ void ScrollView::paint(GraphicsContext& context, const IntRect& rect, SecurityOr
     }
 
     if (!documentDirtyRect.isEmpty()) {
-        GraphicsContextStateSaver stateSaver(context);
+        GraphicsContextStateSaver stateSaver(context, !context.asRecorder());
+        RecordingClipStateSaver recordingStateSaver(context);
 
         IntPoint locationOfContents = this->locationOfContents();
-        context.translate(locationOfContents.x(), locationOfContents.y());
+        if (!context.asRecorder())
+            context.translate(locationOfContents.x(), locationOfContents.y());
         documentDirtyRect.moveBy(-locationOfContents);
 
         if (!paintsEntireContents()) {
-            context.translate(-scrollX(), -scrollY());
+            if (!context.asRecorder())
+                context.translate(-scrollX(), -scrollY());
             documentDirtyRect.moveBy(scrollPosition());
 
-            context.clip(visibleContentRect(LegacyIOSDocumentVisibleRect));
+            if (!recordingStateSaver.pushClip(visibleContentRect(LegacyIOSDocumentVisibleRect)))
+                context.clip(visibleContentRect(LegacyIOSDocumentVisibleRect));
         }
 
         paintContents(context, documentDirtyRect, securityOriginPaintPolicy, regionContext);

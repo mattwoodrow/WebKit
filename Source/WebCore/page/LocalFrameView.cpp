@@ -5402,6 +5402,7 @@ void LocalFrameView::willPaintContents(GraphicsContext& context, const IntRect&,
             PaintBehavior::ExcludeReplacedContentExceptForIFrames,
             PaintBehavior::ExcludeText,
             PaintBehavior::FixedAndStickyLayersOnly,
+            PaintBehavior::BuildPaintTree,
         };
         m_paintBehavior.add(parentView->paintBehavior() & flagsToCopy);
     }

@@ -980,6 +980,9 @@ void GraphicsLayer::dumpProperties(TextStream& ts, OptionSet<LayerTreeAsTextOpti
         ts << ")\n"_s;
     }
 
+    if (m_showDebugBorder)
+        ts << indent << "(debug-borders)\n"_s;
+
     if (m_size != IntSize())
         ts << indent << "(bounds "_s << m_size.width() << ' ' << m_size.height() << ")\n"_s;
 

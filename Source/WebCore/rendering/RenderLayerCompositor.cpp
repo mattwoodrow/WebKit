@@ -853,8 +853,8 @@ public:
         { }
         ~PaintLayer()
         {
-            if (m_graphicsLayer)
-                m_graphicsLayer->removeFromParent();
+            if (m_outermostLayer)
+                m_outermostLayer->removeFromParent();
         }
         RefPtr<PaintScroller> m_scroller;
         RefPtr<PaintClip> m_clip;
@@ -877,7 +877,7 @@ public:
             if (parent)
                 parent->addChild(Ref { *layer });
             else
-                m_graphicsLayer = layer;
+                m_outermostLayer = layer;
             return layer;
         }
 
@@ -909,9 +909,9 @@ public:
             FloatPoint offset;
             RefPtr<GraphicsLayer> clipLayer = createClipLayers(factory, m_clip.get(), offset);
 
-            RefPtr contentLayer = createLayer(factory, clipLayer.get(), m_bounds, offset);
-            contentLayer->setDrawsContent(true);
-            contentLayer->setAcceleratesDrawing(true);
+            m_primaryLayer = createLayer(factory, clipLayer.get(), m_bounds, offset);
+            m_primaryLayer ->setDrawsContent(true);
+            m_primaryLayer ->setAcceleratesDrawing(true);
         }
 
         void tiledBackingUsageChanged(const GraphicsLayer* layer, bool usingTiledBacking) final
@@ -935,7 +935,8 @@ public:
             return ts.release();
         }
 
-        RefPtr<GraphicsLayer> m_graphicsLayer;
+        RefPtr<GraphicsLayer> m_outermostLayer;
+        RefPtr<GraphicsLayer> m_primaryLayer;
     };
 
     struct DisplayListLayer : public PaintLayer {
@@ -972,6 +973,13 @@ public:
                         context.concatCTM(item.m_transform);
                         paintItemList(context, item.paintItems);
                         context.restore();
+                    },
+                    [&](const CSSTransformPaintItem& item) {
+                        ASSERT(item.m_transform.isAffine());
+                        context.save();
+                        context.concatCTM(item.m_transform.toAffineTransform());
+                        paintItemList(context, item.paintItems);
+                        context.restore();
                     });
             }
         }
@@ -999,7 +1007,7 @@ public:
         container->finalize(factory);
 
         build(container->m_layers, WTFMove(item.paintItems), factory);
-        container->m_graphicsLayer->setChildren(graphicsLayers(container->m_layers));
+        container->m_primaryLayer->setChildren(childrenForSuperlayer(container->m_layers));
         return container;
     }
 
@@ -1011,7 +1019,7 @@ public:
             // I think for each layer we want to skip-over, we need to find the nearest common ancestor
             // scroller, compute the clipped extents of each in that space and check if they intersect.
             if (!layers.size() || !layers.last()->asDisplayListLayer() || layers.last()->m_scroller != item.m_scroller || layers.last()->m_clip != scrolledClip(item)) {
-                if (layers.size() && !layers.last()->m_graphicsLayer)
+                if (layers.size() && !layers.last()->m_primaryLayer)
                     layers.last()->finalize(factory);
                 layers.append(adoptRef(*new DisplayListLayer(item.m_scroller.get(), scrolledClip(item))));
             }
@@ -1032,10 +1040,10 @@ public:
                         return;
                     }
 
-                    if (layers.size() && !layers.last()->m_graphicsLayer)
+                    if (layers.size() && !layers.last()->m_primaryLayer)
                         layers.last()->finalize(factory);
                     Ref container = buildContainerLayer(item, factory);
-                    container->m_graphicsLayer->setOpacity(item.m_opacity);
+                    container->m_primaryLayer->setOpacity(item.m_opacity);
                     layers.append(WTFMove(container));
                 },
                 [&](AffineTransformPaintItem& item) {
@@ -1044,35 +1052,52 @@ public:
                         return;
                     }
 
-                    if (layers.size() && !layers.last()->m_graphicsLayer)
+                    if (layers.size() && !layers.last()->m_primaryLayer)
                         layers.last()->finalize(factory);
                     Ref container = buildContainerLayer(item, factory);
-                    container->m_graphicsLayer->setTransform(item.m_transform);
+                    container->m_primaryLayer->setTransform(item.m_transform);
+                    layers.append(WTFMove(container));
+                },
+                [&](CSSTransformPaintItem& item) {
+                    if (!item.m_needsCompositing) {
+                        addPaintedItem(item);
+                        return;
+                    }
+
+                    if (layers.size() && !layers.last()->m_primaryLayer)
+                        layers.last()->finalize(factory);
+                    Ref container = buildContainerLayer(item, factory);
+                    container->m_primaryLayer->setTransform(item.m_transform);
                     layers.append(WTFMove(container));
                 });
         }
-        if (layers.size() && !layers.last()->m_graphicsLayer)
+        if (layers.size() && !layers.last()->m_primaryLayer)
             layers.last()->finalize(factory);
     }
 
-    Vector<Ref<GraphicsLayer>> graphicsLayers() const
+    Vector<Ref<GraphicsLayer>> childrenForSuperlayer() const
     {
-        return graphicsLayers(m_layers);
+        return childrenForSuperlayer(m_layers);
     }
 
-    Vector<Ref<GraphicsLayer>> graphicsLayers(const Vector<Ref<PaintLayer>>& layers) const
+    Vector<Ref<GraphicsLayer>> childrenForSuperlayer(const Vector<Ref<PaintLayer>>& layers) const
     {
         Vector<Ref<GraphicsLayer>> result;
         for (const auto& layer : layers)
-            result.append(*layer->m_graphicsLayer);
+            result.append(*layer->m_outermostLayer);
         return result;
     }
 
     void setDebugBorders(Vector<Ref<PaintLayer>>& layers, bool showDebugBorders)
     {
         for (const auto& layer : layers) {
-            if (layer->m_graphicsLayer)
-                layer->m_graphicsLayer->setShowDebugBorder(showDebugBorders);
+            GraphicsLayer* graphicsLayer = layer->m_primaryLayer.get();
+            while (graphicsLayer) {
+                graphicsLayer->setShowDebugBorder(showDebugBorders);
+                if (graphicsLayer == layer->m_outermostLayer)
+                    break;
+                graphicsLayer = graphicsLayer->parent();
+            }
             if (auto* container = layer->asContainerLayer())
                 setDebugBorders(container->m_layers, showDebugBorders);
         }
@@ -1199,7 +1224,7 @@ void RenderLayerCompositor::flushPendingLayerChanges(bool isFlushRoot)
                 WTFLogAlways("%s", stream.release().utf8().data());
             }
 
-            rootContentsLayer->setChildren(paintBuilder->graphicsLayers());
+            rootContentsLayer->setChildren(paintBuilder->childrenForSuperlayer());
 
             LOG_WITH_STREAM(Compositing,  stream << "\nRenderLayerCompositor " << " flushPendingLayerChanges (is root " << isFlushRoot << ") visible rect " << visibleRect);
             rootContentsLayer->flushCompositingState(visibleRect);

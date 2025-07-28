@@ -64,6 +64,7 @@ Ref<const DisplayList> RecorderImpl::takeDisplayList()
 {
     appendStateChangeItemIfNecessary();
     m_items.shrinkToFit();
+    currentState() = { };
     return DisplayList::create(WTFMove(m_items));
 }
 

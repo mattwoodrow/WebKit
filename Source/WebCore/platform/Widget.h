@@ -116,6 +116,8 @@ public:
     void invalidate() { invalidateRect(boundsRect()); }
     virtual void invalidateRect(const IntRect&) = 0;
 
+    virtual IntPoint paintingOffset() { return { }; }
+
     WEBCORE_EXPORT virtual void setFocus(bool);
 
     WEBCORE_EXPORT void setCursor(const Cursor&);

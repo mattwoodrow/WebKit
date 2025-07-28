@@ -31,6 +31,7 @@
 #include "PaintInfo.h"
 #include "RenderBox.h"
 #include "RenderInline.h"
+#include "RenderLayer.h"
 #include "RenderLineBreak.h"
 #include "RenderStyleInlines.h"
 #include "TextBoxPainter.h"
@@ -106,7 +107,19 @@ void InlineContentPainter::paintDisplayBox(const InlineDisplay::Box& box)
         inlineBoxPaintInfo.phase = m_paintInfo.phase == PaintPhase::ChildOutlines ? PaintPhase::Outline : m_paintInfo.phase;
         inlineBoxPaintInfo.outlineObjects = &m_outlineObjects;
 
+        PaintTreeRecorder* recorder = nullptr;
+        if (m_paintInfo.paintBehavior.contains(PaintBehavior::BuildPaintTree)) {
+            recorder = m_paintInfo.context().asRecorder();
+            ASSERT(recorder);
+
+            LayoutRect overflow = enclosingLayoutRect(box.inkOverflow());
+            recorder->append(m_paintInfo.context(), DisplayListPaintItem { box, m_paintInfo.phase, overflow, recorder->m_currentClip.get(), recorder->m_currentScroller.get() });
+        }
+
         InlineBoxPainter { m_inlineContent, box, inlineBoxPaintInfo, m_paintOffset }.paint();
+
+        if (recorder)
+            recorder->storeDisplayListOnTopItem(m_paintInfo.context().tryTakeDisplayList());
         return;
     }
 
@@ -115,7 +128,20 @@ void InlineContentPainter::paintDisplayBox(const InlineDisplay::Box& box)
         if (!hasVisibleDamage)
             return;
 
+        PaintTreeRecorder* recorder = nullptr;
+        if (m_paintInfo.paintBehavior.contains(PaintBehavior::BuildPaintTree)) {
+            recorder = m_paintInfo.context().asRecorder();
+            ASSERT(recorder);
+
+            LayoutRect overflow = enclosingLayoutRect(box.inkOverflow());
+            overflow.moveBy(m_paintOffset);
+            recorder->append(m_paintInfo.context(), DisplayListPaintItem { box, m_paintInfo.phase, overflow, recorder->m_currentClip.get(), recorder->m_currentScroller.get() });
+        }
+
         TextBoxPainter { m_inlineContent, box, box.style(), m_paintInfo, m_paintOffset }.paint();
+
+        if (recorder)
+            recorder->storeDisplayListOnTopItem(m_paintInfo.context().tryTakeDisplayList());
         return;
     }
 
@@ -125,6 +151,7 @@ void InlineContentPainter::paintDisplayBox(const InlineDisplay::Box& box)
             const_cast<RenderBox*>(renderer)->paintAsInlineBlock(m_paintInfo, flippedContentOffsetIfNeeded(*renderer));
         }
     }
+
 }
 
 void InlineContentPainter::paint()

@@ -3408,15 +3408,40 @@ void RenderLayer::paintLayerWithPaintTree(GraphicsContext& context, const LayerP
 
     // Surely there is a better way to do this. We only need to adjust if we've stepped into
     // a layer where the parent layer isn't on the CB chain
-    const auto* cb = renderer().containingBlock();
-    if (cb && cb->layer()) {
-        if (cb->layer()->isRenderViewLayer() && renderer().isFixedPositioned()) {
+    if (RenderLayer *containingLayer = enclosingLayerInContainingBlockOrder()) {
+        if (containingLayer->isRenderViewLayer() && renderer().isFixedPositioned()) {
             context.asRecorder()->m_currentClip = nullptr;
             context.asRecorder()->m_currentScroller = nullptr;
         } else {
-            context.asRecorder()->m_currentClip = cb->layer()->m_paintClip;
-            context.asRecorder()->m_currentScroller = cb->layer()->m_paintScroller;
+            context.asRecorder()->m_currentClip = containingLayer->m_paintClip;
+            context.asRecorder()->m_currentScroller = containingLayer->m_paintScroller;
         }
+    }
+
+    // Since transforms establish a containing block for all descendants, then the current
+    // clip should be applied to all descendants. We can reset the clip chain while building
+    // descendants and just clip the transform item itself.
+    TransformationMatrix transform;
+    LayerPaintingInfo transformedPaintingInfo(paintingInfo);
+    RefPtr<PaintClip> transformClip;
+    if (this->transform()) {
+        transformClip = context.asRecorder()->m_currentClip;
+        context.asRecorder()->m_currentClip = nullptr;
+
+        float deviceScaleFactor = renderer().document().deviceScaleFactor();
+        LayoutSize offsetFromParent = offsetFromAncestor(paintingInfo.rootLayer);
+        transform = renderableTransform(paintingInfo.paintBehavior);
+        // Add the subpixel accumulation to the current layer's offset so that we can always snap the translateRight value to where the renderer() is supposed to be painting.
+        LayoutSize offsetForThisLayer = offsetFromParent + paintingInfo.subpixelOffset;
+        FloatSize alignedOffsetForThisLayer = rendererNeedsPixelSnapping(renderer()) ? toFloatSize(roundPointToDevicePixels(toLayoutPoint(offsetForThisLayer), deviceScaleFactor)) : offsetForThisLayer;
+        // We handle accumulated subpixels through nested layers here. Since the context gets translated to device pixels,
+        // all we need to do is add the delta to the accumulated pixels coming from ancestor layers.
+        // Translate the graphics context to the snapping position to avoid off-device-pixel positing.
+        transform.translateRight(alignedOffsetForThisLayer.width(), alignedOffsetForThisLayer.height());
+
+        transformedPaintingInfo.rootLayer = this;
+        if (!transformedPaintingInfo.paintDirtyRect.isInfinite())
+            transformedPaintingInfo.paintDirtyRect = LayoutRect(encloseRectToDevicePixels(valueOrDefault(transform.inverse()).mapRect(paintingInfo.paintDirtyRect), renderer().document().deviceScaleFactor()));
     }
 
     // FIXME: clip/clip-path clipping (but not in RenderLayer)
@@ -3445,19 +3470,30 @@ void RenderLayer::paintLayerWithPaintTree(GraphicsContext& context, const LayerP
     else
         m_paintScroller = context.asRecorder()->m_currentScroller;
 
-    ContainerPaintItemScope childScope(context, renderer().opacity() != 1);
+    ContainerPaintItemScope transformScope(context, !!this->transform());
+    ContainerPaintItemScope opacityScope(context, renderer().opacity() != 1);
 
     auto localPaintFlags = paintFlags - OptionSet<PaintLayerFlag> { PaintLayerFlag::AppliedTransform, PaintLayerFlag::PaintingOverflowContentsRoot };
     localPaintFlags.add(paintLayerPaintingCompositingAllPhasesFlags());
-    paintLayerContents(context, paintingInfo, localPaintFlags);
+    paintLayerContents(context, transformedPaintingInfo, localPaintFlags);
 
     // Start with no clip on the container. Just because clips affect this element doesn't
     // mean they'll affect all descendants (like position:fixed ones). If this element is a containing
     // block for fixed we could clip here and then reset clipping for descendants. Or we could detect
     // that no descendants escape (with precomputed RenderLayer flags?).
     // We could probably also walk up the clip chain and find a subset that does apply.
-    if (childScope.isValid())
-        childScope.finish(context, OpacityPaintItem { renderer(), renderer().opacity(), { }, nullptr, context.asRecorder()->m_currentScroller.get(), childScope.takePaintItems() });
+    if (opacityScope.isValid())
+        opacityScope.finish(context, OpacityPaintItem { renderer(), renderer().opacity(), { }, nullptr, context.asRecorder()->m_currentScroller.get(), opacityScope.takePaintItems() });
+    else
+        opacityScope.finishEmpty();
+
+    if (transformClip)
+        context.asRecorder()->m_currentClip = transformClip;
+
+    if (transformScope.isValid())
+        transformScope.finish(context, CSSTransformPaintItem { renderer(), transform, { }, context.asRecorder()->m_currentClip.get(), context.asRecorder()->m_currentScroller.get(), transformScope.takePaintItems() });
+    else
+        transformScope.finishEmpty();
 }
 
 void RenderLayer::paintLayerWithEffects(GraphicsContext& context, const LayerPaintingInfo& paintingInfo, OptionSet<PaintLayerFlag> paintFlags)
@@ -3580,7 +3616,7 @@ bool RenderLayer::setupFontSubpixelQuantization(GraphicsContext& context, bool& 
     bool isZooming = !page().chrome().client().hasStablePageScaleFactor();
     if (scrollingOnMainThread || contentsScrollByPainting || isZooming) {
         didQuantizeFonts = context.shouldSubpixelQuantizeFonts();
-        context.setShouldSubpixelQuantizeFonts(false);
+        //context.setShouldSubpixelQuantizeFonts(false);
         return true;
     }
     return false;
@@ -6864,6 +6900,7 @@ TextStream& operator<<(TextStream& ts, PaintItemType type)
             case PaintItemType::Accessibility: ts << "accessibility"_s; break;
             case PaintItemType::Opacity: ts << "opacity"_s; break;
             case PaintItemType::AffineTransform: ts << "affine-transform"_s; break;
+            case PaintItemType::CSSTransform: ts << "css-transform"_s; break;
         }
         return ts;
     }
@@ -6908,6 +6945,18 @@ TextStream& operator<<(TextStream& ts, const OpacityPaintItem& item)
 {
     ts << '(';
     ts << "(opacity " << item.m_opacity << ") ";
+    dumpPaintItemProperties(ts, item);
+
+    ts << ')';
+
+    dumpPaintItemChildren(ts, item);
+    return ts;
+}
+
+TextStream& operator<<(TextStream& ts, const CSSTransformPaintItem& item)
+{
+    ts << '(';
+    ts << "(transform " << item.m_transform << ") ";
     dumpPaintItemProperties(ts, item);
 
     ts << ')';

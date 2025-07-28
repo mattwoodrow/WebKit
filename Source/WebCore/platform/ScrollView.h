@@ -385,6 +385,8 @@ public:
     WEBCORE_EXPORT void paint(GraphicsContext&, const IntRect&, Widget::SecurityOriginPaintPolicy = SecurityOriginPaintPolicy::AnyOrigin, RegionContext* = nullptr) final;
     void paintScrollbars(GraphicsContext&, const IntRect&);
 
+    IntPoint paintingOffset() final;
+
     // Widget overrides to ensure that our children's visibility status is kept up to date when we get shown and hidden.
     WEBCORE_EXPORT void show() override;
     WEBCORE_EXPORT void hide() override;

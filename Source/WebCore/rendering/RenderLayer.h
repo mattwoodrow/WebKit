@@ -1005,6 +1005,8 @@ public:
 
     bool ancestorLayerIsDOMParent(const RenderLayer* ancestor) const;
 
+    PaintScroller* paintScroller() { return m_paintScroller.get(); }
+
 private:
 
     void setNextSibling(RenderLayer* next) { m_next = next; }
@@ -1525,6 +1527,7 @@ enum class PaintItemType {
 
     Opacity,
     AffineTransform,
+    CSSTransform,
 };
 
 inline PaintItemType paintItemTypeFromPhase(PaintPhase phase)
@@ -1562,6 +1565,19 @@ public:
         m_rendererName = stream.release();
 #endif
     }
+    PaintItem(const InlineDisplay::Box& box, PaintItemType type, LayoutRect bounds, PaintClip* clip, PaintScroller* scroller)
+        : m_id(uintptr_t(&box))
+        , m_phase(type)
+        , m_bounds(bounds)
+        , m_clip(clip)
+        , m_scroller(scroller)
+    {
+#ifndef NDEBUG
+        TextStream stream;
+        stream << box;
+        m_rendererName = stream.release();
+#endif
+    }
 
     // I think we're going to need a threadsafe way to track identity across
     // paints/instances. This is not a good solution to that.
@@ -1581,13 +1597,17 @@ public:
     DisplayListPaintItem(RenderElement& renderer, PaintPhase phase, LayoutRect bounds, PaintClip* clip, PaintScroller* scroller)
         : PaintItem(renderer, paintItemTypeFromPhase(phase), bounds, clip, scroller)
     {}
+    DisplayListPaintItem(const InlineDisplay::Box& box, PaintPhase phase, LayoutRect bounds, PaintClip* clip, PaintScroller* scroller)
+        : PaintItem(box, paintItemTypeFromPhase(phase), bounds, clip, scroller)
+    {}
 
     RefPtr<DisplayList::RemoteDisplayList> displayList;
 };
 
 class OpacityPaintItem;
+class CSSTransformPaintItem;
 class AffineTransformPaintItem;
-typedef Variant<DisplayListPaintItem, OpacityPaintItem, AffineTransformPaintItem> PaintItems;
+typedef Variant<DisplayListPaintItem, OpacityPaintItem, AffineTransformPaintItem, CSSTransformPaintItem> PaintItems;
 
 class ContainerPaintItem : public PaintItem {
 public:
@@ -1617,6 +1637,19 @@ public:
     {}
 
     AffineTransform m_transform;
+};
+
+class CSSTransformPaintItem : public ContainerPaintItem {
+public:
+    CSSTransformPaintItem(RenderElement& renderer, const TransformationMatrix& transform, LayoutRect bounds, PaintClip* clip, PaintScroller* scroller, Vector<PaintItems>&& items)
+        : ContainerPaintItem(renderer, PaintItemType::Opacity, bounds, clip, scroller, WTFMove(items))
+        , m_transform(transform)
+    {
+        if (!m_transform.isAffine())
+            m_needsCompositing = true;
+    }
+
+    TransformationMatrix m_transform;
 };
 
 class PaintTreeRecorder
@@ -1657,6 +1690,7 @@ public:
         , m_previousCommonScroller(m_recorder ? m_recorder->m_commonScroller : std::nullopt)
     {
         if (m_recorder && emplace) {
+            m_recorder->storeDisplayListOnTopItem(context.tryTakeDisplayList());
             m_recorder->m_currentPaintItems = &m_paintItems;
             m_recorder->m_commonScroller = m_recorder->m_currentScroller;
         } else
@@ -1664,8 +1698,7 @@ public:
     }
     ~ContainerPaintItemScope()
     {
-        ASSERT(!m_recorder);
-        ASSERT(!m_paintItems.size());
+        finishEmpty();
     }
 
     bool isValid()
@@ -1689,6 +1722,15 @@ public:
         m_recorder->m_currentPaintItems = m_previousPaintItems;
         m_recorder->append(context, WTFMove(item));
         m_recorder = nullptr;
+    }
+
+    void finishEmpty()
+    {
+        ASSERT(!m_paintItems.size());
+        if (m_recorder) {
+            m_recorder->m_commonScroller = m_previousCommonScroller;
+            m_recorder->m_currentPaintItems = m_previousPaintItems;
+        }
     }
 
 private:
@@ -1808,6 +1850,7 @@ WTF::TextStream& operator<<(WTF::TextStream&, PaintBehavior);
 WTF::TextStream& operator<<(WTF::TextStream&, RenderLayer::PaintLayerFlag);
 WTF::TextStream& operator<<(WTF::TextStream&, const OpacityPaintItem&);
 WTF::TextStream& operator<<(WTF::TextStream&, const AffineTransformPaintItem&);
+WTF::TextStream& operator<<(WTF::TextStream&, const CSSTransformPaintItem&);
 WTF::TextStream& operator<<(WTF::TextStream&, const DisplayListPaintItem&);
 WTF::TextStream& operator<<(WTF::TextStream&, const PaintClip&);
 WTF::TextStream& operator<<(WTF::TextStream&, const PaintScroller&);

@@ -334,4 +334,7 @@ inline bool operator==(const Box& a, const Box& b)
 }
 
 }
+
+WTF::TextStream& operator<<(WTF::TextStream&, const InlineDisplay::Box&);
+
 }

@@ -2769,7 +2769,7 @@ void RenderElement::paint(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
 
         // FIXME: This creates a lot of items for paint phases that don't have any content (which then
         // get popped again). Can we defer some work, seems like ref churn might be a problem.
-        recorder->append(paintInfo.context(), DisplayListPaintItem { *this, paintInfo.phase, overflow, recorder->m_currentClip.get(), recorder->m_currentScroller.get() });
+        recorder->append(DisplayListPaintItem { *this, paintInfo.phase, overflow, recorder->m_currentClip.get(), recorder->m_currentScroller.get() });
     }
     paintInternal(paintInfo, paintOffset);
 

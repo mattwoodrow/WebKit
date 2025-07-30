@@ -29,6 +29,7 @@
 #include "HitTestResult.h"
 #include "LayoutRepainter.h"
 #include "RenderIterator.h"
+#include "RenderLayer.h"
 #include "RenderObjectInlines.h"
 #include "RenderTreeBuilder.h"
 #include "RenderView.h"
@@ -135,19 +136,21 @@ void LegacyRenderSVGContainer::paintInternal(PaintInfo& paintInfo, const LayoutP
 
     PaintInfo childPaintInfo(paintInfo);
     {
-        GraphicsContextStateSaver stateSaver(childPaintInfo.context());
+        GraphicsContextStateSaver stateSaver(childPaintInfo.context(), !paintInfo.context().asRecorder());
 
         // Let the LegacyRenderSVGViewportContainer subclass clip if necessary
         applyViewportClip(childPaintInfo);
 
+        ContainerPaintItemScope childScope(paintInfo.context());
+
         auto transform = localToParentTransform();
-        childPaintInfo.applyTransform(transform);
+        childPaintInfo.applyTransform(transform, !paintInfo.context().asRecorder());
         if (paintInfo.phase == PaintPhase::EventRegion && childPaintInfo.eventRegionContext())
             childPaintInfo.eventRegionContext()->pushTransform(transform);
 
         SVGRenderingContext renderingContext;
         bool continueRendering = true;
-        if (childPaintInfo.phase == PaintPhase::Foreground) {
+        if (childPaintInfo.phase == PaintPhase::Foreground && !paintInfo.context().asRecorder()) {
             renderingContext.prepareToRenderSVGContent(*this, childPaintInfo);
             continueRendering = renderingContext.isRenderingPrepared();
         }
@@ -160,6 +163,9 @@ void LegacyRenderSVGContainer::paintInternal(PaintInfo& paintInfo, const LayoutP
 
         if (paintInfo.phase == PaintPhase::EventRegion && childPaintInfo.eventRegionContext())
             childPaintInfo.eventRegionContext()->popTransform();
+
+        if (childScope.isValid())
+            childScope.wrapInContainer<AffineTransformPaintItem>(*this, transform, LayoutRect { }, paintInfo.context().asRecorder()->m_currentClip.get(), paintInfo.context().asRecorder()->m_currentScroller.get());
     }
 
     

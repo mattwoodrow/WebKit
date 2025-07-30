@@ -332,7 +332,7 @@ void LegacyRenderSVGRoot::paintReplaced(PaintInfo& paintInfo, const LayoutPoint&
     }
 
     if (childScope.isValid())
-        childScope.finish(context, AffineTransformPaintItem { *this, transform, { }, context.asRecorder()->m_currentClip.get(), context.asRecorder()->m_currentScroller.get(), childScope.takePaintItems() });
+        childScope.wrapInContainer<AffineTransformPaintItem>(*this, transform, LayoutRect { }, context.asRecorder()->m_currentClip.get(), context.asRecorder()->m_currentScroller.get());
 
     if (!context.asRecorder())
         childPaintInfo.context().restore();

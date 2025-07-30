@@ -292,7 +292,7 @@ void RenderWidget::paintContents(PaintInfo& paintInfo, const LayoutPoint& paintO
         AffineTransform transform;
         transform.translate(widgetPaintOffset);
         transform.translate(m_widget->paintingOffset());
-        childScope.finish(paintInfo.context(), AffineTransformPaintItem { *this, transform, { }, paintInfo.context().asRecorder()->m_currentClip.get(), paintInfo.context().asRecorder()->m_currentScroller.get(), childScope.takePaintItems() });
+        childScope.wrapInContainer<AffineTransformPaintItem>(*this, transform, LayoutRect { }, paintInfo.context().asRecorder()->m_currentClip.get(), paintInfo.context().asRecorder()->m_currentScroller.get());
     }
 
     if (paintInfo.regionContext)

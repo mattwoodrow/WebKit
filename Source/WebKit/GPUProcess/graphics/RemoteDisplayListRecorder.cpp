@@ -785,7 +785,9 @@ void RemoteDisplayListRecorder::drawDisplayList(WebCore::RenderingResourceIdenti
 void StandaloneRemoteDisplayListRecorder::cacheDisplayList(WebCore::RenderingResourceIdentifier identifier)
 {
     auto dl = m_impl.takeDisplayList();
+#if ENABLE(TREE_DEBUGGING)
     ALWAYS_LOG_WITH_STREAM_MULTI(stream << "Caching display list " << identifier << ": " << dl);
+#endif
     resourceCache().cacheDisplayList(identifier, WTFMove(dl));
 }
 

@@ -833,7 +833,7 @@ FloatRect RenderLayerCompositor::visibleRectForLayerFlushing() const
 #endif
 }
 
-static PaintClip* scrolledClip(PaintItem& item)
+static PaintClip* scrolledClip(const PaintItem& item)
 {
     RefPtr<PaintClip> clip = item.m_clip;
     while (clip && clip->m_scroller == item.m_scroller)
@@ -863,7 +863,7 @@ public:
         virtual DisplayListLayer* asDisplayListLayer() { return nullptr; }
         virtual ContainerLayer* asContainerLayer() { return nullptr; }
 
-        RefPtr<GraphicsLayer> createLayer(GraphicsLayerFactory* factory, GraphicsLayer* parent, const LayoutRect& rect, FloatPoint offset = { })
+        RefPtr<GraphicsLayer> createLayer(GraphicsLayerFactory* factory, GraphicsLayer* parent, const LayoutRect& rect, FloatPoint offset, bool showDebugBorders)
         {
             RefPtr layer = GraphicsLayer::create(factory, *this);
             FloatRect bounds = snappedIntRect(rect);
@@ -873,6 +873,7 @@ public:
             layer->setPosition(bounds.location());
             layer->setSize(bounds.size());
             layer->setName(debugDescription());
+            layer->setShowDebugBorder(showDebugBorders);
 
             if (parent)
                 parent->addChild(Ref { *layer });
@@ -881,15 +882,15 @@ public:
             return layer;
         }
 
-        RefPtr<GraphicsLayer> createClipLayers(GraphicsLayerFactory* factory, PaintClip* clip, FloatPoint& offset)
+        RefPtr<GraphicsLayer> createClipLayers(GraphicsLayerFactory* factory, PaintClip* clip, FloatPoint& offset, bool showDebugBorders)
         {
             if (!clip)
                 return nullptr;
 
             // FIXME: Needing to recurse up the clip chain to build the outermost clip first feels pretty yuck.
-            RefPtr<GraphicsLayer> parentClip = createClipLayers(factory, clip->m_parent.get(), offset);
+            RefPtr<GraphicsLayer> parentClip = createClipLayers(factory, clip->m_parent.get(), offset, showDebugBorders);
 
-            RefPtr<GraphicsLayer> clipLayer = createLayer(factory, parentClip.get(), clip->m_rect);
+            RefPtr<GraphicsLayer> clipLayer = createLayer(factory, parentClip.get(), clip->m_rect, {}, showDebugBorders);
 
             TextStream ts;
             ts << "PaintClip: " << *clip;
@@ -900,18 +901,18 @@ public:
             return clipLayer;
         }
 
-        void finalize(GraphicsLayerFactory* factory)
+        virtual void finalize(GraphicsLayerFactory* factory, bool showDebugBorders)
         {
             // FIXME: Sibling layers will frequently have clips in common, we should try
             // to not build a bespoke set of clip layers each time.
             // We should also track what clip was applied to our ancestor, and only clip up
             // to that.
             FloatPoint offset;
-            RefPtr<GraphicsLayer> clipLayer = createClipLayers(factory, m_clip.get(), offset);
+            RefPtr<GraphicsLayer> clipLayer = createClipLayers(factory, m_clip.get(), offset, showDebugBorders);
 
-            m_primaryLayer = createLayer(factory, clipLayer.get(), m_bounds, offset);
-            m_primaryLayer ->setDrawsContent(true);
-            m_primaryLayer ->setAcceleratesDrawing(true);
+            m_primaryLayer = createLayer(factory, clipLayer.get(), m_bounds, offset, showDebugBorders);
+            m_primaryLayer->setDrawsContent(true);
+            m_primaryLayer->setAcceleratesDrawing(true);
         }
 
         void tiledBackingUsageChanged(const GraphicsLayer* layer, bool usingTiledBacking) final
@@ -963,6 +964,9 @@ public:
                     [&](const DisplayListPaintItem& item) {
                         context.drawDisplayList(*item.displayList);
                     },
+                    [&](const ContainerPaintItem&) {
+                        ASSERT_NOT_REACHED();
+                    },
                     [&](const OpacityPaintItem& item) {
                         context.beginTransparencyLayer(item.m_opacity);
                         paintItemList(context, item.paintItems);
@@ -986,43 +990,69 @@ public:
     };
 
     struct ContainerLayer : public PaintLayer {
+        PaintItems m_item;
         Vector<Ref<PaintLayer>> m_layers;
 
-        ContainerLayer(PaintScroller* scroller, PaintClip* clip)
-        : PaintLayer(scroller, clip)
+        template<typename T>
+        ContainerLayer(const T& item, PaintScroller* scroller, PaintClip* clip)
+            : PaintLayer(scroller, clip)
+            , m_item(item)
         {}
+
+        void finalize(GraphicsLayerFactory* factory, bool showDebugBorders) final
+        {
+            PaintLayer::finalize(factory, showDebugBorders);
+
+            WTF::switchOn(m_item,
+                [&](const OpacityPaintItem& item) {
+                    m_primaryLayer->setOpacity(item.m_opacity);
+                },
+                [&](const AffineTransformPaintItem& item) {
+                    m_primaryLayer->setTransform(item.m_transform);
+                },
+                [&](const CSSTransformPaintItem& item) {
+                    m_primaryLayer->setTransform(item.m_transform);
+                },
+                [&](const auto&) {
+                    ASSERT_NOT_REACHED();
+                });
+
+            Vector<Ref<GraphicsLayer>> childrenGraphicsLayers;
+            for (const auto& layer : m_layers) {
+                layer->finalize(factory, showDebugBorders);
+                childrenGraphicsLayers.append(*layer->m_outermostLayer);
+            }
+
+            m_primaryLayer->setChildren(WTFMove(childrenGraphicsLayers));
+        }
 
         ContainerLayer* asContainerLayer() final { return this; }
     };
 
-    void build(Vector<PaintItems>&& items, GraphicsLayerFactory* factory)
+    void build(Vector<PaintItems>&& items)
     {
         m_layers.clear();
-        build(m_layers, WTFMove(items), factory);
+        m_items = WTFMove(items);
+        build(m_layers, m_items);
     }
 
-    Ref<ContainerLayer> buildContainerLayer(ContainerPaintItem& item, GraphicsLayerFactory* factory)
+    template<typename T>
+    Ref<ContainerLayer> buildContainerLayer(const T& item)
     {
-        Ref container = adoptRef(*new ContainerLayer(item.m_scroller.get(), scrolledClip(item)));
-        container->finalize(factory);
-
-        build(container->m_layers, WTFMove(item.paintItems), factory);
-        container->m_primaryLayer->setChildren(childrenForSuperlayer(container->m_layers));
+        Ref container = adoptRef(*new ContainerLayer(item, item.m_scroller.get(), scrolledClip(item)));
+        build(container->m_layers, item.paintItems);
         return container;
     }
 
-    void build(Vector<Ref<PaintLayer>>& layers, Vector<PaintItems>&& items, GraphicsLayerFactory* factory)
+    void build(Vector<Ref<PaintLayer>>& layers, const Vector<PaintItems>& items)
     {
-        auto addPaintedItem = [&](auto& item) {
+        auto addPaintedItem = [&](const auto& item) {
             // FIXME: We need an overlap map equivalent here. Rather than trying to append to the
             // last layer, we could append into something further back if the overlap aligns.
             // I think for each layer we want to skip-over, we need to find the nearest common ancestor
             // scroller, compute the clipped extents of each in that space and check if they intersect.
-            if (!layers.size() || !layers.last()->asDisplayListLayer() || layers.last()->m_scroller != item.m_scroller || layers.last()->m_clip != scrolledClip(item)) {
-                if (layers.size() && !layers.last()->m_primaryLayer)
-                    layers.last()->finalize(factory);
+            if (!layers.size() || !layers.last()->asDisplayListLayer() || layers.last()->m_scroller != item.m_scroller || layers.last()->m_clip != scrolledClip(item))
                 layers.append(adoptRef(*new DisplayListLayer(item.m_scroller.get(), scrolledClip(item))));
-            }
 
             layers.last()->m_bounds.uniteIfNonZero(item.m_bounds);
             // FIXME: Copying items is likely way too slow.
@@ -1031,84 +1061,36 @@ public:
 
         for (auto& item : items) {
             WTF::switchOn(item,
-                [&](DisplayListPaintItem& item) {
+                [&](const DisplayListPaintItem& item) {
                     addPaintedItem(item);
                 },
-                [&](OpacityPaintItem& item) {
-                    if (!item.m_needsCompositing) {
-                        addPaintedItem(item);
-                        return;
-                    }
-
-                    if (layers.size() && !layers.last()->m_primaryLayer)
-                        layers.last()->finalize(factory);
-                    Ref container = buildContainerLayer(item, factory);
-                    container->m_primaryLayer->setOpacity(item.m_opacity);
-                    layers.append(WTFMove(container));
+                [&](const ContainerPaintItem& item) {
+                    // Maybe assert we're not throwing away clips/scrollers here?
+                    build(layers, item.paintItems);
                 },
-                [&](AffineTransformPaintItem& item) {
-                    if (!item.m_needsCompositing) {
-                        addPaintedItem(item);
+                [&](const auto& container) {
+                    if (!container.m_needsCompositing) {
+                        addPaintedItem(container);
                         return;
                     }
 
-                    if (layers.size() && !layers.last()->m_primaryLayer)
-                        layers.last()->finalize(factory);
-                    Ref container = buildContainerLayer(item, factory);
-                    container->m_primaryLayer->setTransform(item.m_transform);
-                    layers.append(WTFMove(container));
-                },
-                [&](CSSTransformPaintItem& item) {
-                    if (!item.m_needsCompositing) {
-                        addPaintedItem(item);
-                        return;
-                    }
-
-                    if (layers.size() && !layers.last()->m_primaryLayer)
-                        layers.last()->finalize(factory);
-                    Ref container = buildContainerLayer(item, factory);
-                    container->m_primaryLayer->setTransform(item.m_transform);
-                    layers.append(WTFMove(container));
+                    layers.append(buildContainerLayer(container));
                 });
         }
-        if (layers.size() && !layers.last()->m_primaryLayer)
-            layers.last()->finalize(factory);
     }
 
-    Vector<Ref<GraphicsLayer>> childrenForSuperlayer() const
-    {
-        return childrenForSuperlayer(m_layers);
-    }
-
-    Vector<Ref<GraphicsLayer>> childrenForSuperlayer(const Vector<Ref<PaintLayer>>& layers) const
+    Vector<Ref<GraphicsLayer>> buildGraphicsLayers(GraphicsLayerFactory* factory, bool showDebugBorders) const
     {
         Vector<Ref<GraphicsLayer>> result;
-        for (const auto& layer : layers)
+        for (const auto& layer : m_layers) {
+            layer->finalize(factory, showDebugBorders);
             result.append(*layer->m_outermostLayer);
+        }
         return result;
     }
 
-    void setDebugBorders(Vector<Ref<PaintLayer>>& layers, bool showDebugBorders)
-    {
-        for (const auto& layer : layers) {
-            GraphicsLayer* graphicsLayer = layer->m_primaryLayer.get();
-            while (graphicsLayer) {
-                graphicsLayer->setShowDebugBorder(showDebugBorders);
-                if (graphicsLayer == layer->m_outermostLayer)
-                    break;
-                graphicsLayer = graphicsLayer->parent();
-            }
-            if (auto* container = layer->asContainerLayer())
-                setDebugBorders(container->m_layers, showDebugBorders);
-        }
-    }
-    void setDebugBorders(bool showDebugBorders)
-    {
-        setDebugBorders(m_layers, showDebugBorders);
-    }
-
-
     Vector<Ref<PaintLayer>> m_layers;
+    Vector<PaintItems> m_items;
 };
 
 static TextStream& operator<<(TextStream& ts, PaintLayerBuilder::PaintLayer& layer)
@@ -1180,8 +1162,9 @@ void RenderLayerCompositor::flushPendingLayerChanges(bool isFlushRoot)
 
         auto paintFlags = RenderLayer::paintLayerPaintingCompositingAllPhasesFlags();
         //paintFlags.add(RenderLayer::PaintLayerFlag::TemporaryClipRects);
-        PaintTreeRecorder recorder;
+
         auto context = page().chrome().client().createDisplayListRecorder();
+        PaintTreeRecorder recorder(*context);
         context->setRecorder(&recorder);
         m_renderView.layer()->paint(*context, m_renderView.frameRect(), { }, m_renderView.frameView().paintBehavior(), nullptr, paintFlags);
 
@@ -1189,7 +1172,11 @@ void RenderLayerCompositor::flushPendingLayerChanges(bool isFlushRoot)
 
         m_renderView.frameView().setPaintBehavior(oldPaintBehavior);
 
-        {
+        bool dump = false;
+#if ENABLE(TREE_DEBUGGING)
+        dump = true;
+#endif
+        if (dump) {
             WTF::TextStream stream;
             stream << recorder;
             WTFLogAlways("%s", stream.release().utf8().data());
@@ -1215,17 +1202,21 @@ void RenderLayerCompositor::flushPendingLayerChanges(bool isFlushRoot)
             rootContentsLayer->setPosition(contentsPosition);
             rootContentsLayer->setAnchorPoint({ });
 
-            paintBuilder->build(WTFMove(items), factory);
-            paintBuilder->setDebugBorders(showDebugBorders);
+            paintBuilder->build(WTFMove(items));
 
-            {
+            bool dump = false;
+    #if ENABLE(TREE_DEBUGGING)
+            dump = true;
+    #endif
+            if (dump) {
                 WTF::TextStream stream;
                 stream << *paintBuilder;
                 WTFLogAlways("%s", stream.release().utf8().data());
             }
 
-            rootContentsLayer->setChildren(paintBuilder->childrenForSuperlayer());
+            rootContentsLayer->setChildren(paintBuilder->buildGraphicsLayers(factory, showDebugBorders));
 
+            UNUSED_PARAM(isFlushRoot);
             LOG_WITH_STREAM(Compositing,  stream << "\nRenderLayerCompositor " << " flushPendingLayerChanges (is root " << isFlushRoot << ") visible rect " << visibleRect);
             rootContentsLayer->flushCompositingState(visibleRect);
 

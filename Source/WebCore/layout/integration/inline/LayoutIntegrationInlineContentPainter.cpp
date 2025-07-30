@@ -59,7 +59,20 @@ void InlineContentPainter::paintEllipsis(size_t lineIndex)
     auto lineBox = InlineIterator::LineBox { InlineIterator::LineBoxIteratorModernPath { m_inlineContent, lineIndex } };
     if (!lineBox.hasEllipsis())
         return;
+
+    PaintTreeRecorder* recorder = nullptr;
+    if (m_paintInfo.paintBehavior.contains(PaintBehavior::BuildPaintTree)) {
+        recorder = m_paintInfo.context().asRecorder();
+        ASSERT(recorder);
+
+        //LayoutRect overflow = enclosingLayoutRect(box.inkOverflow());
+        recorder->append(DisplayListPaintItem { nullptr, m_paintInfo.phase, { }, recorder->m_currentClip.get(), recorder->m_currentScroller.get() });
+    }
+
     EllipsisBoxPainter { lineBox, m_paintInfo, m_paintOffset, root().selectionForegroundColor(), root().selectionBackgroundColor() }.paint();
+
+    if (recorder)
+        recorder->storeDisplayListOnTopItem(m_paintInfo.context().tryTakeDisplayList());
 }
 
 void InlineContentPainter::paintDisplayBox(const InlineDisplay::Box& box)
@@ -113,7 +126,8 @@ void InlineContentPainter::paintDisplayBox(const InlineDisplay::Box& box)
             ASSERT(recorder);
 
             LayoutRect overflow = enclosingLayoutRect(box.inkOverflow());
-            recorder->append(m_paintInfo.context(), DisplayListPaintItem { box, m_paintInfo.phase, overflow, recorder->m_currentClip.get(), recorder->m_currentScroller.get() });
+            overflow.moveBy(m_paintOffset);
+            recorder->append(DisplayListPaintItem { &box, m_paintInfo.phase, overflow, recorder->m_currentClip.get(), recorder->m_currentScroller.get() });
         }
 
         InlineBoxPainter { m_inlineContent, box, inlineBoxPaintInfo, m_paintOffset }.paint();
@@ -135,7 +149,7 @@ void InlineContentPainter::paintDisplayBox(const InlineDisplay::Box& box)
 
             LayoutRect overflow = enclosingLayoutRect(box.inkOverflow());
             overflow.moveBy(m_paintOffset);
-            recorder->append(m_paintInfo.context(), DisplayListPaintItem { box, m_paintInfo.phase, overflow, recorder->m_currentClip.get(), recorder->m_currentScroller.get() });
+            recorder->append(DisplayListPaintItem { &box, m_paintInfo.phase, overflow, recorder->m_currentClip.get(), recorder->m_currentScroller.get() });
         }
 
         TextBoxPainter { m_inlineContent, box, box.style(), m_paintInfo, m_paintOffset }.paint();

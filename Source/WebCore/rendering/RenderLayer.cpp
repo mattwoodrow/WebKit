@@ -3470,8 +3470,9 @@ void RenderLayer::paintLayerWithPaintTree(GraphicsContext& context, const LayerP
     else
         m_paintScroller = context.asRecorder()->m_currentScroller;
 
-    ContainerPaintItemScope transformScope(context, !!this->transform());
-    ContainerPaintItemScope opacityScope(context, renderer().opacity() != 1);
+    bool hasTransform = !!this->transform();
+    bool hasOpacity = renderer().opacity() != 1;
+    ContainerPaintItemScope childScope(context);
 
     auto localPaintFlags = paintFlags - OptionSet<PaintLayerFlag> { PaintLayerFlag::AppliedTransform, PaintLayerFlag::PaintingOverflowContentsRoot };
     localPaintFlags.add(paintLayerPaintingCompositingAllPhasesFlags());
@@ -3482,18 +3483,25 @@ void RenderLayer::paintLayerWithPaintTree(GraphicsContext& context, const LayerP
     // block for fixed we could clip here and then reset clipping for descendants. Or we could detect
     // that no descendants escape (with precomputed RenderLayer flags?).
     // We could probably also walk up the clip chain and find a subset that does apply.
-    if (opacityScope.isValid())
-        opacityScope.finish(context, OpacityPaintItem { renderer(), renderer().opacity(), { }, nullptr, context.asRecorder()->m_currentScroller.get(), opacityScope.takePaintItems() });
-    else
-        opacityScope.finishEmpty();
+    if (childScope.isValid() && hasOpacity)
+        childScope.wrapInContainer<OpacityPaintItem>(renderer(), renderer().opacity(), LayoutRect { }, nullptr, context.asRecorder()->m_currentScroller.get());
 
+    // Transforms are always a containing block for all descendants, so we cleared the clip for the
+    // subtree build, and now we can put it just on the transform container.
     if (transformClip)
         context.asRecorder()->m_currentClip = transformClip;
 
-    if (transformScope.isValid())
-        transformScope.finish(context, CSSTransformPaintItem { renderer(), transform, { }, context.asRecorder()->m_currentClip.get(), context.asRecorder()->m_currentScroller.get(), transformScope.takePaintItems() });
-    else
-        transformScope.finishEmpty();
+
+    if (childScope.isValid() && hasTransform)
+        childScope.wrapInContainer<CSSTransformPaintItem>(renderer(), transform, LayoutRect { }, context.asRecorder()->m_currentClip.get(), context.asRecorder()->m_currentScroller.get());
+
+    // Container item bounds are a bit tricky. If we end up with multiple GraphicsLayers with scrollers
+    // inside the container, then any notion of the 'current' bounds right now is meaningless. We need
+    // to instead focus on the clipped scrollable extents of each scrollable piece when computing overlap.
+    // However, if we end up painting this container as a whole into a single layer, then knowing the
+    // union bounds of the descendants would be useful.
+    if (childScope.isValid() && !hasTransform && !hasOpacity)
+        childScope.wrapInContainer<ContainerPaintItem>(renderer(), PaintItemType::Container, LayoutRect { }, nullptr, context.asRecorder()->m_currentScroller.get());
 }
 
 void RenderLayer::paintLayerWithEffects(GraphicsContext& context, const LayerPaintingInfo& paintingInfo, OptionSet<PaintLayerFlag> paintFlags)
@@ -6901,6 +6909,7 @@ TextStream& operator<<(TextStream& ts, PaintItemType type)
             case PaintItemType::Opacity: ts << "opacity"_s; break;
             case PaintItemType::AffineTransform: ts << "affine-transform"_s; break;
             case PaintItemType::CSSTransform: ts << "css-transform"_s; break;
+            case PaintItemType::Container: ts << "container"_s; break;
         }
         return ts;
     }
@@ -6945,6 +6954,18 @@ TextStream& operator<<(TextStream& ts, const OpacityPaintItem& item)
 {
     ts << '(';
     ts << "(opacity " << item.m_opacity << ") ";
+    dumpPaintItemProperties(ts, item);
+
+    ts << ')';
+
+    dumpPaintItemChildren(ts, item);
+    return ts;
+}
+
+TextStream& operator<<(TextStream& ts, const ContainerPaintItem& item)
+{
+    ts << '(';
+    ts << "(container) ";
     dumpPaintItemProperties(ts, item);
 
     ts << ')';
@@ -7003,12 +7024,21 @@ TextStream& operator<<(TextStream& ts, const PaintScroller& paintScroller)
 
 TextStream& operator<<(TextStream& ts, const PaintTreeRecorder& paintTree)
 {
-    ts << "paint tree:"_s;
+    ts << "PaintTreeRecorder: root paint tree:"_s;
     ts.nextLine();
 
     for (auto& item : paintTree.m_rootPaintItems) {
         ts << item;
         ts.nextLine();
+    }
+
+    if (&paintTree.m_rootPaintItems != paintTree.m_currentPaintItems) {
+        ts << "PaintTreeRecorder: current paint subtree:"_s;
+        ts.nextLine();
+        for (auto& item : *paintTree.m_currentPaintItems) {
+            ts << item;
+            ts.nextLine();
+        }
     }
     return ts;
 }

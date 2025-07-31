@@ -568,7 +568,7 @@ void RenderObject::clearNeedsLayout(HadSkippedLayout hadSkippedLayout)
     setEverHadLayout();
     setHadSkippedLayout(hadSkippedLayout == HadSkippedLayout::Yes);
 
-    if (hasLayer())
+    if (hasLayer() && !needsSimplifiedNormalFlowLayoutOnly())
         downcast<RenderLayerModelObject>(*this).layer()->setSelfAndChildrenNeedPositionUpdate();
     m_stateBitfields.clearFlag(StateFlag::NeedsLayout);
     setOutOfFlowChildNeedsLayoutBit(false);

@@ -1078,6 +1078,9 @@ void RenderElement::styleDidChange(StyleDifference diff, const RenderStyle* oldS
             repaintClientsOfReferencedSVGResources();
     }
 
+    if (RenderLayer* enclosing = enclosingLayer())
+        enclosing->setSelfAndDescendantsNeedPositionUpdate();
+
     if (!m_parent)
         return;
     

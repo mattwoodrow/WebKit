@@ -1215,6 +1215,16 @@ bool RenderLayer::ancestorLayerPositionStateChanged(OptionSet<UpdateLayerPositio
         || m_hasPaginatedAncestor != flags.contains(UpdatePagination);
 }
 
+void RenderLayer::invalidatePaintTreeOnAncestors()
+{
+    for (RenderLayer* layer = this; layer; layer = layer->parent())
+        layer->m_hasValidPaintTree = false;
+
+    if (enclosingFrameRenderLayer()) {
+        enclosingFrameRenderLayer()->invalidatePaintTreeOnAncestors();
+    }
+}
+
 #define LAYER_POSITIONS_ASSERT_ENABLED ASSERT_ENABLED || ENABLE(CONJECTURE_ASSERT)
 #if ASSERT_ENABLED
 #if ENABLE(TREE_DEBUGGING)
@@ -1256,6 +1266,12 @@ void RenderLayer::recursiveUpdateLayerPositions(OptionSet<UpdateLayerPositionsFl
         recursiveUpdateLayerPositions<Verify>(flags);
 #endif
         return;
+    }
+
+    if (mode == Write) {
+        m_hasValidPaintTree = false;
+        if (!parent() && enclosingFrameRenderLayer())
+            enclosingFrameRenderLayer()->invalidatePaintTreeOnAncestors();
     }
 
     if (m_layerPositionDirtyBits.contains(LayerPositionUpdates::AllDescendantsNeedPositionUpdate)) {
@@ -3402,6 +3418,11 @@ void RenderLayer::paintLayerWithPaintTree(GraphicsContext& context, const LayerP
     if (!isSelfPaintingLayer() && !hasSelfPaintingLayerDescendant())
         return;
 
+    if (m_hasValidPaintTree) {
+        context.asRecorder()->append(PlaceholderPaintItem { renderer() });
+        return;
+    }
+
     LayoutSize offsetFromRoot = offsetFromAncestor(paintingInfo.rootLayer);
 
     RecordingClipStateSaver recordingStateSaver(context);
@@ -3502,6 +3523,9 @@ void RenderLayer::paintLayerWithPaintTree(GraphicsContext& context, const LayerP
     // union bounds of the descendants would be useful.
     if (childScope.isValid() && !hasTransform && !hasOpacity)
         childScope.wrapInContainer<ContainerPaintItem>(renderer(), PaintItemType::Container, LayoutRect { }, nullptr, context.asRecorder()->m_currentScroller.get());
+
+    if (childScope.isValid())
+        m_hasValidPaintTree = true;
 }
 
 void RenderLayer::paintLayerWithEffects(GraphicsContext& context, const LayerPaintingInfo& paintingInfo, OptionSet<PaintLayerFlag> paintFlags)
@@ -6910,6 +6934,7 @@ TextStream& operator<<(TextStream& ts, PaintItemType type)
             case PaintItemType::AffineTransform: ts << "affine-transform"_s; break;
             case PaintItemType::CSSTransform: ts << "css-transform"_s; break;
             case PaintItemType::Container: ts << "container"_s; break;
+            case PaintItemType::CachedPlaceholder: ts << "cached-placeholder"_s; break;
         }
         return ts;
     }
@@ -6971,6 +6996,19 @@ TextStream& operator<<(TextStream& ts, const ContainerPaintItem& item)
     ts << ')';
 
     dumpPaintItemChildren(ts, item);
+    return ts;
+}
+
+TextStream& operator<<(TextStream& ts, const PlaceholderPaintItem& item)
+{
+    ts << '(';
+    ts << "(placeholder) ";
+#ifndef NDEBUG
+    ts << "(renderer " << item.m_rendererName << ") ";
+#endif
+    UNUSED_PARAM(item);
+
+    ts << ')';
     return ts;
 }
 

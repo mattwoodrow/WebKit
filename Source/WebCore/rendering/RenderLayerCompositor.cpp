@@ -967,6 +967,9 @@ public:
                     [&](const ContainerPaintItem&) {
                         ASSERT_NOT_REACHED();
                     },
+                    [&](const PlaceholderPaintItem&) {
+                        ASSERT_NOT_REACHED();
+                    },
                     [&](const OpacityPaintItem& item) {
                         context.beginTransparencyLayer(item.m_opacity);
                         paintItemList(context, item.paintItems);
@@ -1032,19 +1035,23 @@ public:
     void build(Vector<PaintItems>&& items)
     {
         m_layers.clear();
+        m_prevItems.clear();
+        m_prevItemsMap.clear();
+        m_items.swap(m_prevItems);
+        m_itemsMap.swap(m_prevItemsMap);
         m_items = WTFMove(items);
         build(m_layers, m_items);
     }
 
     template<typename T>
-    Ref<ContainerLayer> buildContainerLayer(const T& item)
+    Ref<ContainerLayer> buildContainerLayer(T& item)
     {
         Ref container = adoptRef(*new ContainerLayer(item, item.m_scroller.get(), scrolledClip(item)));
         build(container->m_layers, item.paintItems);
         return container;
     }
 
-    void build(Vector<Ref<PaintLayer>>& layers, const Vector<PaintItems>& items)
+    void buildItem(Vector<Ref<PaintLayer>>& layers, PaintItems& item)
     {
         auto addPaintedItem = [&](const auto& item) {
             // FIXME: We need an overlap map equivalent here. Rather than trying to append to the
@@ -1059,24 +1066,38 @@ public:
             layers.last()->asDisplayListLayer()->m_items.append(item);
         };
 
-        for (auto& item : items) {
-            WTF::switchOn(item,
-                [&](const DisplayListPaintItem& item) {
-                    addPaintedItem(item);
-                },
-                [&](const ContainerPaintItem& item) {
-                    // Maybe assert we're not throwing away clips/scrollers here?
-                    build(layers, item.paintItems);
-                },
-                [&](const auto& container) {
-                    if (!container.m_needsCompositing) {
-                        addPaintedItem(container);
-                        return;
-                    }
+        WTF::switchOn(item,
+            [&](DisplayListPaintItem& item) {
+                addPaintedItem(item);
+            },
+            [&](ContainerPaintItem& container) {
+                m_itemsMap.add(container.m_id, &item);
+                // Maybe assert we're not throwing away clips/scrollers here?
+                build(layers, container.paintItems);
+            },
+            [&](PlaceholderPaintItem& placeholder) {
+                ASSERT(m_prevItemsMap.contains(placeholder.m_id));
+                // Overwrite item in-place with a copy from the old items, then recurse into
+                // this function to try the switch again.
+                item = *m_prevItemsMap.get(placeholder.m_id);
+                buildItem(layers, item);
+            },
+            [&](auto& container) {
+                m_itemsMap.add(container.m_id, &item);
 
-                    layers.append(buildContainerLayer(container));
-                });
-        }
+                if (!container.m_needsCompositing) {
+                    addPaintedItem(container);
+                    return;
+                }
+
+                layers.append(buildContainerLayer(container));
+            });
+    }
+
+    void build(Vector<Ref<PaintLayer>>& layers, Vector<PaintItems>& items)
+    {
+        for (auto& item : items)
+            buildItem(layers, item);
     }
 
     Vector<Ref<GraphicsLayer>> buildGraphicsLayers(GraphicsLayerFactory* factory, bool showDebugBorders) const
@@ -1090,7 +1111,14 @@ public:
     }
 
     Vector<Ref<PaintLayer>> m_layers;
+
+    // Just store pointers directly into the vector, what could
+    // go wrong!
     Vector<PaintItems> m_items;
+    HashMap<uintptr_t, PaintItems*> m_itemsMap;
+
+    Vector<PaintItems> m_prevItems;
+    HashMap<uintptr_t, PaintItems*> m_prevItemsMap;
 };
 
 static TextStream& operator<<(TextStream& ts, PaintLayerBuilder::PaintLayer& layer)
@@ -1443,6 +1471,9 @@ static std::optional<ScrollingNodeID> frameHostingNodeForFrame(LocalFrame& frame
 // Returns true on a successful update.
 bool RenderLayerCompositor::updateCompositingLayers(CompositingUpdateType updateType, RenderLayer* updateRoot)
 {
+    if (isPaintTreeEnabled())
+        return false;
+
     LOG_WITH_STREAM(Compositing, stream << "RenderLayerCompositor " << this << " [" << m_renderView.frameView() << "] updateCompositingLayers " << updateType << " contentLayersCount " << m_contentLayersCount);
 
     TraceScope tracingScope(CompositingUpdateStart, CompositingUpdateEnd);

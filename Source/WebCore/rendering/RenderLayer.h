@@ -1031,6 +1031,8 @@ private:
     bool setCanBeBackdropRoot(bool);
     void isStackingContextChanged();
 
+    void invalidatePaintTreeOnAncestors();
+
     bool isDirtyStackingContext() const { return m_zOrderListsDirty && isStackingContext(); }
 
     void updateZOrderLists();
@@ -1438,6 +1440,8 @@ private:
     bool m_hasAlwaysIncludedInZOrderListsDescendants : 1 { false };
     bool m_hasAlwaysIncludedInZOrderListsDescendantsStatusDirty : 1 { true };
 
+    bool m_hasValidPaintTree : 1 { false };
+
     bool m_wasOmittedFromZOrderTree : 1 { false };
     bool m_suppressAncestorClippingInsideFilter : 1 { false };
 
@@ -1530,6 +1534,8 @@ enum class PaintItemType {
     AffineTransform,
     CSSTransform,
     Container,
+
+    CachedPlaceholder,
 };
 
 inline PaintItemType paintItemTypeFromPhase(PaintPhase phase)
@@ -1611,11 +1617,18 @@ public:
     RefPtr<DisplayList::RemoteDisplayList> displayList;
 };
 
+class PlaceholderPaintItem : public PaintItem {
+public:
+    PlaceholderPaintItem(RenderElement& renderer)
+        : PaintItem(renderer, PaintItemType::CachedPlaceholder, { }, nullptr, nullptr)
+    {}
+};
+
 class ContainerPaintItem;
 class OpacityPaintItem;
 class CSSTransformPaintItem;
 class AffineTransformPaintItem;
-typedef Variant<DisplayListPaintItem, ContainerPaintItem, OpacityPaintItem, AffineTransformPaintItem, CSSTransformPaintItem> PaintItems;
+typedef Variant<DisplayListPaintItem, ContainerPaintItem, OpacityPaintItem, AffineTransformPaintItem, CSSTransformPaintItem, PlaceholderPaintItem> PaintItems;
 
 class ContainerPaintItem : public PaintItem {
 public:
@@ -1853,6 +1866,7 @@ WTF::TextStream& operator<<(WTF::TextStream&, const ContainerPaintItem&);
 WTF::TextStream& operator<<(WTF::TextStream&, const AffineTransformPaintItem&);
 WTF::TextStream& operator<<(WTF::TextStream&, const CSSTransformPaintItem&);
 WTF::TextStream& operator<<(WTF::TextStream&, const DisplayListPaintItem&);
+WTF::TextStream& operator<<(WTF::TextStream&, const PlaceholderPaintItem&);
 WTF::TextStream& operator<<(WTF::TextStream&, const PaintClip&);
 WTF::TextStream& operator<<(WTF::TextStream&, const PaintScroller&);
 WTF::TextStream& operator<<(WTF::TextStream&, const PaintTreeRecorder&);

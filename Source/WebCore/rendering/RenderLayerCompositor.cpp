@@ -91,6 +91,7 @@
 #include <wtf/text/StringBuilder.h>
 #include <wtf/text/StringToIntegerConversion.h>
 #include <wtf/text/TextStream.h>
+#include <wtf/threads/BinarySemaphore.h>
 
 #if PLATFORM(IOS_FAMILY)
 #include "LegacyTileCache.h"
@@ -1170,16 +1171,31 @@ static bool isPaintTreeEnabled()
     return flag;
 }
 
+static bool isPaintTreeSync()
+{
+    static bool flag = false;
+    static std::once_flag onceKey;
+    std::call_once(onceKey, [&] {
+        const char* value = getenv("WebKitPaintTreeSync");
+        if (value) {
+            if (auto result = parseInteger<int>(StringView::fromLatin1(value)); result && result.value())
+                flag = true;
+        }
+    });
+    return flag;
+}
+
+
 void RenderLayerCompositor::flushPendingLayerChanges(bool isFlushRoot)
 {
     // LocalFrameView::flushCompositingStateIncludingSubframes() flushes each subframe,
     // but GraphicsLayer::flushCompositingState() will cross frame boundaries
     // if the GraphicsLayers are connected (the RootLayerAttachedViaEnclosingFrame case).
     // As long as we're not the root of the flush, we can bail.
-    if (!isFlushRoot && rootLayerAttachment() == RootLayerAttachedViaEnclosingFrame)
+    if (!isFlushRoot /*&& rootLayerAttachment() == RootLayerAttachedViaEnclosingFrame */)
         return;
 
-    if (rootLayerAttachment() == RootLayerUnattached) {
+    if (rootLayerAttachment() == RootLayerUnattached && 0) {
         m_shouldFlushOnReattach = true;
         return;
     }
@@ -1218,7 +1234,9 @@ void RenderLayerCompositor::flushPendingLayerChanges(bool isFlushRoot)
         if (!m_paintBuilder)
             m_paintBuilder = adoptRef(new PaintLayerBuilder);
 
-        m_threadRunLoop->dispatch([layerBuilderClient = m_layerBuilderClient, paintBuilder = m_paintBuilder, items = WTFMove(recorder.m_rootPaintItems), id = m_renderView.frameView().frame().frameID(), overflowRect = m_renderView.layoutOverflowRect(), visibleRect = visibleRectForLayerFlushing(), contentsPosition = positionForClipLayer(), isFlushRoot, showDebugBorders = m_showDebugBorders, fence]() mutable {
+        BinarySemaphore semaphore;
+
+        m_threadRunLoop->dispatch([layerBuilderClient = m_layerBuilderClient, paintBuilder = m_paintBuilder, items = WTFMove(recorder.m_rootPaintItems), id = m_renderView.frameView().frame().frameID(), overflowRect = m_renderView.layoutOverflowRect(), visibleRect = visibleRectForLayerFlushing(), contentsPosition = positionForClipLayer(), isFlushRoot, showDebugBorders = m_showDebugBorders, fence, &semaphore]() mutable {
 
             GraphicsLayerFactory* factory = layerBuilderClient->beginTransaction(id);
 
@@ -1258,7 +1276,13 @@ void RenderLayerCompositor::flushPendingLayerChanges(bool isFlushRoot)
             if (fence)
                 layerBuilderClient->waitOnDisplayLists(fence);
             layerBuilderClient->endTransaction(rootContentsLayer.get());
+
+            if (isPaintTreeSync())
+                semaphore.signal();
         });
+
+        if (isPaintTreeSync())
+            semaphore.wait();
 
         return;
     }

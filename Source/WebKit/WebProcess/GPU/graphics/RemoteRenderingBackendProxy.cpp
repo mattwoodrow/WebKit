@@ -114,12 +114,17 @@ void RemoteRenderingBackendProxy::ensureGPUProcessConnection()
     // connection. This prevents waits on RemoteRenderingBackendProxy to process messages from other connections.
     streamConnection->open(*this, *this);
     m_isResponsive = true;
-    callOnMainRunLoopAndWait([&, serverHandle = WTFMove(serverHandle)]() mutable {
-        Ref gpuProcessConnection = WebProcess::singleton().ensureGPUProcessConnection();
-        gpuProcessConnection->createRenderingBackend(m_identifier, WTFMove(serverHandle), m_parentIdentifier);
-        m_gpuProcessConnection = gpuProcessConnection.get();
-        m_sharedResourceCache = gpuProcessConnection->sharedResourceCache();
-    });
+    //callOnMainRunLoopAndWait([&, serverHandle = WTFMove(serverHandle)]() mutable {
+    RefPtr<GPUProcessConnection> gpuProcessConnection;
+    if (isMainRunLoop())
+        gpuProcessConnection = WebProcess::singleton().ensureGPUProcessConnection();
+    else
+        gpuProcessConnection = WebProcess::singleton().existingGPUProcessConnection();
+    ASSERT(gpuProcessConnection);
+    gpuProcessConnection->createRenderingBackend(m_identifier, WTFMove(serverHandle), m_parentIdentifier);
+    m_gpuProcessConnection = gpuProcessConnection;
+    m_sharedResourceCache = gpuProcessConnection->sharedResourceCache();
+    //});
 }
 
 template<typename T, typename U, typename V, typename W>

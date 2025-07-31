@@ -862,11 +862,19 @@ public:
         LayoutRect m_bounds;
 
         virtual DisplayListLayer* asDisplayListLayer() { return nullptr; }
+        virtual const DisplayListLayer* asDisplayListLayer() const { return nullptr; }
         virtual ContainerLayer* asContainerLayer() { return nullptr; }
+        virtual const ContainerLayer* asContainerLayer() const { return nullptr; }
 
-        RefPtr<GraphicsLayer> createLayer(GraphicsLayerFactory* factory, GraphicsLayer* parent, const LayoutRect& rect, FloatPoint offset, bool showDebugBorders)
+        RefPtr<GraphicsLayer> createLayer(GraphicsLayerFactory* factory, GraphicsLayer* parent, const LayoutRect& rect, FloatPoint offset, GraphicsLayer* existingLayer, bool showDebugBorders)
         {
-            RefPtr layer = GraphicsLayer::create(factory, *this);
+            RefPtr<GraphicsLayer> layer;
+            if (existingLayer) {
+                layer = existingLayer;
+                layer->setClient(*this);
+                layer->setNeedsDisplay();
+            } else
+                layer = GraphicsLayer::create(factory, *this);
             FloatRect bounds = snappedIntRect(rect);
             bounds.moveBy(-offset);
 
@@ -891,7 +899,7 @@ public:
             // FIXME: Needing to recurse up the clip chain to build the outermost clip first feels pretty yuck.
             RefPtr<GraphicsLayer> parentClip = createClipLayers(factory, clip->m_parent.get(), offset, showDebugBorders);
 
-            RefPtr<GraphicsLayer> clipLayer = createLayer(factory, parentClip.get(), clip->m_rect, {}, showDebugBorders);
+            RefPtr<GraphicsLayer> clipLayer = createLayer(factory, parentClip.get(), clip->m_rect, {}, nullptr, showDebugBorders);
 
             TextStream ts;
             ts << "PaintClip: " << *clip;
@@ -902,7 +910,7 @@ public:
             return clipLayer;
         }
 
-        virtual void finalize(GraphicsLayerFactory* factory, bool showDebugBorders)
+        virtual void finalize(GraphicsLayerFactory* factory, PaintLayer* existingLayer, bool showDebugBorders)
         {
             // FIXME: Sibling layers will frequently have clips in common, we should try
             // to not build a bespoke set of clip layers each time.
@@ -911,9 +919,14 @@ public:
             FloatPoint offset;
             RefPtr<GraphicsLayer> clipLayer = createClipLayers(factory, m_clip.get(), offset, showDebugBorders);
 
-            m_primaryLayer = createLayer(factory, clipLayer.get(), m_bounds, offset, showDebugBorders);
-            m_primaryLayer->setDrawsContent(true);
-            m_primaryLayer->setAcceleratesDrawing(true);
+            RefPtr<GraphicsLayer> existingGraphicsLayer;
+            if (existingLayer) {
+                existingGraphicsLayer = std::exchange(existingLayer->m_primaryLayer, nullptr);
+                if (existingLayer->m_outermostLayer == existingGraphicsLayer)
+                    existingLayer->m_outermostLayer = nullptr;
+            }
+
+            m_primaryLayer = createLayer(factory, clipLayer.get(), m_bounds, offset, existingGraphicsLayer.get(), showDebugBorders);
         }
 
         void tiledBackingUsageChanged(const GraphicsLayer* layer, bool usingTiledBacking) final
@@ -949,6 +962,7 @@ public:
         {}
 
         DisplayListLayer* asDisplayListLayer() final { return this; }
+        const DisplayListLayer* asDisplayListLayer() const final { return this; }
 
         void paintContents(const GraphicsLayer*, GraphicsContext& context, const FloatRect& /* inClip */, OptionSet<GraphicsLayerPaintBehavior>) final
         {
@@ -991,6 +1005,14 @@ public:
                     });
             }
         }
+
+        void finalize(GraphicsLayerFactory* factory, PaintLayer* existingLayer, bool showDebugBorders) final
+        {
+            PaintLayer::finalize(factory, existingLayer, showDebugBorders);
+            m_primaryLayer->setDrawsContent(true);
+            m_primaryLayer->setAcceleratesDrawing(true);
+            m_primaryLayer->setAllowsTiling(!!m_scroller);
+        }
     };
 
     struct ContainerLayer : public PaintLayer {
@@ -1003,9 +1025,9 @@ public:
             , m_item(item)
         {}
 
-        void finalize(GraphicsLayerFactory* factory, bool showDebugBorders) final
+        void finalize(GraphicsLayerFactory* factory, PaintLayer* existingLayer, bool showDebugBorders) final
         {
-            PaintLayer::finalize(factory, showDebugBorders);
+            PaintLayer::finalize(factory, existingLayer, showDebugBorders);
 
             WTF::switchOn(m_item,
                 [&](const OpacityPaintItem& item) {
@@ -1021,9 +1043,16 @@ public:
                     ASSERT_NOT_REACHED();
                 });
 
+            Vector<Ref<PaintLayer>>* existingChildLayers = nullptr;
+            if (existingLayer) {
+                ASSERT(existingLayer->asContainerLayer());
+                existingChildLayers = &existingLayer->asContainerLayer()->m_layers;
+            }
+
             Vector<Ref<GraphicsLayer>> childrenGraphicsLayers;
             for (const auto& layer : m_layers) {
-                layer->finalize(factory, showDebugBorders);
+                PaintLayer* existingChildLayer = existingChildLayers ? PaintLayerBuilder::findExistingLayerFor(layer.get(), *existingChildLayers) : nullptr;
+                layer->finalize(factory, existingChildLayer, showDebugBorders);
                 childrenGraphicsLayers.append(*layer->m_outermostLayer);
             }
 
@@ -1031,17 +1060,20 @@ public:
         }
 
         ContainerLayer* asContainerLayer() final { return this; }
+        const ContainerLayer* asContainerLayer() const final { return this; }
     };
 
     void build(Vector<PaintItems>&& items)
     {
-        m_layers.clear();
-        m_prevItems.clear();
-        m_prevItemsMap.clear();
+        m_layers.swap(m_prevLayers);
         m_items.swap(m_prevItems);
         m_itemsMap.swap(m_prevItemsMap);
+
         m_items = WTFMove(items);
         build(m_layers, m_items);
+
+        m_prevItems.clear();
+        m_prevItemsMap.clear();
     }
 
     template<typename T>
@@ -1101,17 +1133,44 @@ public:
             buildItem(layers, item);
     }
 
-    Vector<Ref<GraphicsLayer>> buildGraphicsLayers(GraphicsLayerFactory* factory, bool showDebugBorders) const
+    static PaintLayer* findExistingLayerFor(const PaintLayer& layer, Vector<Ref<PaintLayer>>& existingLayers)
+    {
+        const PaintItems& newLayerReferenceItem = layer.asContainerLayer() ? layer.asContainerLayer()->m_item : layer.asDisplayListLayer()->m_items[0];
+        for (auto& existingLayer : existingLayers) {
+            // If we've already used this layer, continue.
+            // We shoud probably remember where we got to last time, rather than
+            // iterating from 0 each time.
+            if (!existingLayer->m_primaryLayer)
+                continue;
+
+            const PaintItems& existingLayerReferenceItem = existingLayer->asContainerLayer() ? existingLayer->asContainerLayer()->m_item : existingLayer->asDisplayListLayer()->m_items[0];
+
+            if (paintItemID(newLayerReferenceItem) != paintItemID(existingLayerReferenceItem))
+                continue;
+
+            if (paintItemType(newLayerReferenceItem) != paintItemType(existingLayerReferenceItem))
+                continue;
+
+            return existingLayer.ptr();
+        }
+        return nullptr;
+    }
+
+    Vector<Ref<GraphicsLayer>> buildGraphicsLayers(GraphicsLayerFactory* factory, bool showDebugBorders)
     {
         Vector<Ref<GraphicsLayer>> result;
         for (const auto& layer : m_layers) {
-            layer->finalize(factory, showDebugBorders);
+            layer->finalize(factory, findExistingLayerFor(layer, m_prevLayers), showDebugBorders);
             result.append(*layer->m_outermostLayer);
         }
+
+        m_prevLayers.clear();
         return result;
     }
 
     Vector<Ref<PaintLayer>> m_layers;
+
+    Vector<Ref<PaintLayer>> m_prevLayers;
 
     // Just store pointers directly into the vector, what could
     // go wrong!
@@ -1210,7 +1269,9 @@ void RenderLayerCompositor::flushPendingLayerChanges(bool isFlushRoot)
         auto context = page().chrome().client().createDisplayListRecorder();
         PaintTreeRecorder recorder(*context);
         context->setRecorder(&recorder);
-        m_renderView.layer()->paint(*context, m_renderView.frameRect(), { }, m_renderView.frameView().paintBehavior(), nullptr, paintFlags);
+        auto paintRect = m_renderView.frameRect();
+        paintRect.moveBy(m_renderView.frameView().scrollPosition());
+        m_renderView.layer()->paint(*context, paintRect, { }, m_renderView.frameView().paintBehavior(), nullptr, paintFlags);
 
         uint64_t fence = context->flushDisplayLists();
 
@@ -3330,7 +3391,7 @@ FloatPoint RenderLayerCompositor::positionForClipLayer() const
 {
     Ref frameView = m_renderView.frameView();
 
-    auto clipLayerPosition = LocalFrameView::positionForInsetClipLayer(frameView->scrollPosition(), frameView->obscuredContentInsets());
+    auto clipLayerPosition = LocalFrameView::positionForInsetClipLayer({ }, frameView->obscuredContentInsets());
     return FloatPoint(frameView->insetForLeftScrollbarSpace() + clipLayerPosition.x(), clipLayerPosition.y());
 }
 

@@ -491,8 +491,10 @@ void RemoteLayerTreeDrawingArea::updateRendering()
             rootLayer.viewOverlayRootLayer->flushCompositingState(visibleRect);
     }
 
-    if (m_usingThreadedMode)
+    if (m_usingThreadedMode) {
+        m_waitingForBackingStoreSwap = true;
         return;
+    }
 
     Ref backingStoreCollection = m_remoteLayerTreeContext->backingStoreCollection();
     backingStoreCollection->willFlushLayers();

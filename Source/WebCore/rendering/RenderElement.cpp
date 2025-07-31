@@ -1078,6 +1078,7 @@ void RenderElement::styleDidChange(StyleDifference diff, const RenderStyle* oldS
             repaintClientsOfReferencedSVGResources();
     }
 
+    // FIXME: Make sure this isn't a perf regression from extra layer updates.
     if (RenderLayer* enclosing = enclosingLayer())
         enclosing->setSelfAndDescendantsNeedPositionUpdate();
 

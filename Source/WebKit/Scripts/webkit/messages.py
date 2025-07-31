@@ -346,6 +346,7 @@ def atomic_object_identifier(type):
         'WebKit::GPUProcessConnectionIdentifier',
         'WebKit::LibWebRTCResolverIdentifier',
         'WebKit::LogStreamIdentifier',
+        'WebKit::MarkSurfacesAsVolatileRequestIdentifier',
         'WebKit::QuotaIncreaseRequestIdentifier',
         'WebKit::RenderingBackendIdentifier',
         'WebKit::RemoteDisplayListRecorderIdentifier',

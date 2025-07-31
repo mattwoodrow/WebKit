@@ -1673,6 +1673,23 @@ public:
     TransformationMatrix m_transform;
 };
 
+inline uintptr_t paintItemID(const PaintItems& item)
+{
+    return WTF::switchOn(item,
+        [&](const auto& item) {
+            return item.m_id;
+        });
+}
+
+inline PaintItemType paintItemType(const PaintItems& item)
+{
+    return WTF::switchOn(item,
+        [&](const auto& item) {
+            return item.m_phase;
+        });
+}
+
+
 class PaintTreeRecorder
 {
 public:

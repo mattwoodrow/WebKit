@@ -3430,6 +3430,9 @@ void RenderLayer::paintLayerWithPaintTree(GraphicsContext& context, const LayerP
     // Surely there is a better way to do this. We only need to adjust if we've stepped into
     // a layer where the parent layer isn't on the CB chain
     if (RenderLayer *containingLayer = enclosingLayerInContainingBlockOrder()) {
+        // This is wrong, need to grab the scroller/clip from our parent document
+        // if one exists, otherwise we're fixing things inside iframes to ICB of the main
+        // frame.
         if (containingLayer->isRenderViewLayer() && renderer().isFixedPositioned()) {
             context.asRecorder()->m_currentClip = nullptr;
             context.asRecorder()->m_currentScroller = nullptr;
@@ -3486,7 +3489,7 @@ void RenderLayer::paintLayerWithPaintTree(GraphicsContext& context, const LayerP
     // incorrectly), this should be a function of renderer traversal.
     // FIXME: Can we build these trees (scrolls and clips) in advance, similar to how we do
     // for RenderLayer trees. Having these largely be constant between paints would be useful I think.
-    if (usesCompositedScrolling() || isRenderViewLayer())
+    if (usesCompositedScrolling() || (isRenderViewLayer() && renderer().view().frameView().isScrollable()))
         m_paintScroller = adoptRef(new PaintScroller(renderer(),  context.asRecorder()->m_currentScroller.get()));
     else
         m_paintScroller = context.asRecorder()->m_currentScroller;
@@ -3504,8 +3507,10 @@ void RenderLayer::paintLayerWithPaintTree(GraphicsContext& context, const LayerP
     // block for fixed we could clip here and then reset clipping for descendants. Or we could detect
     // that no descendants escape (with precomputed RenderLayer flags?).
     // We could probably also walk up the clip chain and find a subset that does apply.
-    if (childScope.isValid() && hasOpacity)
-        childScope.wrapInContainer<OpacityPaintItem>(renderer(), renderer().opacity(), LayoutRect { }, nullptr, context.asRecorder()->m_currentScroller.get());
+    if (childScope.isValid() && hasOpacity) {
+        auto bounds = calculateLayerBounds(transformedPaintingInfo.rootLayer, LayoutSize(), { RenderLayer::IncludeFilterOutsets, RenderLayer::ExcludeHiddenDescendants, RenderLayer::IncludeCompositedDescendants, RenderLayer::PreserveAncestorFlags });
+        childScope.wrapInContainer<OpacityPaintItem>(renderer(), renderer().opacity(), bounds, nullptr, context.asRecorder()->m_currentScroller.get());
+    }
 
     // Transforms are always a containing block for all descendants, so we cleared the clip for the
     // subtree build, and now we can put it just on the transform container.
@@ -3513,8 +3518,10 @@ void RenderLayer::paintLayerWithPaintTree(GraphicsContext& context, const LayerP
         context.asRecorder()->m_currentClip = transformClip;
 
 
-    if (childScope.isValid() && hasTransform)
-        childScope.wrapInContainer<CSSTransformPaintItem>(renderer(), transform, LayoutRect { }, context.asRecorder()->m_currentClip.get(), context.asRecorder()->m_currentScroller.get());
+    if (childScope.isValid() && hasTransform) {
+        auto bounds = calculateLayerBounds(paintingInfo.rootLayer, LayoutSize(), { RenderLayer::IncludeFilterOutsets, RenderLayer::ExcludeHiddenDescendants, RenderLayer::IncludeCompositedDescendants, RenderLayer::PreserveAncestorFlags, RenderLayer::IncludeSelfTransform });
+        childScope.wrapInContainer<CSSTransformPaintItem>(renderer(), transform, bounds, context.asRecorder()->m_currentClip.get(), context.asRecorder()->m_currentScroller.get());
+    }
 
     // Container item bounds are a bit tricky. If we end up with multiple GraphicsLayers with scrollers
     // inside the container, then any notion of the 'current' bounds right now is meaningless. We need
@@ -4033,7 +4040,7 @@ void RenderLayer::paintLayerContents(GraphicsContext& context, const LayerPainti
     { // Scope for filter-related state changes.
         ClipRect backgroundRect;
 
-        if (shouldHaveFiltersForPainting(context, paintFlags, paintBehavior)) {
+        if (shouldHaveFiltersForPainting(context, paintFlags, paintBehavior) && 0) {
             // When we called collectFragments() last time, paintDirtyRect was reset to represent the filter bounds.
             // Now we need to compute the backgroundRect uncontaminated by filters, in order to clip the filtered result.
             // Note that we also use paintingInfo here, not localPaintingInfo which filters also contaminated.
@@ -4055,7 +4062,7 @@ void RenderLayer::paintLayerContents(GraphicsContext& context, const LayerPainti
         }
 
         LayerPaintingInfo localPaintingInfo(paintingInfo);
-        GraphicsContext* filterContext = setupFilters(context, localPaintingInfo, localPaintFlags, columnAwareOffsetFromRoot, backgroundRect);
+        GraphicsContext* filterContext = /*setupFilters(context, localPaintingInfo, localPaintFlags, columnAwareOffsetFromRoot, backgroundRect); */ nullptr;
         GraphicsContext& currentContext = filterContext ? *filterContext : context;
 
         if (filterContext)

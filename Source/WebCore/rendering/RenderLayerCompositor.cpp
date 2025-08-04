@@ -990,8 +990,8 @@ public:
                     [&](const DisplayListPaintItem& item) {
                         context.drawDisplayList(*item.displayList);
                     },
-                    [&](const ContainerPaintItem&) {
-                        ASSERT_NOT_REACHED();
+                    [&](const ContainerPaintItem& container) {
+                        paintItemList(context, container.paintItems);
                     },
                     [&](const PlaceholderPaintItem&) {
                         ASSERT_NOT_REACHED();
@@ -1137,12 +1137,38 @@ public:
                 m_itemsMap.add(container.m_id, &item);
 
                 if (!container.m_needsCompositing) {
+                    // FIXME: Handle 'opaque' for containers. Should we be computing this
+                    // at paint tree build time, or doing so here?
+                    resolvePlaceholders(container.paintItems);
                     addPaintedItem(container);
                     return;
                 }
 
                 layers.append(buildContainerLayer(container));
             });
+    }
+
+    void resolvePlaceholder(PaintItems& item)
+    {
+        WTF::switchOn(item,
+            [&](DisplayListPaintItem&) {
+            },
+            [&](PlaceholderPaintItem& placeholder) {
+                ASSERT(m_prevItemsMap.contains(placeholder.m_id));
+                // Overwrite item in-place with a copy from the old items, then recurse into
+                // this function to try the switch again.
+                item = *m_prevItemsMap.get(placeholder.m_id);
+                resolvePlaceholder(item);
+            },
+            [&](auto& container) {
+                m_itemsMap.add(container.m_id, &item);
+                resolvePlaceholders(container.paintItems);
+            });
+    }
+    void resolvePlaceholders(Vector<PaintItems>& items)
+    {
+        for (auto& item : items)
+            resolvePlaceholder(item);
     }
 
     void build(Vector<Ref<PaintLayer>>& layers, Vector<PaintItems>& items)

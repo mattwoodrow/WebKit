@@ -2771,9 +2771,20 @@ void RenderElement::paint(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
         LayoutRect overflow = rendererVisualOverflowRect(*this);
         overflow.moveBy(paintOffset);
 
+        bool opaque = false;
+        if (paintInfo.phase == PaintPhase::BlockBackground && isDocumentElementRenderer()) {
+            Color documentBackgroundColor = view().frameView().documentBackgroundColor();
+            if (!documentBackgroundColor.isValid())
+                documentBackgroundColor = view().frameView().baseBackgroundColor();
+            opaque = documentBackgroundColor.isOpaque();
+        }
+
         // FIXME: This creates a lot of items for paint phases that don't have any content (which then
         // get popped again). Can we defer some work, seems like ref churn might be a problem.
-        recorder->append(DisplayListPaintItem { *this, paintInfo.phase, overflow, recorder->m_currentClip.get(), recorder->m_currentScroller.get() });
+        // I think we could refactor into a 'paintSelf'/'paintChildren' model, where we create the item
+        // after self painting (if there is a recorded display list). Ideally virtual, so renderers
+        // can override with type-specific bounds etc as needed.
+        recorder->append(DisplayListPaintItem { *this, paintInfo.phase, overflow, recorder->m_currentClip.get(), recorder->m_currentScroller.get(), opaque });
     }
     paintInternal(paintInfo, paintOffset);
 

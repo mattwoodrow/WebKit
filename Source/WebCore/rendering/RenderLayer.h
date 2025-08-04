@@ -1542,7 +1542,7 @@ inline PaintItemType paintItemTypeFromPhase(PaintPhase phase)
 {
     if (phase == PaintPhase::BlockBackground)
         return PaintItemType::BlockBackground;
-    return (PaintItemType)std::countr_zero((uint16_t)phase);
+    return (PaintItemType)(std::countr_zero((uint16_t)phase) + 1);
 }
 
 inline PaintPhase paintPhaseFromPaintItemType(PaintItemType type)
@@ -1560,12 +1560,13 @@ inline PaintPhase paintPhaseFromPaintItemType(PaintItemType type)
 // out-of-line storage for the properties.
 class PaintItem {
 public:
-    PaintItem(RenderElement& renderer, PaintItemType type, LayoutRect bounds, PaintClip* clip, PaintScroller* scroller)
+    PaintItem(RenderElement& renderer, PaintItemType type, LayoutRect bounds, PaintClip* clip, PaintScroller* scroller, bool opaque = false)
         : m_id(uintptr_t(&renderer))
         , m_phase(type)
         , m_bounds(bounds)
         , m_clip(clip)
         , m_scroller(scroller)
+        , m_opaque(opaque)
     {
         UNUSED_PARAM(renderer);
 #ifndef NDEBUG
@@ -1603,12 +1604,13 @@ public:
     RefPtr<PaintClip> m_clip;
     RefPtr<PaintScroller> m_scroller;
     bool m_needsCompositing { false };
+    bool m_opaque { false };
 };
 
 class DisplayListPaintItem : public PaintItem {
 public:
-    DisplayListPaintItem(RenderElement& renderer, PaintPhase phase, LayoutRect bounds, PaintClip* clip, PaintScroller* scroller)
-        : PaintItem(renderer, paintItemTypeFromPhase(phase), bounds, clip, scroller)
+    DisplayListPaintItem(RenderElement& renderer, PaintPhase phase, LayoutRect bounds, PaintClip* clip, PaintScroller* scroller, bool opaque = false)
+        : PaintItem(renderer, paintItemTypeFromPhase(phase), bounds, clip, scroller, opaque)
     {}
     DisplayListPaintItem(const InlineDisplay::Box* box, PaintPhase phase, LayoutRect bounds, PaintClip* clip, PaintScroller* scroller)
         : PaintItem(box, paintItemTypeFromPhase(phase), bounds, clip, scroller)

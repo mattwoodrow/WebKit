@@ -6969,6 +6969,8 @@ static void dumpPaintItemProperties(TextStream& ts, const PaintItem& paintItem)
     ts << "(clip " << paintItem.m_clip << ") ";
     if (paintItem.m_needsCompositing)
         ts << "(explicit-compositing) ";
+    if (paintItem.m_opaque)
+        ts << "(opaque) ";
 }
 
 static void dumpPaintItemChildren(TextStream& ts, const ContainerPaintItem& paintItem)

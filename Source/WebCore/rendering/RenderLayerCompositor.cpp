@@ -938,14 +938,18 @@ public:
 
         String debugDescription() {
             TextStream ts;
-            if (asDisplayListLayer())
+            if (asDisplayListLayer()) {
                 ts << "(displaylist layer "_s;
-            else
+                if (asDisplayListLayer()->m_opaque)
+                    ts << "(opaque) ";
+            } else
                 ts << "(container layer "_s;
 
             ts << "(bounds " << m_bounds << ") ";
             ts << "(scroller " << m_scroller << ") ";
             ts << "(clip " << m_clip << ") ";
+
+            ts << ")";
 
             return ts.release();
         }
@@ -956,6 +960,7 @@ public:
 
     struct DisplayListLayer : public PaintLayer {
         Vector<PaintItems> m_items;
+        bool m_opaque { false };
 
         DisplayListLayer(PaintScroller* scroller, PaintClip* clip)
         : PaintLayer(scroller, clip)
@@ -1012,6 +1017,7 @@ public:
             m_primaryLayer->setDrawsContent(true);
             m_primaryLayer->setAcceleratesDrawing(true);
             m_primaryLayer->setAllowsTiling(!!m_scroller);
+            m_primaryLayer->setContentsOpaque(m_opaque);
         }
     };
 
@@ -1094,7 +1100,13 @@ public:
             if (!layers.size() || !layers.last()->asDisplayListLayer() || layers.last()->m_scroller != item.m_scroller || layers.last()->m_clip != scrolledClip(item))
                 layers.append(adoptRef(*new DisplayListLayer(item.m_scroller.get(), scrolledClip(item))));
 
-            layers.last()->m_bounds.uniteIfNonZero(item.m_bounds);
+            if (layers.last()->m_bounds.isEmpty()) {
+                layers.last()->m_bounds = item.m_bounds;
+                layers.last()->asDisplayListLayer()->m_opaque = item.m_opaque;
+            } else if (!layers.last()->m_bounds.contains(item.m_bounds)) {
+                layers.last()->m_bounds.uniteIfNonZero(item.m_bounds);
+                layers.last()->asDisplayListLayer()->m_opaque &= item.m_opaque;
+            }
             // FIXME: Copying items is likely way too slow.
             layers.last()->asDisplayListLayer()->m_items.append(item);
         };

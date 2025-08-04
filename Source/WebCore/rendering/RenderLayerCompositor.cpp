@@ -854,8 +854,11 @@ public:
         { }
         ~PaintLayer()
         {
-            if (m_outermostLayer)
-                m_outermostLayer->removeFromParent();
+            for (auto& layer : m_clipLayers) {
+                layer->removeFromParent();
+            }
+            if (m_primaryLayer)
+                m_primaryLayer->removeFromParent();
         }
         RefPtr<PaintScroller> m_scroller;
         RefPtr<PaintClip> m_clip;
@@ -866,15 +869,14 @@ public:
         virtual ContainerLayer* asContainerLayer() { return nullptr; }
         virtual const ContainerLayer* asContainerLayer() const { return nullptr; }
 
-        RefPtr<GraphicsLayer> createLayer(GraphicsLayerFactory* factory, GraphicsLayer* parent, const LayoutRect& rect, FloatPoint offset, GraphicsLayer* existingLayer, bool showDebugBorders)
+        Ref<GraphicsLayer> createLayer(GraphicsLayerFactory* factory, GraphicsLayer* parent, const LayoutRect& rect, FloatPoint offset, GraphicsLayer* existingLayer, bool showDebugBorders)
         {
-            RefPtr<GraphicsLayer> layer;
+            Ref<GraphicsLayer> layer = existingLayer ? Ref { *existingLayer } : GraphicsLayer::create(factory, *this);
             if (existingLayer) {
-                layer = existingLayer;
                 layer->setClient(*this);
                 layer->setNeedsDisplay();
-            } else
-                layer = GraphicsLayer::create(factory, *this);
+            }
+
             FloatRect bounds = snappedIntRect(rect);
             bounds.moveBy(-offset);
 
@@ -885,21 +887,25 @@ public:
             layer->setShowDebugBorder(showDebugBorders);
 
             if (parent)
-                parent->addChild(Ref { *layer });
-            else
-                m_outermostLayer = layer;
+                parent->addChild(Ref { layer });
             return layer;
         }
 
-        RefPtr<GraphicsLayer> createClipLayers(GraphicsLayerFactory* factory, PaintClip* clip, FloatPoint& offset, bool showDebugBorders)
+        RefPtr<GraphicsLayer> createClipLayers(GraphicsLayerFactory* factory, PaintClip* clip, FloatPoint& offset, bool showDebugBorders, Vector<Ref<GraphicsLayer>>* existingClipLayers)
         {
             if (!clip)
                 return nullptr;
 
             // FIXME: Needing to recurse up the clip chain to build the outermost clip first feels pretty yuck.
-            RefPtr<GraphicsLayer> parentClip = createClipLayers(factory, clip->m_parent.get(), offset, showDebugBorders);
+            RefPtr<GraphicsLayer> parentClip = createClipLayers(factory, clip->m_parent.get(), offset, showDebugBorders, existingClipLayers);
 
-            RefPtr<GraphicsLayer> clipLayer = createLayer(factory, parentClip.get(), clip->m_rect, {}, nullptr, showDebugBorders);
+            RefPtr<GraphicsLayer> existingClipLayer;
+            if (existingClipLayers && existingClipLayers->size()) {
+                existingClipLayer = existingClipLayers->first().ptr();
+                existingClipLayers->removeAt(0);
+            }
+
+            Ref<GraphicsLayer> clipLayer = createLayer(factory, parentClip.get(), clip->m_rect, {}, existingClipLayer.get(), showDebugBorders);
 
             TextStream ts;
             ts << "PaintClip: " << *clip;
@@ -907,6 +913,7 @@ public:
 
             offset += clipLayer->position();
             clipLayer->setMasksToBounds(true);
+            m_clipLayers.append(clipLayer);
             return clipLayer;
         }
 
@@ -917,14 +924,11 @@ public:
             // We should also track what clip was applied to our ancestor, and only clip up
             // to that.
             FloatPoint offset;
-            RefPtr<GraphicsLayer> clipLayer = createClipLayers(factory, m_clip.get(), offset, showDebugBorders);
+            RefPtr<GraphicsLayer> clipLayer = createClipLayers(factory, m_clip.get(), offset, showDebugBorders, existingLayer ? &existingLayer->m_clipLayers : nullptr);
 
             RefPtr<GraphicsLayer> existingGraphicsLayer;
-            if (existingLayer) {
+            if (existingLayer)
                 existingGraphicsLayer = std::exchange(existingLayer->m_primaryLayer, nullptr);
-                if (existingLayer->m_outermostLayer == existingGraphicsLayer)
-                    existingLayer->m_outermostLayer = nullptr;
-            }
 
             m_primaryLayer = createLayer(factory, clipLayer.get(), m_bounds, offset, existingGraphicsLayer.get(), showDebugBorders);
         }
@@ -954,8 +958,10 @@ public:
             return ts.release();
         }
 
-        RefPtr<GraphicsLayer> m_outermostLayer;
+        GraphicsLayer* outermostLayer() { return m_clipLayers.isEmpty() ? m_primaryLayer.get() : m_clipLayers[0].ptr(); }
+
         RefPtr<GraphicsLayer> m_primaryLayer;
+        Vector<Ref<GraphicsLayer>> m_clipLayers;
     };
 
     struct DisplayListLayer : public PaintLayer {
@@ -1057,9 +1063,9 @@ public:
 
             Vector<Ref<GraphicsLayer>> childrenGraphicsLayers;
             for (const auto& layer : m_layers) {
-                PaintLayer* existingChildLayer = existingChildLayers ? PaintLayerBuilder::findExistingLayerFor(layer.get(), *existingChildLayers) : nullptr;
+                PaintLayer* existingChildLayer = existingChildLayers ? PaintLayerBuilder::findExistingPaintLayerFor(layer.get(), *existingChildLayers) : nullptr;
                 layer->finalize(factory, existingChildLayer, showDebugBorders);
-                childrenGraphicsLayers.append(*layer->m_outermostLayer);
+                childrenGraphicsLayers.append(*layer->outermostLayer());
             }
 
             m_primaryLayer->setChildren(WTFMove(childrenGraphicsLayers));
@@ -1145,7 +1151,7 @@ public:
             buildItem(layers, item);
     }
 
-    static PaintLayer* findExistingLayerFor(const PaintLayer& layer, Vector<Ref<PaintLayer>>& existingLayers)
+    static PaintLayer* findExistingPaintLayerFor(const PaintLayer& layer, Vector<Ref<PaintLayer>>& existingLayers)
     {
         const PaintItems& newLayerReferenceItem = layer.asContainerLayer() ? layer.asContainerLayer()->m_item : layer.asDisplayListLayer()->m_items[0];
         for (auto& existingLayer : existingLayers) {
@@ -1172,8 +1178,8 @@ public:
     {
         Vector<Ref<GraphicsLayer>> result;
         for (const auto& layer : m_layers) {
-            layer->finalize(factory, findExistingLayerFor(layer, m_prevLayers), showDebugBorders);
-            result.append(*layer->m_outermostLayer);
+            layer->finalize(factory, findExistingPaintLayerFor(layer, m_prevLayers), showDebugBorders);
+            result.append(*layer->outermostLayer());
         }
 
         m_prevLayers.clear();
@@ -1191,6 +1197,8 @@ public:
 
     Vector<PaintItems> m_prevItems;
     HashMap<uintptr_t, PaintItems*> m_prevItemsMap;
+
+    RefPtr<GraphicsLayer> m_rootContentsLayer;
 };
 
 static TextStream& operator<<(TextStream& ts, PaintLayerBuilder::PaintLayer& layer)
@@ -1313,13 +1321,15 @@ void RenderLayerCompositor::flushPendingLayerChanges(bool isFlushRoot)
 
             GraphicsLayerFactory* factory = layerBuilderClient->beginTransaction(id);
 
-            static PaintLayerBuilder::PaintLayer& layer = *new PaintLayerBuilder::PaintLayer(nullptr, nullptr);
-            RefPtr rootContentsLayer = GraphicsLayer::create(factory, layer);
-            rootContentsLayer->setName(MAKE_STATIC_STRING_IMPL("content root"));
+            if (!paintBuilder->m_rootContentsLayer) {
+                static PaintLayerBuilder::PaintLayer& layer = *new PaintLayerBuilder::PaintLayer(nullptr, nullptr);
+                paintBuilder->m_rootContentsLayer = GraphicsLayer::create(factory, layer);
+                paintBuilder->m_rootContentsLayer->setName(MAKE_STATIC_STRING_IMPL("content root"));
+            }
             IntRect intOverflowRect = snappedIntRect(overflowRect);
-            RefPtr { rootContentsLayer }->setSize(FloatSize(intOverflowRect.maxX(), intOverflowRect.maxY()));
-            rootContentsLayer->setPosition(contentsPosition);
-            rootContentsLayer->setAnchorPoint({ });
+            paintBuilder->m_rootContentsLayer->setSize(FloatSize(intOverflowRect.maxX(), intOverflowRect.maxY()));
+            paintBuilder->m_rootContentsLayer->setPosition(contentsPosition);
+            paintBuilder->m_rootContentsLayer->setAnchorPoint({ });
 
             paintBuilder->build(WTFMove(items));
 
@@ -1333,22 +1343,22 @@ void RenderLayerCompositor::flushPendingLayerChanges(bool isFlushRoot)
                 WTFLogAlways("%s", stream.release().utf8().data());
             }
 
-            rootContentsLayer->setChildren(paintBuilder->buildGraphicsLayers(factory, showDebugBorders));
+            paintBuilder->m_rootContentsLayer->setChildren(paintBuilder->buildGraphicsLayers(factory, showDebugBorders));
 
             UNUSED_PARAM(isFlushRoot);
             LOG_WITH_STREAM(Compositing,  stream << "\nRenderLayerCompositor " << " flushPendingLayerChanges (is root " << isFlushRoot << ") visible rect " << visibleRect);
-            rootContentsLayer->flushCompositingState(visibleRect);
+            paintBuilder->m_rootContentsLayer->flushCompositingState(visibleRect);
 
 #if ENABLE(TREE_DEBUGGING)
             if (layersLogEnabled()) {
                 LOG(Layers, "RenderLayerCompositor::flushPendingLayerChanges");
-                showGraphicsLayerTree(rootContentsLayer.get());
+                showGraphicsLayerTree(paintBuilder->m_rootContentsLayer.get());
             }
 #endif
 
             if (fence)
                 layerBuilderClient->waitOnDisplayLists(fence);
-            layerBuilderClient->endTransaction(rootContentsLayer.get());
+            layerBuilderClient->endTransaction(paintBuilder->m_rootContentsLayer.get());
 
             if (isPaintTreeSync())
                 semaphore.signal();

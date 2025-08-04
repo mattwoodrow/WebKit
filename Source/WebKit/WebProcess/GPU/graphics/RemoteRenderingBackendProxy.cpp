@@ -82,6 +82,20 @@ RemoteRenderingBackendProxy::RemoteRenderingBackendProxy(SerialFunctionDispatche
 {
 }
 
+static bool isPaintTreeSync()
+{
+    static bool flag = false;
+    static std::once_flag onceKey;
+    std::call_once(onceKey, [&] {
+        const char* value = getenv("WebKitPaintTreeSync");
+        if (value) {
+            if (auto result = parseInteger<int>(StringView::fromLatin1(value)); result && result.value())
+                flag = true;
+        }
+    });
+    return flag;
+}
+
 RemoteRenderingBackendProxy::~RemoteRenderingBackendProxy()
 {
     for (auto& markAsVolatileHandlers : m_markAsVolatileRequests.values())
@@ -114,17 +128,26 @@ void RemoteRenderingBackendProxy::ensureGPUProcessConnection()
     // connection. This prevents waits on RemoteRenderingBackendProxy to process messages from other connections.
     streamConnection->open(*this, *this);
     m_isResponsive = true;
-    //callOnMainRunLoopAndWait([&, serverHandle = WTFMove(serverHandle)]() mutable {
-    RefPtr<GPUProcessConnection> gpuProcessConnection;
-    if (isMainRunLoop())
-        gpuProcessConnection = WebProcess::singleton().ensureGPUProcessConnection();
-    else
-        gpuProcessConnection = WebProcess::singleton().existingGPUProcessConnection();
-    ASSERT(gpuProcessConnection);
-    gpuProcessConnection->createRenderingBackend(m_identifier, WTFMove(serverHandle), m_parentIdentifier);
-    m_gpuProcessConnection = gpuProcessConnection;
-    m_sharedResourceCache = gpuProcessConnection->sharedResourceCache();
-    //});
+
+    if (isPaintTreeSync()) {
+        RefPtr<GPUProcessConnection> gpuProcessConnection;
+        if (isMainRunLoop())
+            gpuProcessConnection = WebProcess::singleton().ensureGPUProcessConnection();
+        else
+            gpuProcessConnection = WebProcess::singleton().existingGPUProcessConnection();
+        ASSERT(gpuProcessConnection);
+        gpuProcessConnection->createRenderingBackend(m_identifier, WTFMove(serverHandle), m_parentIdentifier);
+        m_gpuProcessConnection = gpuProcessConnection;
+        m_sharedResourceCache = gpuProcessConnection->sharedResourceCache();
+    } else {
+        callOnMainRunLoopAndWait([&, serverHandle = WTFMove(serverHandle)]() mutable {
+            RefPtr<GPUProcessConnection> gpuProcessConnection = WebProcess::singleton().ensureGPUProcessConnection();
+            ASSERT(gpuProcessConnection);
+            gpuProcessConnection->createRenderingBackend(m_identifier, WTFMove(serverHandle), m_parentIdentifier);
+            m_gpuProcessConnection = gpuProcessConnection;
+            m_sharedResourceCache = gpuProcessConnection->sharedResourceCache();
+        });
+    }
 }
 
 template<typename T, typename U, typename V, typename W>

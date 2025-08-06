@@ -95,6 +95,8 @@ ALWAYS_INLINE void RemoteDisplayListRecorderProxy::send(T&& message)
         m_connection = connection;
     }
 
+    add(m_hasher, message.hash());
+
     if (!m_hasDrawn) {
         if (RefPtr client = m_client.get())
             client->backingStoreWillChange();
@@ -905,7 +907,7 @@ RefPtr<DisplayList::RemoteDisplayList> RemoteDisplayListRecorderProxy::tryTakeDi
         return nullptr;
     }
 
-    RefPtr displayList = adoptRef(new DisplayList::RemoteDisplayList);
+    RefPtr displayList = adoptRef(new DisplayList::RemoteDisplayList(m_hasher.hash()));
     renderingBackend->remoteResourceCacheProxy().recordDisplayListUse(*displayList);
 
     appendStateChangeItemIfNecessary();
@@ -913,6 +915,7 @@ RefPtr<DisplayList::RemoteDisplayList> RemoteDisplayListRecorderProxy::tryTakeDi
 
     consumeHasDrawn();
     currentState() = { };
+    m_hasher = { };
     return displayList;
 }
 

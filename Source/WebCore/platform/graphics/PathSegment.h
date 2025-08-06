@@ -27,6 +27,7 @@
 
 #include "PathSegmentData.h"
 #include <wtf/Function.h>
+#include <wtf/Hasher.h>
 
 namespace WebCore {
 
@@ -90,4 +91,10 @@ inline PathSegment::PathSegment(Data&& data)
     : m_data(WTFMove(data))
 {
 }
+
+inline void add(Hasher& hasher, const PathSegment& segment)
+{
+    add(hasher, segment.data());
+}
+
 } // namespace WebCore

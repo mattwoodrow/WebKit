@@ -29,6 +29,7 @@
 #include "WritingMode.h"
 #include <array>
 #include <concepts>
+#include <wtf/Hasher.h>
 #include <wtf/OptionSet.h>
 #include <wtf/text/TextStream.h>
 
@@ -227,6 +228,12 @@ TextStream& operator<<(TextStream& ts, const RectEdges<T>& edges)
 {
     ts << "[top "_s << edges.top() << " right "_s << edges.right() << " bottom "_s << edges.bottom() << " left "_s << edges.left() << ']';
     return ts;
+}
+
+template<typename T>
+inline void add(Hasher& hasher, const RectEdges<T>& edges)
+{
+    add(hasher, edges.top(), edges.right(), edges.bottom(), edges.left());
 }
 
 }

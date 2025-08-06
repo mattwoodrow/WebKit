@@ -26,7 +26,7 @@ import re
 import sys
 
 from webkit import parser
-from webkit.model import BUILTIN_ATTRIBUTE, SYNCHRONOUS_ATTRIBUTE, ALLOWEDWHENWAITINGFORSYNCREPLY_ATTRIBUTE, ALLOWEDWHENWAITINGFORSYNCREPLYDURINGUNBOUNDEDIPC_ATTRIBUTE, MAINTHREADCALLBACK_ATTRIBUTE, STREAM_ATTRIBUTE, CALL_WITH_REPLY_ID_ATTRIBUTE, MessageReceiver, Message
+from webkit.model import BUILTIN_ATTRIBUTE, SYNCHRONOUS_ATTRIBUTE, ALLOWEDWHENWAITINGFORSYNCREPLY_ATTRIBUTE, ALLOWEDWHENWAITINGFORSYNCREPLYDURINGUNBOUNDEDIPC_ATTRIBUTE, MAINTHREADCALLBACK_ATTRIBUTE, STREAM_ATTRIBUTE, HASH_ATTRIBUTE, CALL_WITH_REPLY_ID_ATTRIBUTE, MessageReceiver, Message
 
 _license_header = """/*
  * Copyright (C) 2021-2023 Apple Inc. All rights reserved.
@@ -313,6 +313,11 @@ def message_to_struct_declaration(receiver, message):
             result.append('encoder << m_%s;\n' % parameter.name)
     result.append('    }\n')
     result.append('\n')
+
+    if receiver.has_attribute(HASH_ATTRIBUTE):
+        result.append('    unsigned hash();\n')
+        result.append('\n')
+
     result.append('private:\n')
     for i in range(len(function_parameters)):
         parameter = function_parameters[i]
@@ -679,6 +684,7 @@ def forward_declarations_and_headers(receiver):
         '"Connection.h"',
         '"MessageNames.h"',
         '<wtf/Forward.h>',
+        '<wtf/Hasher.h>',
         '<wtf/RuntimeApplicationChecks.h>',
         '<wtf/ThreadSafeRefCounted.h>',
     ])
@@ -1719,6 +1725,23 @@ def generate_message_handler(receiver):
 
     result.append('\n')
     result.append('} // namespace WebKit\n')
+
+    if receiver.has_attribute(HASH_ATTRIBUTE):
+        result.append('namespace Messages {\n')
+        result.append('namespace %s {\n\n' % receiver.name)
+
+        for message in receiver.messages:
+            result.append('unsigned %s::hash() {\n' % message.name);
+            result.append('    Hasher hasher;\n')
+            result.append('    add(hasher, name());\n')
+            for i in range(len(message.parameters)):
+                parameter = message.parameters[i]
+                result.append('    add(hasher, m_%s);\n' % parameter.name)
+            result.append('    return hasher.hash();\n')
+            result.append('}\n\n');
+
+        result.append('} // namespace %s\n' % receiver.name)
+        result.append('} // namespace Messages\n')
 
     result.append('\n')
     result.append('#if ENABLE(IPC_TESTING_API)\n')

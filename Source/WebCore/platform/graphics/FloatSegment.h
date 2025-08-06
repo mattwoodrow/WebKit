@@ -27,6 +27,7 @@
 
 #include <algorithm>
 #include <ranges>
+#include <wtf/Hasher.h>
 #include <wtf/Vector.h>
 
 namespace WTF {
@@ -79,5 +80,10 @@ inline Vector<FloatSegment> differenceWithDilation(FloatSegment a, Vector<FloatS
 }
 
 WEBCORE_EXPORT TextStream& operator<<(TextStream&, FloatSegment);
+
+inline void add(Hasher& hasher, const FloatSegment& segment)
+{
+    add(hasher, segment.begin, segment.end);
+}
 
 } // namespace WebCore

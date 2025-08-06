@@ -26,6 +26,7 @@
 #pragma once
 
 #include "Timeout.h"
+#include <wtf/Hasher.h>
 #include <wtf/Lock.h>
 #include <wtf/Noncopyable.h>
 #include <wtf/Seconds.h>
@@ -86,6 +87,7 @@ public:
 
 private:
     friend std::optional<EventSignalPair> createEventSignalPair();
+    friend void add(Hasher&, const Semaphore&);
     void destroy();
 #if PLATFORM(COCOA)
     MachSendRight m_sendRight;
@@ -96,5 +98,10 @@ private:
     UnixFileDescriptor m_fd;
 #endif
 };
+
+inline void add(Hasher& hasher, const Semaphore& sem)
+{
+    add(hasher, sem.m_sendRight);
+}
 
 } // namespace IPC

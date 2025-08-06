@@ -34,6 +34,7 @@
 #include "FloatSize.h"
 #include "LayoutRoundedRect.h"
 #include "Region.h"
+#include <wtf/Hasher.h>
 #include <wtf/TZoneMalloc.h>
 
 #if USE(SKIA)
@@ -206,6 +207,16 @@ WEBCORE_EXPORT WTF::TextStream& operator<<(WTF::TextStream&, const FloatRoundedR
 
 // Snip away rectangles from corners, roughly one per step length of arc.
 WEBCORE_EXPORT Region approximateAsRegion(const FloatRoundedRect&, unsigned stepLength = 20);
+
+inline void add(Hasher& hasher, const FloatRoundedRect::Radii& radii)
+{
+    add(hasher, radii.topLeft(), radii.topRight(), radii.bottomLeft(), radii.bottomRight());
+}
+
+inline void add(Hasher& hasher, const FloatRoundedRect& rect)
+{
+    add(hasher, rect.rect(), rect.radii());
+}
 
 } // namespace WebCore
 

@@ -33,6 +33,7 @@
 #include "PlatformPath.h"
 #include "WindRule.h"
 #include <wtf/DataRef.h>
+#include <wtf/Hasher.h>
 #include <wtf/TZoneMalloc.h>
 
 namespace WebCore {
@@ -75,7 +76,7 @@ public:
 
     WEBCORE_EXPORT void addPath(const Path&, const AffineTransform&);
 
-    void applySegments(const PathSegmentApplier&) const;
+    WEBCORE_EXPORT void applySegments(const PathSegmentApplier&) const;
     WEBCORE_EXPORT void applyElements(const PathElementApplier&) const;
     void clear();
 
@@ -257,6 +258,13 @@ inline std::optional<FloatPoint> Path::initialMoveToPoint() const
             return moveTo->point;
     }
     return std::nullopt;
+}
+
+inline void add(Hasher& hasher, const Path& path)
+{
+    path.applySegments([&hasher](const PathSegment& segment) {
+        add(hasher, segment);
+    });
 }
 
 } // namespace WebCore

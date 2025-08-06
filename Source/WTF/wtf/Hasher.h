@@ -216,9 +216,20 @@ template<typename T> void add(Hasher& hasher, std::initializer_list<T> values)
         add(hasher, value);
 }
 
+template<typename T> void add(Hasher& hasher, std::span<T> values)
+{
+    for (auto& value : values)
+        add(hasher, value);
+}
+
 template<typename T, typename U, typename V> void add(Hasher& hasher, const RefPtr<T, U, V>& refPtr)
 {
     add(hasher, refPtr.get());
+}
+
+template<typename T, typename U, typename V> void add(Hasher& hasher, const Ref<T, U, V>& refPtr)
+{
+    add(hasher, refPtr.ptr());
 }
 
 template<typename T, typename U> void add(Hasher& hasher, const CheckedPtr<T, U>& checkedPtr)

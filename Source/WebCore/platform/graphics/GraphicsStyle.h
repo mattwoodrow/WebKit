@@ -27,6 +27,7 @@
 
 #include "Color.h"
 #include "FloatSize.h"
+#include <wtf/Hasher.h>
 #include <wtf/Vector.h>
 
 namespace WTF {
@@ -81,5 +82,22 @@ WEBCORE_EXPORT WTF::TextStream& operator<<(WTF::TextStream&, const GraphicsDropS
 WEBCORE_EXPORT WTF::TextStream& operator<<(WTF::TextStream&, const GraphicsGaussianBlur&);
 WEBCORE_EXPORT WTF::TextStream& operator<<(WTF::TextStream&, const GraphicsColorMatrix&);
 WEBCORE_EXPORT WTF::TextStream& operator<<(WTF::TextStream&, const GraphicsStyle&);
+
+inline void add(Hasher& hasher, const GraphicsDropShadow& shadow)
+{
+    add(hasher, shadow.offset, shadow.radius, shadow.color, shadow.radiusMode, shadow.opacity);
+}
+
+inline void add(Hasher& hasher, const GraphicsGaussianBlur& blur)
+{
+    add(hasher, blur.radius);
+}
+
+inline void add(Hasher& hasher, const GraphicsColorMatrix& matrix)
+{
+    for (size_t i = 0; i < 20; i++)
+        add(hasher, matrix.values[i]);
+}
+
 
 } // namespace WebCore

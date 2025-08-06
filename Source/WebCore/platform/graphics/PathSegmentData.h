@@ -29,6 +29,7 @@
 #include "FloatRoundedRect.h"
 #include "PathElement.h"
 #include "RotationDirection.h"
+#include <wtf/Hasher.h>
 
 namespace WTF {
 class TextStream;
@@ -57,6 +58,11 @@ struct PathMoveTo {
 
 WEBCORE_EXPORT WTF::TextStream& operator<<(WTF::TextStream&, const PathMoveTo&);
 
+inline void add(Hasher& hasher, const PathMoveTo& p)
+{
+    add(hasher, p.point);
+}
+
 struct PathLineTo {
     FloatPoint point;
 
@@ -77,6 +83,11 @@ struct PathLineTo {
 };
 
 WEBCORE_EXPORT WTF::TextStream& operator<<(WTF::TextStream&, const PathLineTo&);
+
+inline void add(Hasher& hasher, const PathLineTo& p)
+{
+    add(hasher, p.point);
+}
 
 struct PathQuadCurveTo {
     FloatPoint controlPoint;
@@ -99,6 +110,11 @@ struct PathQuadCurveTo {
 };
 
 WEBCORE_EXPORT WTF::TextStream& operator<<(WTF::TextStream&, const PathQuadCurveTo&);
+
+inline void add(Hasher& hasher, const PathQuadCurveTo& p)
+{
+    add(hasher, p.controlPoint, p.endPoint);
+}
 
 struct PathBezierCurveTo {
     FloatPoint controlPoint1;
@@ -123,6 +139,11 @@ struct PathBezierCurveTo {
 
 WEBCORE_EXPORT WTF::TextStream& operator<<(WTF::TextStream&, const PathBezierCurveTo&);
 
+inline void add(Hasher& hasher, const PathBezierCurveTo& p)
+{
+    add(hasher, p.controlPoint1, p.controlPoint2, p.endPoint);
+}
+
 struct PathArcTo {
     FloatPoint controlPoint1;
     FloatPoint controlPoint2;
@@ -142,6 +163,11 @@ struct PathArcTo {
 };
 
 WEBCORE_EXPORT WTF::TextStream& operator<<(WTF::TextStream&, const PathArcTo&);
+
+inline void add(Hasher& hasher, const PathArcTo& p)
+{
+    add(hasher, p.controlPoint1, p.controlPoint2, p.radius);
+}
 
 struct PathArc {
     FloatPoint center;
@@ -165,6 +191,11 @@ struct PathArc {
 
 WEBCORE_EXPORT WTF::TextStream& operator<<(WTF::TextStream&, const PathArc&);
 
+inline void add(Hasher& hasher, const PathArc& p)
+{
+    add(hasher, p.center, p.radius, p.startAngle, p.endAngle, p.direction);
+}
+
 struct PathClosedArc {
     PathArc arc;
 
@@ -182,6 +213,11 @@ struct PathClosedArc {
 };
 
 WEBCORE_EXPORT WTF::TextStream& operator<<(WTF::TextStream&, const PathClosedArc&);
+
+inline void add(Hasher& hasher, const PathClosedArc& p)
+{
+    add(hasher, p.arc);
+}
 
 struct PathEllipse {
     FloatPoint center;
@@ -207,6 +243,11 @@ struct PathEllipse {
 
 WEBCORE_EXPORT WTF::TextStream& operator<<(WTF::TextStream&, const PathEllipse&);
 
+inline void add(Hasher& hasher, const PathEllipse& p)
+{
+    add(hasher, p.center, p.radiusX, p.radiusY, p.rotation, p.startAngle, p.endAngle, p.direction);
+}
+
 struct PathEllipseInRect {
     FloatRect rect;
 
@@ -225,6 +266,11 @@ struct PathEllipseInRect {
 
 WEBCORE_EXPORT WTF::TextStream& operator<<(WTF::TextStream&, const PathEllipseInRect&);
 
+inline void add(Hasher& hasher, const PathEllipseInRect& p)
+{
+    add(hasher, p.rect);
+}
+
 struct PathRect {
     FloatRect rect;
 
@@ -242,6 +288,12 @@ struct PathRect {
 };
 
 WEBCORE_EXPORT WTF::TextStream& operator<<(WTF::TextStream&, const PathRect&);
+
+
+inline void add(Hasher& hasher, const PathRect& p)
+{
+    add(hasher, p.rect);
+}
 
 struct PathRoundedRect {
     enum class Strategy : uint8_t {
@@ -267,6 +319,11 @@ struct PathRoundedRect {
 
 WEBCORE_EXPORT WTF::TextStream& operator<<(WTF::TextStream&, const PathRoundedRect&);
 
+inline void add(Hasher& hasher, const PathRoundedRect& p)
+{
+    add(hasher, p.roundedRect, p.strategy);
+}
+
 struct PathContinuousRoundedRect {
     FloatRect rect;
     float cornerWidth;
@@ -286,6 +343,12 @@ struct PathContinuousRoundedRect {
 };
 
 WEBCORE_EXPORT WTF::TextStream& operator<<(WTF::TextStream&, const PathContinuousRoundedRect&);
+
+
+inline void add(Hasher& hasher, const PathContinuousRoundedRect& p)
+{
+    add(hasher, p.rect, p.cornerWidth, p.cornerHeight);
+}
 
 struct PathDataLine {
     PathDataLine(FloatPoint start, FloatPoint end)
@@ -322,6 +385,11 @@ private:
 
 WEBCORE_EXPORT WTF::TextStream& operator<<(WTF::TextStream&, const PathDataLine&);
 
+inline void add(Hasher& hasher, const PathDataLine& p)
+{
+    add(hasher, p.span()[0], p.span()[1], p.span()[2], p.span()[3]);
+}
+
 struct PathDataQuadCurve {
     FloatPoint start;
     FloatPoint controlPoint;
@@ -344,6 +412,11 @@ struct PathDataQuadCurve {
 };
 
 WEBCORE_EXPORT WTF::TextStream& operator<<(WTF::TextStream&, const PathDataQuadCurve&);
+
+inline void add(Hasher& hasher, const PathDataQuadCurve& p)
+{
+    add(hasher, p.start, p.controlPoint, p.endPoint);
+}
 
 struct PathDataBezierCurve {
     FloatPoint start;
@@ -369,6 +442,11 @@ struct PathDataBezierCurve {
 
 WEBCORE_EXPORT WTF::TextStream& operator<<(WTF::TextStream&, const PathDataBezierCurve&);
 
+inline void add(Hasher& hasher, const PathDataBezierCurve& p)
+{
+    add(hasher, p.start, p.controlPoint1, p.controlPoint2, p.endPoint);
+}
+
 struct PathDataArc {
     FloatPoint start;
     FloatPoint controlPoint1;
@@ -390,6 +468,11 @@ struct PathDataArc {
 
 WEBCORE_EXPORT WTF::TextStream& operator<<(WTF::TextStream&, const PathDataArc&);
 
+inline void add(Hasher& hasher, const PathDataArc& p)
+{
+    add(hasher, p.start, p.controlPoint1, p.controlPoint2, p.radius);
+}
+
 struct PathCloseSubpath {
     static constexpr bool canApplyElements = true;
     static constexpr bool canTransform = true;
@@ -408,5 +491,7 @@ struct PathCloseSubpath {
 };
 
 WEBCORE_EXPORT WTF::TextStream& operator<<(WTF::TextStream&, const PathCloseSubpath&);
+
+inline void add(Hasher&, const PathCloseSubpath&) { }
 
 } // namespace WebCore

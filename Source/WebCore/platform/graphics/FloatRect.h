@@ -28,6 +28,7 @@
 
 #include "FloatPoint.h"
 #include "LengthBox.h"
+#include <wtf/Hasher.h>
 
 #if USE(CG)
 typedef struct CGRect CGRect;
@@ -366,6 +367,11 @@ WEBCORE_EXPORT WTF::TextStream& operator<<(WTF::TextStream&, const FloatRect&);
 #ifdef __OBJC__
 WEBCORE_EXPORT id makeNSArrayElement(const FloatRect&);
 #endif
+
+inline void add(Hasher& hasher, const FloatRect& rect)
+{
+    add(hasher, rect.location(), rect.size());
+}
 
 }
 

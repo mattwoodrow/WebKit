@@ -29,6 +29,7 @@
 #include "ColorMatrix.h"
 #include "ColorModels.h"
 #include "ColorTransferFunctions.h"
+#include <wtf/Hasher.h>
 #include <optional>
 
 namespace WebCore {
@@ -748,6 +749,11 @@ struct ARGB {
 
     uint32_t value;
 };
+
+inline void add(Hasher& hasher, const RGBA& rgba)
+{
+    add(hasher, rgba.value);
+}
 
 }
 

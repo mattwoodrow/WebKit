@@ -67,7 +67,9 @@ class RemoteDisplayList final : public ThreadSafeRefCounted<RemoteDisplayList, W
     WTF_MAKE_TZONE_ALLOCATED_EXPORT(RemoteDisplayList, WEBCORE_EXPORT);
     WTF_MAKE_NONCOPYABLE(RemoteDisplayList);
 public:
-    WEBCORE_EXPORT RemoteDisplayList() = default;
+    RemoteDisplayList(unsigned hash)
+      : m_hash(hash)
+    { }
     WEBCORE_EXPORT ~RemoteDisplayList();
 
     RenderingResourceIdentifier renderingResourceIdentifier() const
@@ -82,9 +84,12 @@ public:
 
     void dump(WTF::TextStream&) const;
 
+    unsigned hash() { return m_hash; }
+
 private:
     WeakHashSet<RenderingResourceObserver> m_observers;
     RenderingResourceIdentifier m_identifier { RenderingResourceIdentifier::generate() };
+    unsigned m_hash { 0 };
 };
 
 WEBCORE_EXPORT WTF::TextStream& operator<<(WTF::TextStream&, const DisplayList&);

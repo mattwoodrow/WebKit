@@ -25,6 +25,7 @@
 
 #pragma once
 
+#include <wtf/Hasher.h>
 #include <wtf/Vector.h>
 
 namespace IPC {
@@ -60,5 +61,17 @@ private:
     size_t m_size { 0 };
     std::tuple<const Types*...> m_data;
 };
+
+template<typename... Types, size_t... Indices>
+inline void add(Hasher& hasher, const ArrayReferenceTuple<Types...>& arrayReference, std::index_sequence<Indices...>)
+{
+    (..., add(hasher, arrayReference.template span<Indices>()));
+}
+
+template<typename... Types>
+inline void add(Hasher& hasher, const  ArrayReferenceTuple<Types...>& arrayReference)
+{
+    add(hasher, arrayReference, std::index_sequence_for<Types...> { });
+}
 
 }

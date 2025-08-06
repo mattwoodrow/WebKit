@@ -35,6 +35,7 @@
 #include <optional>
 #include <span>
 #include <wtf/Forward.h>
+#include <wtf/Hasher.h>
 #include <wtf/TZoneMalloc.h>
 
 #if USE(CG)
@@ -254,5 +255,10 @@ constexpr std::span<const double, 6> AffineTransform::span() const
 }
 
 static constexpr inline AffineTransform identity;
+
+inline void add(Hasher& hasher, const AffineTransform& transform)
+{
+    add(hasher, transform.a(), transform.b(), transform.c(), transform.d(), transform.e(), transform.f());
+}
 
 }

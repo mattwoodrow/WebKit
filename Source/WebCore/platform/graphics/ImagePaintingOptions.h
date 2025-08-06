@@ -32,6 +32,7 @@
 #include "PlatformDynamicRangeLimit.h"
 #include <initializer_list>
 #include <wtf/Forward.h>
+#include <wtf/Hasher.h>
 
 namespace WebCore {
 
@@ -138,5 +139,13 @@ private:
 };
 
 WEBCORE_EXPORT TextStream& operator<<(TextStream&, ImagePaintingOptions);
+
+inline void add(Hasher& hasher, const ImagePaintingOptions& options)
+{
+    add(hasher, options.compositeOperator(), options.blendMode(), options.decodingMode(), options.orientation().orientation(), options.interpolationQuality(), options.allowImageSubsampling(), options.showDebugBackground(), options.drawsHDRContent(), options.headroom(), options.dynamicRangeLimit().value());
+#if USE(SKIA)
+    add(hasher, options.strictImageClamping());
+#endif
+}
 
 } // namespace WebCore

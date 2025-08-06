@@ -27,7 +27,7 @@
     DispatchedFrom=WebContent,
     DispatchedTo=GPU
 ]
-messages -> RemoteDisplayListRecorder Stream {
+messages -> RemoteDisplayListRecorder Stream Hashable {
     Save() StreamBatched
     Restore() StreamBatched
     Translate(float x, float y) StreamBatched

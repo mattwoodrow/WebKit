@@ -151,6 +151,13 @@ template<typename T> inline void add(Hasher& hasher, ObjectIdentifierReference<T
     add(hasher, reference.version());
 }
 
+template<typename T> inline void add(Hasher& hasher, ObjectIdentifierReadReference<T> reference)
+{
+    add(hasher, reference.identifier());
+    add(hasher, reference.version());
+    add(hasher, reference.reference());
+}
+
 template<typename T>
 TextStream& operator<<(TextStream& ts, const IPC::ObjectIdentifierReference<T>& reference)
 {

@@ -26,6 +26,7 @@
 #pragma once
 
 #include <wtf/Forward.h>
+#include <wtf/Hasher.h>
 
 #if PLATFORM(COCOA)
 
@@ -60,6 +61,11 @@ private:
 };
 
 WTF_EXPORT_PRIVATE void deallocateSendRightSafely(mach_port_t);
+
+inline void add(Hasher& hasher, const MachSendRight& right)
+{
+    add(hasher, (unsigned)right.sendRight());
+}
 
 }
 

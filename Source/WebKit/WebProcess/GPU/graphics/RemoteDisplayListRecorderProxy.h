@@ -30,6 +30,7 @@
 #include "RemoteDisplayListRecorderIdentifier.h"
 #include <WebCore/DisplayListRecorder.h>
 #include <WebCore/GraphicsContext.h>
+#include <wtf/Hasher.h>
 #include <wtf/TZoneMalloc.h>
 #include <wtf/ThreadSafeWeakPtr.h>
 #include <wtf/URL.h>
@@ -178,6 +179,7 @@ private:
     WeakPtr<RemoteRenderingBackendProxy> m_renderingBackend;
     std::optional<WebCore::ContentsFormat> m_contentsFormat;
     ThreadSafeWeakPtr<RemoteImageBufferProxy> m_client;
+    Hasher m_hasher;
 #if PLATFORM(COCOA) && ENABLE(VIDEO)
     Lock m_sharedVideoFrameWriterLock;
     std::unique_ptr<SharedVideoFrameWriter> m_sharedVideoFrameWriter WTF_GUARDED_BY_LOCK(m_sharedVideoFrameWriterLock);

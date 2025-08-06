@@ -28,6 +28,7 @@
 
 #include "AffineTransform.h"
 #include "FloatSize.h"
+#include <wtf/Hasher.h>
 #include <stdint.h>
 
 // X11 headers define a bunch of macros with common terms, interfering with WebCore and WTF enum values.
@@ -175,5 +176,10 @@ private:
 };
 
 TextStream& operator<<(TextStream&, ImageOrientation::Orientation);
+
+inline void add(Hasher& hasher, const ImageOrientation& o)
+{
+    add(hasher, o.orientation());
+}
 
 } // namespace WebCore

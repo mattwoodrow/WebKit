@@ -30,6 +30,7 @@
 #include "AffineTransform.h"
 #include "SourceImage.h"
 
+#include <wtf/Hasher.h>
 #include <wtf/Ref.h>
 #include <wtf/RefCounted.h>
 
@@ -95,6 +96,12 @@ private:
     SourceImage m_tileImage;
     Parameters m_parameters;
 };
+
+inline void add(Hasher& hasher, const PatternParameters& params)
+{
+    add(hasher, params.repeatX, params.repeatY, params.patternSpaceTransform);
+}
+
 
 
 } //namespace

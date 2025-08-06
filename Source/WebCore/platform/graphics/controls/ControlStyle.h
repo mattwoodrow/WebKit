@@ -27,6 +27,7 @@
 
 #include "Color.h"
 #include "LengthBox.h"
+#include <wtf/Hasher.h>
 
 namespace WTF {
 class TextStream;
@@ -65,5 +66,10 @@ struct ControlStyle {
 
 WEBCORE_EXPORT TextStream& operator<<(TextStream&, ControlStyle::State);
 WEBCORE_EXPORT TextStream& operator<<(TextStream&, const ControlStyle&);
+
+inline void add(Hasher& hasher, const ControlStyle& style)
+{
+    add(hasher, style.states, style.fontSize, style.zoomFactor, style.accentColor, style.textColor, style.borderWidth);
+}
 
 } // namespace WebCore

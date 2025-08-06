@@ -30,6 +30,7 @@
 #include "WindRule.h"
 #include <optional>
 #include <wtf/Forward.h>
+#include <wtf/Hasher.h>
 
 namespace WTF {
 class TextStream;
@@ -186,5 +187,15 @@ WEBCORE_EXPORT WTF::TextStream& operator<<(WTF::TextStream&, LineJoin);
 WEBCORE_EXPORT WTF::TextStream& operator<<(WTF::TextStream&, StrokeStyle);
 WEBCORE_EXPORT WTF::TextStream& operator<<(WTF::TextStream&, TextDrawingMode);
 WEBCORE_EXPORT WTF::TextStream& operator<<(WTF::TextStream&, WindRule);
+
+inline void add(Hasher& hasher, const DocumentMarkerLineStyle& style)
+{
+    add(hasher, style.mode, style.color);
+}
+
+inline void add(Hasher& hasher, const CompositeMode& mode)
+{
+    add(hasher, mode.operation, mode.blendMode);
+}
 
 } // namespace WebCore

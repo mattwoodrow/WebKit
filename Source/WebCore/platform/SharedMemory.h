@@ -28,6 +28,7 @@
 
 #include <wtf/ArgumentCoder.h>
 #include <wtf/Forward.h>
+#include <wtf/Hasher.h>
 #include <wtf/ThreadSafeRefCounted.h>
 
 #if USE(UNIX_DOMAIN_SOCKETS)
@@ -90,6 +91,7 @@ public:
 
 private:
     friend struct IPC::ArgumentCoder<SharedMemoryHandle, void>;
+    friend void add(Hasher&, const SharedMemoryHandle&);
     friend class SharedMemory;
 
     Type m_handle;
@@ -153,5 +155,10 @@ private:
     Win32Handle m_handle;
 #endif
 };
+
+inline void add(Hasher& hasher, const SharedMemoryHandle& handle)
+{
+    add(hasher, handle.m_handle);
+}
 
 } // namespace WebCore

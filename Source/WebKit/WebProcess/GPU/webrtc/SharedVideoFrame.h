@@ -33,6 +33,7 @@
 #include <WebCore/PixelBufferConformerCV.h>
 #include <WebCore/ProcessIdentity.h>
 #include <WebCore/SharedMemory.h>
+#include <wtf/Hasher.h>
 #include <wtf/MediaTime.h>
 #include <wtf/RefPtr.h>
 #include <wtf/RetainPtr.h>
@@ -132,6 +133,11 @@ private:
     WebCore::IntSize m_blackFrameSize;
     RetainPtr<CVPixelBufferRef> m_blackFrame;
 };
+
+inline void add(Hasher& hasher, const SharedVideoFrame& frame)
+{
+    add(hasher, frame.time, frame.mirrored, frame.rotation, frame.buffer);
+}
 
 }
 

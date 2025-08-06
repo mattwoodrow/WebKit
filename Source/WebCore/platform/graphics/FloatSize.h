@@ -30,6 +30,7 @@
 
 #include "DoubleSize.h"
 #include "IntPoint.h"
+#include <wtf/Hasher.h>
 #include <wtf/JSONValues.h>
 #include <wtf/MathExtras.h>
 #include <wtf/text/WTFString.h>
@@ -273,6 +274,11 @@ constexpr bool FloatSize::isNaN() const
 }
 
 WEBCORE_EXPORT WTF::TextStream& operator<<(WTF::TextStream&, const FloatSize&);
+
+inline void add(Hasher& hasher, const FloatSize& size)
+{
+    add(hasher, size.width(), size.height());
+}
 
 } // namespace WebCore
 

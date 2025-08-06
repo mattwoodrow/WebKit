@@ -29,6 +29,7 @@
 #pragma once
 
 #include <wtf/FastMalloc.h>
+#include <wtf/Hasher.h>
 #include <wtf/JSONValues.h>
 #include <wtf/Seconds.h>
 #include <wtf/text/WTFString.h>
@@ -190,6 +191,11 @@ template<> struct LogArgument<MediaTimeRange> {
 };
 
 WTF_EXPORT_PRIVATE TextStream& operator<<(TextStream&, const MediaTime&);
+
+inline void add(Hasher& hasher, const MediaTime& time)
+{
+    add(hasher, time.toMicroseconds());
+}
 
 }
 

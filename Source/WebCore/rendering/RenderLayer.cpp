@@ -3418,6 +3418,9 @@ void RenderLayer::paintLayerWithPaintTree(GraphicsContext& context, const LayerP
     if (!isSelfPaintingLayer() && !hasSelfPaintingLayerDescendant())
         return;
 
+    // FIXME: This is going to break the 'all descendants have same scroller' accumulation
+    // on ancestors. We need to cache the required input data, or move that computation to the
+    // layer builder. Maybe just cache 'has placeholder' descendant?
     if (m_hasValidPaintTree) {
         context.asRecorder()->append(PlaceholderPaintItem { renderer() });
         return;
@@ -3488,11 +3491,17 @@ void RenderLayer::paintLayerWithPaintTree(GraphicsContext& context, const LayerP
     // FIXME: Scrollers shouldn't require a RenderLayer (since it affects the paint order
     // incorrectly), this should be a function of renderer traversal.
     // FIXME: Can we build these trees (scrolls and clips) in advance, similar to how we do
-    // for RenderLayer trees. Having these largely be constant between paints would be useful I think.
-    if (usesCompositedScrolling() || (isRenderViewLayer() && renderer().view().frameView().isScrollable()))
-        m_paintScroller = adoptRef(new PaintScroller(renderer(),  context.asRecorder()->m_currentScroller.get()));
+    // for RenderLayer trees. Having these largely be constant between paints would be useful I think for
+    // pointer-based equality (and less time spent here per-paint).
+    if (usesCompositedScrolling())
+        m_paintScroller = adoptRef(new PaintScroller(renderer(),  context.asRecorder()->m_currentScroller.get(), scrollableArea()->scrollPosition()));
+    else if (isRenderViewLayer() && renderer().view().frameView().isScrollable())
+        m_paintScroller = adoptRef(new PaintScroller(renderer(),  context.asRecorder()->m_currentScroller.get(), renderer().view().frameView().scrollPosition()));
     else
         m_paintScroller = context.asRecorder()->m_currentScroller;
+
+    if (behavesAsFixed())
+        transformedPaintingInfo.paintDirtyRect.moveBy(-renderer().view().frameView().scrollPosition());
 
     bool hasTransform = !!this->transform();
     bool hasOpacity = renderer().opacity() != 1;
@@ -3507,9 +3516,13 @@ void RenderLayer::paintLayerWithPaintTree(GraphicsContext& context, const LayerP
     // block for fixed we could clip here and then reset clipping for descendants. Or we could detect
     // that no descendants escape (with precomputed RenderLayer flags?).
     // We could probably also walk up the clip chain and find a subset that does apply.
+    // This is true for scrollers too, the container can only be said to 'have' a scroller if its
+    // whole subtree is scrolled.
+    // Maybe containers should just not have a concept of clip/scroll/bounds, and the layer builder thread
+    // can figure them out (once placeholders have been resolved).
     if (childScope.isValid() && hasOpacity) {
         auto bounds = calculateLayerBounds(transformedPaintingInfo.rootLayer, LayoutSize(), { RenderLayer::IncludeFilterOutsets, RenderLayer::ExcludeHiddenDescendants, RenderLayer::IncludeCompositedDescendants, RenderLayer::PreserveAncestorFlags });
-        childScope.wrapInContainer<OpacityPaintItem>(renderer(), renderer().opacity(), bounds, nullptr, context.asRecorder()->m_currentScroller.get());
+        childScope.wrapInContainer<OpacityPaintItem>(renderer(), renderer().opacity(), bounds, nullptr, nullptr);
     }
 
     // Transforms are always a containing block for all descendants, so we cleared the clip for the
@@ -3529,7 +3542,7 @@ void RenderLayer::paintLayerWithPaintTree(GraphicsContext& context, const LayerP
     // However, if we end up painting this container as a whole into a single layer, then knowing the
     // union bounds of the descendants would be useful.
     if (childScope.isValid() && !hasTransform && !hasOpacity)
-        childScope.wrapInContainer<ContainerPaintItem>(renderer(), PaintItemType::Container, LayoutRect { }, nullptr, context.asRecorder()->m_currentScroller.get());
+        childScope.wrapInContainer<ContainerPaintItem>(renderer(), PaintItemType::Container, LayoutRect { }, nullptr, nullptr);
 
     if (childScope.isValid())
         m_hasValidPaintTree = true;
@@ -3972,6 +3985,10 @@ void RenderLayer::paintLayerContents(GraphicsContext& context, const LayerPainti
     updateLayerListsIfNeeded();
 
     LayoutSize offsetFromRoot = offsetFromAncestor(paintingInfo.rootLayer);
+    if (paintingInfo.paintBehavior & PaintBehavior::BuildPaintTree && behavesAsFixed()) {
+        offsetFromRoot.setWidth(offsetFromRoot.width() - renderer().view().frameView().scrollPosition().x());
+        offsetFromRoot.setHeight(offsetFromRoot.height() - renderer().view().frameView().scrollPosition().y());
+    }
 
     // FIXME: We shouldn't have to disable subpixel quantization for overflow clips or subframes once we scroll those
     // things on the scrolling thread.
@@ -7062,6 +7079,7 @@ TextStream& operator<<(TextStream& ts, const PaintScroller& paintScroller)
 #ifndef NDEBUG
     ts << "(renderer " << paintScroller.m_rendererName;
 #endif
+    ts << "(scroll-pos " << paintScroller.m_scrollPosition << ") ";
     if (paintScroller.m_parent)
         ts << ", " << *paintScroller.m_parent;
 

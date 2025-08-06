@@ -842,6 +842,15 @@ static PaintClip* scrolledClip(const PaintItem& item)
     return clip.get();
 }
 
+static ScrollPosition accumulatedScrollPosition(const PaintScroller* scroller)
+{
+    if (!scroller)
+        return { };
+    if (!scroller->m_parent)
+        return scroller->m_scrollPosition;
+    return scroller->m_scrollPosition + accumulatedScrollPosition(scroller->m_parent.get());
+}
+
 class PaintLayerBuilder : public ThreadSafeRefCounted<PaintLayerBuilder>
 {
 public:
@@ -869,7 +878,7 @@ public:
         virtual ContainerLayer* asContainerLayer() { return nullptr; }
         virtual const ContainerLayer* asContainerLayer() const { return nullptr; }
 
-        Ref<GraphicsLayer> createLayer(GraphicsLayerFactory* factory, GraphicsLayer* parent, const LayoutRect& rect, FloatPoint offset, GraphicsLayer* existingLayer, bool showDebugBorders)
+        Ref<GraphicsLayer> createLayer(GraphicsLayerFactory* factory, GraphicsLayer* parent, const LayoutRect& rect, FloatPoint offset, PaintScroller* scroller, GraphicsLayer* existingLayer, bool showDebugBorders)
         {
             Ref<GraphicsLayer> layer = existingLayer ? Ref { *existingLayer } : GraphicsLayer::create(factory, *this);
             if (existingLayer) {
@@ -877,8 +886,12 @@ public:
                 layer->setNeedsDisplay();
             }
 
+            //FIXME: I think it'd be much clearer if we had a templated rect class so that rects
+            // that haven't yet been adjusted for their scroller chain (or parent graphics layer)
+            // can't be interchanged with rects that have.
             FloatRect bounds = snappedIntRect(rect);
             bounds.moveBy(-offset);
+            bounds.moveBy(-accumulatedScrollPosition(scroller));
 
             layer->setAnchorPoint({ });
             layer->setPosition(bounds.location());
@@ -891,13 +904,13 @@ public:
             return layer;
         }
 
-        RefPtr<GraphicsLayer> createClipLayers(GraphicsLayerFactory* factory, PaintClip* clip, FloatPoint& offset, bool showDebugBorders, Vector<Ref<GraphicsLayer>>* existingClipLayers)
+        RefPtr<GraphicsLayer> createClipLayers(GraphicsLayerFactory* factory, PaintClip* clip, PaintClip* parentClip, FloatPoint& offset, bool showDebugBorders, Vector<Ref<GraphicsLayer>>* existingClipLayers)
         {
-            if (!clip)
+            if (!clip || clip == parentClip)
                 return nullptr;
 
             // FIXME: Needing to recurse up the clip chain to build the outermost clip first feels pretty yuck.
-            RefPtr<GraphicsLayer> parentClip = createClipLayers(factory, clip->m_parent.get(), offset, showDebugBorders, existingClipLayers);
+            RefPtr<GraphicsLayer> parentClipLayer = createClipLayers(factory, clip->m_parent.get(), parentClip, offset, showDebugBorders, existingClipLayers);
 
             RefPtr<GraphicsLayer> existingClipLayer;
             if (existingClipLayers && existingClipLayers->size()) {
@@ -905,7 +918,7 @@ public:
                 existingClipLayers->removeAt(0);
             }
 
-            Ref<GraphicsLayer> clipLayer = createLayer(factory, parentClip.get(), clip->m_rect, {}, existingClipLayer.get(), showDebugBorders);
+            Ref<GraphicsLayer> clipLayer = createLayer(factory, parentClipLayer.get(), clip->m_rect, offset, clip->m_scroller.get(), existingClipLayer.get(), showDebugBorders);
 
             TextStream ts;
             ts << "PaintClip: " << *clip;
@@ -917,20 +930,19 @@ public:
             return clipLayer;
         }
 
-        virtual void finalize(GraphicsLayerFactory* factory, PaintLayer* existingLayer, bool showDebugBorders)
+        virtual FloatPoint finalize(GraphicsLayerFactory* factory, PaintClip* parentClip, const FloatPoint& parentOffset, PaintLayer* existingLayer, bool showDebugBorders)
         {
             // FIXME: Sibling layers will frequently have clips in common, we should try
             // to not build a bespoke set of clip layers each time.
-            // We should also track what clip was applied to our ancestor, and only clip up
-            // to that.
-            FloatPoint offset;
-            RefPtr<GraphicsLayer> clipLayer = createClipLayers(factory, m_clip.get(), offset, showDebugBorders, existingLayer ? &existingLayer->m_clipLayers : nullptr);
+            FloatPoint offset = parentOffset;
+            RefPtr<GraphicsLayer> clipLayer = createClipLayers(factory, m_clip.get(), parentClip, offset, showDebugBorders, existingLayer ? &existingLayer->m_clipLayers : nullptr);
 
             RefPtr<GraphicsLayer> existingGraphicsLayer;
             if (existingLayer)
                 existingGraphicsLayer = std::exchange(existingLayer->m_primaryLayer, nullptr);
 
-            m_primaryLayer = createLayer(factory, clipLayer.get(), m_bounds, offset, existingGraphicsLayer.get(), showDebugBorders);
+            m_primaryLayer = createLayer(factory, clipLayer.get(), m_bounds, offset, m_scroller.get(), existingGraphicsLayer.get(), showDebugBorders);
+            return offset;
         }
 
         void tiledBackingUsageChanged(const GraphicsLayer* layer, bool usingTiledBacking) final
@@ -1017,13 +1029,14 @@ public:
             }
         }
 
-        void finalize(GraphicsLayerFactory* factory, PaintLayer* existingLayer, bool showDebugBorders) final
+        FloatPoint finalize(GraphicsLayerFactory* factory, PaintClip* parentClip, const FloatPoint& parentOffset, PaintLayer* existingLayer, bool showDebugBorders) final
         {
-            PaintLayer::finalize(factory, existingLayer, showDebugBorders);
+            FloatPoint offset = PaintLayer::finalize(factory, parentClip, parentOffset, existingLayer, showDebugBorders);
             m_primaryLayer->setDrawsContent(true);
             m_primaryLayer->setAcceleratesDrawing(true);
             m_primaryLayer->setAllowsTiling(!!m_scroller);
             m_primaryLayer->setContentsOpaque(m_opaque);
+            return offset;
         }
     };
 
@@ -1037,9 +1050,9 @@ public:
             , m_item(item)
         {}
 
-        void finalize(GraphicsLayerFactory* factory, PaintLayer* existingLayer, bool showDebugBorders) final
+        FloatPoint finalize(GraphicsLayerFactory* factory, PaintClip* parentClip, const FloatPoint& parentOffset, PaintLayer* existingLayer, bool showDebugBorders) final
         {
-            PaintLayer::finalize(factory, existingLayer, showDebugBorders);
+            FloatPoint offset = PaintLayer::finalize(factory, parentClip, parentOffset, existingLayer, showDebugBorders);
 
             WTF::switchOn(m_item,
                 [&](const OpacityPaintItem& item) {
@@ -1050,6 +1063,8 @@ public:
                 },
                 [&](const CSSTransformPaintItem& item) {
                     m_primaryLayer->setTransform(item.m_transform);
+                    // Transforms establish a new coordinate space.
+                    offset = { };
                 },
                 [&](const auto&) {
                     ASSERT_NOT_REACHED();
@@ -1064,11 +1079,12 @@ public:
             Vector<Ref<GraphicsLayer>> childrenGraphicsLayers;
             for (const auto& layer : m_layers) {
                 PaintLayer* existingChildLayer = existingChildLayers ? PaintLayerBuilder::findExistingPaintLayerFor(layer.get(), *existingChildLayers) : nullptr;
-                layer->finalize(factory, existingChildLayer, showDebugBorders);
+                layer->finalize(factory, m_clip.get(), offset, existingChildLayer, showDebugBorders);
                 childrenGraphicsLayers.append(*layer->outermostLayer());
             }
 
             m_primaryLayer->setChildren(WTFMove(childrenGraphicsLayers));
+            return offset;
         }
 
         ContainerLayer* asContainerLayer() final { return this; }
@@ -1204,7 +1220,7 @@ public:
     {
         Vector<Ref<GraphicsLayer>> result;
         for (const auto& layer : m_layers) {
-            layer->finalize(factory, findExistingPaintLayerFor(layer, m_prevLayers), showDebugBorders);
+            layer->finalize(factory, nullptr, {}, findExistingPaintLayerFor(layer, m_prevLayers), showDebugBorders);
             result.append(*layer->outermostLayer());
         }
 

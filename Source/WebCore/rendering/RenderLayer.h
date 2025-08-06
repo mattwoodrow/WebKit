@@ -159,8 +159,9 @@ enum class UpdateBackingSharingFlags {
 
 class PaintScroller : public ThreadSafeRefCounted<PaintScroller> {
 public:
-    PaintScroller(RenderElement& element, PaintScroller* parent)
+    PaintScroller(RenderElement& element, PaintScroller* parent, const ScrollPosition& scrollPosition)
         : m_parent(parent)
+        , m_scrollPosition(scrollPosition)
     {
         UNUSED_PARAM(element);
 #ifndef NDEBUG
@@ -174,6 +175,7 @@ public:
     String m_rendererName;
 #endif
     RefPtr<PaintScroller> m_parent;
+    ScrollPosition m_scrollPosition;
 };
 
 class PaintClip : public ThreadSafeRefCounted<PaintClip>
@@ -1548,7 +1550,9 @@ inline PaintItemType paintItemTypeFromPhase(PaintPhase phase)
 inline PaintPhase paintPhaseFromPaintItemType(PaintItemType type)
 {
     ASSERT(type < PaintItemType::Opacity);
-    return (PaintPhase)(1 << (uint16_t)type);
+    if (type == PaintItemType::BlockBackground)
+        return PaintPhase::BlockBackground;
+    return (PaintPhase)(1 << ((uint16_t)type - 1));
 }
 
 // Experimenting with variants so that I can create a Vector of paint items inline. Maybe an awful idea.

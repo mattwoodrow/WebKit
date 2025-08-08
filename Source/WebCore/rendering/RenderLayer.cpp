@@ -6978,6 +6978,7 @@ TextStream& operator<<(TextStream& ts, const PaintClip& paintClip)
 
 static void dumpPaintItemProperties(TextStream& ts, const PaintItem& paintItem)
 {
+    ts << "(" << paintItem.m_id << ", " << paintItem.m_phase << ") ";
 #ifndef NDEBUG
     ts << "(renderer " << paintItem.m_rendererName << ") ";
 #endif

@@ -1595,12 +1595,18 @@ public:
 #endif
     }
 
-    // I think we're going to need a threadsafe way to track identity across
-    // paints/instances. This is not a good solution to that.
+    // This is a threadsafe way to track identity across paints/instances. It does suffer from
+    // pointer-reuse issues, but invalidation compares the hash of the displaylist once it matches
+    // so that should fix it. The worst case is that a removed+add gets interpretred as a reorder
+    // and overinvalidates.
+    // FIXME: Maybe we should just compute a hash (of the painting-relevant data) for all items and
+    // use that as the unique identifier.
     uintptr_t m_id;
 #ifndef NDEBUG
     String m_rendererName;
 #endif
+    // This is mostly duplicated data from the Variant's type. Possibly move this to
+    // be specific to DisplayListPaintItem.
     PaintItemType m_phase;
     LayoutRect m_bounds;
     RefPtr<PaintClip> m_clip;
@@ -1628,12 +1634,17 @@ public:
     {}
 };
 
+// FIXME: This wastes spaces since the vector is sized to that of the largest item.
+// Need to keep track of what the various sizes actually are, and try to reduce them,
+// possibly using out-of-line storage for data.
 class ContainerPaintItem;
 class OpacityPaintItem;
 class CSSTransformPaintItem;
 class AffineTransformPaintItem;
 typedef Variant<DisplayListPaintItem, ContainerPaintItem, OpacityPaintItem, AffineTransformPaintItem, CSSTransformPaintItem, PlaceholderPaintItem> PaintItems;
 
+// Container type items current wrap a sublist of items. They could potentially be implemented as
+// a start/end pair of items so that we keep a single contiguous vector for the entire rendering.
 class ContainerPaintItem : public PaintItem {
 public:
     ContainerPaintItem(Vector<PaintItems>&& items, RenderElement& renderer, PaintItemType type, LayoutRect bounds, PaintClip* clip, PaintScroller* scroller)
@@ -1693,6 +1704,29 @@ inline PaintItemType paintItemType(const PaintItems& item)
         });
 }
 
+inline bool paintItemMatches(const PaintItems& a, const PaintItems& b)
+{
+    return paintItemID(a) == paintItemID(b) && paintItemType(a) == paintItemType(b);
+}
+
+inline const PaintItem* asPaintItem(const PaintItems& item)
+{
+    return WTF::switchOn(item,
+        [&](const auto& item) -> const PaintItem* {
+            return &item;
+        });
+}
+
+inline const ContainerPaintItem* asContainerPaintItem(const PaintItems& item)
+{
+    return WTF::switchOn(item,
+        [&](const ContainerPaintItem& item) -> const ContainerPaintItem* {
+            return &item;
+        },
+        [&](const auto&) -> const ContainerPaintItem* {
+            return nullptr;
+        });
+}
 
 class PaintTreeRecorder
 {

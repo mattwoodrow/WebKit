@@ -441,7 +441,7 @@ void BackgroundPainter::paintFillLayer(const Color& color, const FillLayer& bgLa
         LayoutRect backgroundRect(scrolledPaintRect);
         bool applyBoxShadowToBackground = boxShadowShouldBeAppliedToBackground(m_renderer, rect.location(), bleedAvoidance, inlineBoxIterator);
         if (applyBoxShadowToBackground || !shouldPaintBackgroundImage || !bgLayer.hasOpaqueImage(m_renderer) || !bgLayer.hasRepeatXY() || bgLayer.isEmpty()) {
-            if (!applyBoxShadowToBackground)
+            if (!applyBoxShadowToBackground && !m_paintInfo.paintBehavior.contains(PaintBehavior::BuildPaintTree))
                 backgroundRect.intersect(m_paintInfo.rect);
 
             // If we have an alpha and we are painting the root element, blend with the base background color.

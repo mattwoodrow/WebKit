@@ -249,9 +249,12 @@ RefPtr<const DisplayList::DisplayList> FontCascade::displayListForTextRun(Graphi
     if (glyphBuffer.isEmpty())
         return nullptr;
 
+    // FIXME: The display list hashing for paint tree comparison can't inspect into decomposed glyphs
+    // and these get recreated too often (for unchanged content). Use normal DrawGlyphs for now so that
+    // the hashing works.
     DisplayList::RecorderImpl recordingContext(context.state().clone(GraphicsContextState::Purpose::Initial), { },
         context.getCTM(GraphicsContext::DefinitelyIncludeDeviceScale), context.colorSpace(),
-        DisplayList::Recorder::DrawGlyphsMode::DeconstructAndRetain);
+        DisplayList::Recorder::DrawGlyphsMode::Deconstruct);
 
     FloatPoint startPoint = toFloatPoint(WebCore::size(glyphBuffer.initialAdvance()));
     drawGlyphBuffer(recordingContext, glyphBuffer, startPoint, customFontNotReadyAction);

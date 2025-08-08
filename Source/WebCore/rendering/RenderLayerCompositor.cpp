@@ -851,6 +851,41 @@ static ScrollPosition accumulatedScrollPosition(const PaintScroller* scroller)
     return scroller->m_scrollPosition + accumulatedScrollPosition(scroller->m_parent.get());
 }
 
+static bool paintedClipsMatch(const PaintItem&, const PaintItem&)
+{
+    // Implement me
+    return true;
+}
+
+static bool itemsPaintTheSame(const PaintItems& a, const PaintItems& b)
+{
+    ASSERT(paintItemMatches(a, b));
+
+    if (!paintedClipsMatch(*asPaintItem(a), *asPaintItem(b)))
+        return false;
+
+    return WTF::switchOn(a,
+        [&](const DisplayListPaintItem& item) {
+            return item.displayList->hash() == std::get<DisplayListPaintItem>(b).displayList->hash();
+        },
+        [&](const ContainerPaintItem&) {
+            return true;
+        },
+        [&](const PlaceholderPaintItem&) {
+            ASSERT_NOT_REACHED();
+            return false;
+        },
+        [&](const OpacityPaintItem& item) {
+            return item.m_opacity == std::get<OpacityPaintItem>(b).m_opacity;
+        },
+        [&](const AffineTransformPaintItem& item) {
+            return item.m_transform == std::get<AffineTransformPaintItem>(b).m_transform;
+        },
+        [&](const CSSTransformPaintItem& item) {
+            return item.m_transform == std::get<CSSTransformPaintItem>(b).m_transform;
+        });
+}
+
 class PaintLayerBuilder : public ThreadSafeRefCounted<PaintLayerBuilder>
 {
 public:
@@ -881,10 +916,8 @@ public:
         Ref<GraphicsLayer> createLayer(GraphicsLayerFactory* factory, GraphicsLayer* parent, const LayoutRect& rect, FloatPoint offset, PaintScroller* scroller, GraphicsLayer* existingLayer, bool showDebugBorders)
         {
             Ref<GraphicsLayer> layer = existingLayer ? Ref { *existingLayer } : GraphicsLayer::create(factory, *this);
-            if (existingLayer) {
+            if (existingLayer)
                 layer->setClient(*this);
-                layer->setNeedsDisplay();
-            }
 
             //FIXME: I think it'd be much clearer if we had a templated rect class so that rects
             // that haven't yet been adjusted for their scroller chain (or parent graphics layer)
@@ -955,7 +988,7 @@ public:
         String debugDescription() {
             TextStream ts;
             if (asDisplayListLayer()) {
-                ts << "(displaylist layer "_s;
+                ts << "(displaylist layer "_s << this << " ";
                 if (asDisplayListLayer()->m_opaque)
                     ts << "(opaque) ";
             } else
@@ -1029,6 +1062,83 @@ public:
             }
         }
 
+        size_t findItemFrom(size_t start, const Vector<PaintItems>& existingItems, const PaintItems& item)
+        {
+            // O(n^2) if the lists are distinct, we should probably be smarter.
+            for (size_t i = start; i < existingItems.size(); i++) {
+                if (paintItemMatches(existingItems[i], item))
+                    return i;
+            }
+            return notFound;
+        }
+
+        void comparePaintedItems(PaintLayer& existingLayer, const Vector<PaintItems>& newItems, const Vector<PaintItems>& existingItems)
+        {
+            auto invalidateItem = [&](PaintLayer& layer, const PaintItems& item) {
+                LayoutRect bounds = asPaintItem(item)->m_bounds;
+                bounds.moveBy(-layer.m_bounds.location());
+#ifndef NDEBUG
+                ALWAYS_LOG_WITH_STREAM(stream << "Invalidating graphics layer rect " << bounds);
+#endif
+                m_primaryLayer->setNeedsDisplayInRect(enclosingIntRect(bounds));
+            };
+            auto invalidateNewItem = [&](const PaintItems& item) { invalidateItem(*this, item); };
+            auto invalidateOldItem = [&](const PaintItems& item) { invalidateItem(existingLayer, item); };
+
+            // FIXME: We can probably detect simple cases where we invalidate the whole layer
+            // and bail out from looking at the rest of the items.
+            size_t nextUnmatchedExistingItem = 0;
+            for (const auto& newItem : newItems) {
+                size_t indexInOldList = findItemFrom(nextUnmatchedExistingItem, existingItems, newItem);
+                if (indexInOldList == notFound) {
+#ifndef NDEBUG
+                    ALWAYS_LOG_WITH_STREAM(stream << "New item (" << paintItemID(newItem) << ", " << paintItemType(newItem) << ") not found in old layer");
+#endif
+                    invalidateNewItem(newItem);
+                    continue;
+                }
+
+                for (size_t i = nextUnmatchedExistingItem; i < indexInOldList; i++) {
+#ifndef NDEBUG
+                    ALWAYS_LOG_WITH_STREAM(stream << "Old item (" << paintItemID(existingItems[i]) << ", " << paintItemType(existingItems[i]) << ") not found in layer (in order)");
+#endif
+                    // Invalidate skipped over existing items. This is pessimistic since they only
+                    // really need to be invalidated if they overlap the reordered item.
+                    invalidateOldItem(existingItems[i]);
+                }
+
+                const PaintItems& existingItem = existingItems[indexInOldList];
+                nextUnmatchedExistingItem = indexInOldList + 1;
+
+                // FIXME: Items that were inserted to replace a placeholder definitely
+                // are going to match. We should detect this and avoid extra work.
+
+                if (!itemsPaintTheSame(newItem, existingItem)) {
+#ifndef NDEBUG
+                    ALWAYS_LOG_WITH_STREAM(stream << "Item (" << paintItemID(newItem) << ", " << paintItemType(newItem) << ") has changed");
+#endif
+                    invalidateNewItem(newItem);
+                    invalidateOldItem(existingItem);
+                    continue;
+                }
+
+                if (auto* newContainerItem = asContainerPaintItem(newItem)) {
+                    // FIXME: Transform containers change coordinate space, and we
+                    // need to account for that when invalidating inside the sublist.
+                    comparePaintedItems(existingLayer, newContainerItem->paintItems, asContainerPaintItem(existingItem)->paintItems);
+                }
+            }
+
+            // Invalidate remaining existing items.
+            for (size_t i = nextUnmatchedExistingItem; i < existingItems.size(); i++) {
+#ifndef NDEBUG
+                ALWAYS_LOG_WITH_STREAM(stream << "Old item (" << paintItemID(existingItems[i]) << ", " << paintItemType(existingItems[i]) << ") not found in layer (in order)");
+#endif
+                invalidateOldItem(existingItems[i]);
+
+            }
+        }
+
         FloatPoint finalize(GraphicsLayerFactory* factory, PaintClip* parentClip, const FloatPoint& parentOffset, PaintLayer* existingLayer, bool showDebugBorders) final
         {
             FloatPoint offset = PaintLayer::finalize(factory, parentClip, parentOffset, existingLayer, showDebugBorders);
@@ -1036,6 +1146,13 @@ public:
             m_primaryLayer->setAcceleratesDrawing(true);
             m_primaryLayer->setAllowsTiling(!!m_scroller);
             m_primaryLayer->setContentsOpaque(m_opaque);
+            if (existingLayer) {
+#ifndef NDEBUG
+                ALWAYS_LOG_WITH_STREAM(stream << "Comparing items to compute invalidations for " << this);
+#endif
+                comparePaintedItems(*existingLayer, m_items, existingLayer->asDisplayListLayer()->m_items);
+            } else
+                m_primaryLayer->setNeedsDisplay();
             return offset;
         }
     };
@@ -1138,6 +1255,9 @@ public:
                 addPaintedItem(item);
             },
             [&](ContainerPaintItem& container) {
+                // Plain container items help communicate the RenderLayer tree structure.
+                // We should maybe add them to a displaylist layer as a whole instead of
+                // flattening here.
                 m_itemsMap.add(container.m_id, &item);
                 // Maybe assert we're not throwing away clips/scrollers here?
                 build(layers, container.paintItems);

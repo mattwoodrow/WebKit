@@ -1579,20 +1579,18 @@ public:
         m_rendererName = stream.release();
 #endif
     }
-    PaintItem(const InlineDisplay::Box* box, PaintItemType type, LayoutRect bounds, PaintClip* clip, PaintScroller* scroller)
-        : m_id(uintptr_t(box))
+
+    PaintItem(const RenderObject& renderer, size_t lineIndex, PaintItemType type, LayoutRect bounds, PaintClip* clip, PaintScroller* scroller)
+        : m_id(uintptr_t(&renderer) | (lineIndex << 48))
         , m_phase(type)
         , m_bounds(bounds)
         , m_clip(clip)
         , m_scroller(scroller)
     {
-        UNUSED_PARAM(box);
+        ASSERT(lineIndex <= UINT16_MAX);
 #ifndef NDEBUG
         TextStream stream;
-        if (box)
-            stream << *box;
-        else
-            stream << "ellipsis";
+        stream << renderer << "(line " << lineIndex << ")";
         m_rendererName = stream.release();
 #endif
     }
@@ -1616,8 +1614,8 @@ public:
     DisplayListPaintItem(RenderElement& renderer, PaintPhase phase, LayoutRect bounds, PaintClip* clip, PaintScroller* scroller, bool opaque = false)
         : PaintItem(renderer, paintItemTypeFromPhase(phase), bounds, clip, scroller, opaque)
     {}
-    DisplayListPaintItem(const InlineDisplay::Box* box, PaintPhase phase, LayoutRect bounds, PaintClip* clip, PaintScroller* scroller)
-        : PaintItem(box, paintItemTypeFromPhase(phase), bounds, clip, scroller)
+    DisplayListPaintItem(const RenderObject& renderer, size_t lineIndex, PaintPhase phase, LayoutRect bounds, PaintClip* clip, PaintScroller* scroller)
+        : PaintItem(renderer, lineIndex, paintItemTypeFromPhase(phase), bounds, clip, scroller)
     {}
 
     RefPtr<DisplayList::RemoteDisplayList> displayList;

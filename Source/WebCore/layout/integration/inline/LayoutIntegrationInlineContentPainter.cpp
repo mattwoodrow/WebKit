@@ -66,7 +66,7 @@ void InlineContentPainter::paintEllipsis(size_t lineIndex)
         ASSERT(recorder);
 
         //LayoutRect overflow = enclosingLayoutRect(box.inkOverflow());
-        recorder->append(DisplayListPaintItem { nullptr, m_paintInfo.phase, { }, recorder->m_currentClip.get(), recorder->m_currentScroller.get() });
+        recorder->append(DisplayListPaintItem { m_root, lineIndex, m_paintInfo.phase, { }, recorder->m_currentClip.get(), recorder->m_currentScroller.get() });
     }
 
     EllipsisBoxPainter { lineBox, m_paintInfo, m_paintOffset, root().selectionForegroundColor(), root().selectionBackgroundColor() }.paint();
@@ -127,7 +127,8 @@ void InlineContentPainter::paintDisplayBox(const InlineDisplay::Box& box)
 
             LayoutRect overflow = enclosingLayoutRect(box.inkOverflow());
             overflow.moveBy(m_paintOffset);
-            recorder->append(DisplayListPaintItem { &box, m_paintInfo.phase, overflow, recorder->m_currentClip.get(), recorder->m_currentScroller.get() });
+            ASSERT(box.layoutBox().rendererForIntegration());
+            recorder->append(DisplayListPaintItem { *box.layoutBox().rendererForIntegration(), box.lineIndex(), m_paintInfo.phase, overflow, recorder->m_currentClip.get(), recorder->m_currentScroller.get() });
         }
 
         InlineBoxPainter { m_inlineContent, box, inlineBoxPaintInfo, m_paintOffset }.paint();
@@ -149,7 +150,8 @@ void InlineContentPainter::paintDisplayBox(const InlineDisplay::Box& box)
 
             LayoutRect overflow = enclosingLayoutRect(box.inkOverflow());
             overflow.moveBy(m_paintOffset);
-            recorder->append(DisplayListPaintItem { &box, m_paintInfo.phase, overflow, recorder->m_currentClip.get(), recorder->m_currentScroller.get() });
+            ASSERT(box.layoutBox().rendererForIntegration());
+            recorder->append(DisplayListPaintItem { *box.layoutBox().rendererForIntegration(), box.lineIndex(), m_paintInfo.phase, overflow, recorder->m_currentClip.get(), recorder->m_currentScroller.get() });
         }
 
         TextBoxPainter { m_inlineContent, box, box.style(), m_paintInfo, m_paintOffset }.paint();

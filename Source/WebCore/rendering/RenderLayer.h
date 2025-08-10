@@ -1595,6 +1595,40 @@ public:
 #endif
     }
 
+    PaintItem(PaintItem&& other)
+        : m_id(other.m_id)
+#ifndef NDEBUG
+        , m_rendererName(other.m_rendererName)
+#endif
+        , m_phase(other.m_phase)
+        , m_bounds(other.m_bounds)
+        , m_clip(other.m_clip)
+        , m_scroller(other.m_scroller)
+        , m_needsCompositing(other.m_needsCompositing)
+        , m_opaque(other.m_opaque)
+    {
+        other.m_dead = true;
+    }
+
+    PaintItem& operator=(PaintItem&& other)
+    {
+        m_id = other.m_id;
+#ifndef NDEBUG
+        m_rendererName = other.m_rendererName;
+#endif
+        m_phase = other.m_phase;
+        m_bounds = other.m_bounds;
+        m_clip = other.m_clip;
+        m_scroller = other.m_scroller;
+        m_needsCompositing = other.m_needsCompositing;
+        m_opaque = other.m_opaque;
+        other.m_dead = true;
+        return *this;
+    }
+    PaintItem(const PaintItem&) = default;
+    PaintItem& operator=(const PaintItem&) = default;
+
+
     // This is a threadsafe way to track identity across paints/instances. It does suffer from
     // pointer-reuse issues, but invalidation compares the hash of the displaylist once it matches
     // so that should fix it. The worst case is that a removed+add gets interpretred as a reorder
@@ -1613,6 +1647,7 @@ public:
     RefPtr<PaintScroller> m_scroller;
     bool m_needsCompositing { false };
     bool m_opaque { false };
+    bool m_dead { false };
 };
 
 class DisplayListPaintItem : public PaintItem {
@@ -1653,7 +1688,9 @@ public:
     {}
 
     Vector<PaintItems> paintItems;
+    bool containsPlaceholder { false };
 };
+
 
 class OpacityPaintItem : public ContainerPaintItem {
 public:
@@ -1704,6 +1741,22 @@ inline PaintItemType paintItemType(const PaintItems& item)
         });
 }
 
+inline PaintScroller* paintItemScroller(const PaintItems& item)
+{
+    return WTF::switchOn(item,
+        [&](const auto& item) {
+            return item.m_scroller.get();
+        });
+}
+
+inline bool paintItemNeedsCompositing(const PaintItems& item)
+{
+    return WTF::switchOn(item,
+        [&](const auto& item) {
+            return item.m_needsCompositing;
+        });
+}
+
 inline bool paintItemMatches(const PaintItems& a, const PaintItems& b)
 {
     return paintItemID(a) == paintItemID(b) && paintItemType(a) == paintItemType(b);
@@ -1746,6 +1799,9 @@ public:
         if ((m_commonScroller && item.m_scroller != *m_commonScroller) || item.m_needsCompositing)
             m_commonScroller = std::nullopt;
 
+        if constexpr (std::is_same_v<T, PlaceholderPaintItem>)
+            m_containsPlaceholder = true;
+
         m_currentPaintItems->append(WTFMove(item));
     }
 
@@ -1755,6 +1811,7 @@ public:
     Vector<PaintItems> m_rootPaintItems;
     Vector<PaintItems>* m_currentPaintItems;
     std::optional<RefPtr<PaintScroller>> m_commonScroller { nullptr };
+    bool m_containsPlaceholder { false };
     RefPtr<PaintClip> m_currentClip;
     RefPtr<PaintScroller> m_currentScroller;
 };
@@ -1766,11 +1823,13 @@ public:
         : m_recorder(context.asRecorder())
         , m_previousPaintItems(m_recorder ? m_recorder->m_currentPaintItems : nullptr)
         , m_previousCommonScroller(m_recorder ? m_recorder->m_commonScroller : std::nullopt)
+        , m_previousContainsPlaceholder(m_recorder ? m_recorder->m_containsPlaceholder : false)
     {
         if (m_recorder && emplace) {
             m_recorder->storeDisplayListOnTopItem(context.tryTakeDisplayList());
             m_recorder->m_currentPaintItems = &m_paintItems;
             m_recorder->m_commonScroller = m_recorder->m_currentScroller;
+            m_recorder->m_containsPlaceholder = false;
         } else
             m_recorder = nullptr;
     }
@@ -1779,6 +1838,8 @@ public:
         if (m_recorder) {
             if (m_recorder->m_commonScroller && m_recorder->m_commonScroller != m_previousCommonScroller)
                 m_recorder->m_commonScroller = std::nullopt;
+            if (!m_recorder->m_containsPlaceholder)
+                m_recorder->m_containsPlaceholder = m_previousContainsPlaceholder;
             m_recorder->m_currentPaintItems = m_previousPaintItems;
             m_recorder->m_currentPaintItems->appendVector(WTFMove(m_paintItems));
         }
@@ -1798,6 +1859,7 @@ public:
         m_recorder->m_commonScroller = item.m_scroller;
         if (needsCompositing)
             item.m_needsCompositing = true;
+        item.containsPlaceholder = m_recorder->m_containsPlaceholder;
         m_recorder->append(WTFMove(item));
     }
 
@@ -1805,6 +1867,7 @@ private:
     PaintTreeRecorder* m_recorder;
     Vector<PaintItems>* m_previousPaintItems;
     std::optional<RefPtr<PaintScroller>> m_previousCommonScroller;
+    bool m_previousContainsPlaceholder;
     Vector<PaintItems> m_paintItems;
 
 };

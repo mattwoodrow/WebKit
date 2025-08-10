@@ -1111,7 +1111,8 @@ public:
                 nextUnmatchedExistingItem = indexInOldList + 1;
 
                 // FIXME: Items that were inserted to replace a placeholder definitely
-                // are going to match. We should detect this and avoid extra work.
+                // are going to match. We should detect this and avoid extra work (especially
+                // from recursing into them). Accumlating hashes up the tree would solve this.
 
                 if (!itemsPaintTheSame(newItem, existingItem)) {
 #ifndef NDEBUG
@@ -1215,9 +1216,17 @@ public:
         m_itemsMap.swap(m_prevItemsMap);
 
         m_items = WTFMove(items);
+        resolvePlaceholders(m_items);
         build(m_layers, m_items);
 
+        removeFromOldCache(m_prevItems);
         m_prevItems.clear();
+
+        // This should now only contain containers that were within a reused subtree
+        // for a placeholder.
+        for (auto iter : m_prevItemsMap) {
+            m_itemsMap.add(iter.key, iter.value);
+        }
         m_prevItemsMap.clear();
     }
 
@@ -1236,6 +1245,9 @@ public:
             // last layer, we could append into something further back if the overlap aligns.
             // I think for each layer we want to skip-over, we need to find the nearest common ancestor
             // scroller, compute the clipped extents of each in that space and check if they intersect.
+            // FIXME2: This has the potential to create giant layers with small amounts of content in
+            // each corner. Maybe we should split off a new layer for appends that don't overlap the existing
+            // content, and then do a post-processing pass to see if we can make smart merging decisions.
             if (!layers.size() || !layers.last()->asDisplayListLayer() || layers.last()->m_scroller != item.m_scroller || layers.last()->m_clip != scrolledClip(item))
                 layers.append(adoptRef(*new DisplayListLayer(item.m_scroller.get(), scrolledClip(item))));
 
@@ -1254,20 +1266,8 @@ public:
             [&](DisplayListPaintItem& item) {
                 addPaintedItem(item);
             },
-            [&](ContainerPaintItem& container) {
-                // Plain container items help communicate the RenderLayer tree structure.
-                // We should maybe add them to a displaylist layer as a whole instead of
-                // flattening here.
-                m_itemsMap.add(container.m_id, &item);
-                // Maybe assert we're not throwing away clips/scrollers here?
-                build(layers, container.paintItems);
-            },
-            [&](PlaceholderPaintItem& placeholder) {
-                ASSERT(m_prevItemsMap.contains(placeholder.m_id));
-                // Overwrite item in-place with a copy from the old items, then recurse into
-                // this function to try the switch again.
-                item = *m_prevItemsMap.get(placeholder.m_id);
-                buildItem(layers, item);
+            [&](PlaceholderPaintItem&) {
+                ASSERT_NOT_REACHED();
             },
             [&](auto& container) {
                 m_itemsMap.add(container.m_id, &item);
@@ -1275,8 +1275,14 @@ public:
                 if (!container.m_needsCompositing) {
                     // FIXME: Handle 'opaque' for containers. Should we be computing this
                     // at paint tree build time, or doing so here?
-                    resolvePlaceholders(container.paintItems);
                     addPaintedItem(container);
+                    return;
+                }
+
+                // If we're just a wrapper container without effects, then don't bother
+                // creating a GraphicsLayer.
+                if (container.m_phase == PaintItemType::Container) {
+                    build(layers, container.paintItems);
                     return;
                 }
 
@@ -1292,19 +1298,52 @@ public:
             [&](PlaceholderPaintItem& placeholder) {
                 ASSERT(m_prevItemsMap.contains(placeholder.m_id));
                 // Overwrite item in-place with a copy from the old items, then recurse into
-                // this function to try the switch again.
-                item = *m_prevItemsMap.get(placeholder.m_id);
+                // this function to try the switch again. The move constructor should
+                // mark the moved-from item as dead.
+                item = WTFMove(*m_prevItemsMap.get(placeholder.m_id));
                 resolvePlaceholder(item);
             },
             [&](auto& container) {
+                // This only writes if there wasn't an existing value, so if there are multiple nested
+                // containers with the same id, this only stores the outermost.
                 m_itemsMap.add(container.m_id, &item);
-                resolvePlaceholders(container.paintItems);
+                if (!container.containsPlaceholder)
+                    return;
+                resolvePlaceholders(container.paintItems, &container);
+                container.containsPlaceholder = false;
             });
     }
-    void resolvePlaceholders(Vector<PaintItems>& items)
+    void resolvePlaceholders(Vector<PaintItems>& items, ContainerPaintItem* container = nullptr)
     {
-        for (auto& item : items)
+        std::optional<RefPtr<PaintScroller>> commonScroller;
+        if (container)
+            commonScroller = container->m_scroller;
+        for (auto& item : items) {
             resolvePlaceholder(item);
+            if ((commonScroller && paintItemScroller(item) != *commonScroller) || paintItemNeedsCompositing(item))
+                commonScroller = std::nullopt;
+        }
+
+        if (container && !commonScroller)
+            container->m_needsCompositing = true;
+    }
+
+    void removeFromOldCache(const Vector<PaintItems>& items)
+    {
+        for (auto& item : items) {
+            WTF::switchOn(item,
+                [&](const DisplayListPaintItem&) {
+                },
+                [&](const PlaceholderPaintItem&) {
+                    ASSERT_NOT_REACHED();
+                },
+                [&](const auto& container) {
+                    m_prevItemsMap.remove(container.m_id);
+                    if (container.m_dead)
+                        return;
+                    removeFromOldCache(container.paintItems);
+                });
+        }
     }
 
     void build(Vector<Ref<PaintLayer>>& layers, Vector<PaintItems>& items)

@@ -3418,15 +3418,16 @@ void RenderLayer::paintLayerWithPaintTree(GraphicsContext& context, const LayerP
     if (!isSelfPaintingLayer() && !hasSelfPaintingLayerDescendant())
         return;
 
-    // FIXME: This is going to break the 'all descendants have same scroller' accumulation
-    // on ancestors. We need to cache the required input data, or move that computation to the
-    // layer builder. Maybe just cache 'has placeholder' descendant?
     if (m_hasValidPaintTree) {
         context.asRecorder()->append(PlaceholderPaintItem { renderer() });
         return;
     }
 
     LayoutSize offsetFromRoot = offsetFromAncestor(paintingInfo.rootLayer);
+    if (behavesAsFixed()) {
+        offsetFromRoot.setWidth(offsetFromRoot.width() - renderer().view().frameView().scrollPosition().x());
+        offsetFromRoot.setHeight(offsetFromRoot.height() - renderer().view().frameView().scrollPosition().y());
+    }
 
     RecordingClipStateSaver recordingStateSaver(context);
 
@@ -3532,7 +3533,7 @@ void RenderLayer::paintLayerWithPaintTree(GraphicsContext& context, const LayerP
 
 
     if (childScope.isValid() && hasTransform) {
-        auto bounds = calculateLayerBounds(paintingInfo.rootLayer, LayoutSize(), { RenderLayer::IncludeFilterOutsets, RenderLayer::ExcludeHiddenDescendants, RenderLayer::IncludeCompositedDescendants, RenderLayer::PreserveAncestorFlags, RenderLayer::IncludeSelfTransform });
+        auto bounds = calculateLayerBounds(paintingInfo.rootLayer, offsetFromRoot, { RenderLayer::IncludeFilterOutsets, RenderLayer::ExcludeHiddenDescendants, RenderLayer::IncludeCompositedDescendants, RenderLayer::PreserveAncestorFlags, RenderLayer::IncludeSelfTransform });
         childScope.wrapInContainer<CSSTransformPaintItem>(renderer(), transform, bounds, context.asRecorder()->m_currentClip.get(), context.asRecorder()->m_currentScroller.get());
     }
 
@@ -3541,8 +3542,10 @@ void RenderLayer::paintLayerWithPaintTree(GraphicsContext& context, const LayerP
     // to instead focus on the clipped scrollable extents of each scrollable piece when computing overlap.
     // However, if we end up painting this container as a whole into a single layer, then knowing the
     // union bounds of the descendants would be useful.
-    if (childScope.isValid() && !hasTransform && !hasOpacity)
-        childScope.wrapInContainer<ContainerPaintItem>(renderer(), PaintItemType::Container, LayoutRect { }, nullptr, nullptr);
+    if (childScope.isValid() && !hasTransform && !hasOpacity) {
+        auto bounds = calculateLayerBounds(paintingInfo.rootLayer, offsetFromRoot, { RenderLayer::IncludeFilterOutsets, RenderLayer::ExcludeHiddenDescendants, RenderLayer::IncludeCompositedDescendants, RenderLayer::PreserveAncestorFlags, RenderLayer::IncludeSelfTransform });
+        childScope.wrapInContainer<ContainerPaintItem>(renderer(), PaintItemType::Container, bounds, nullptr, nullptr);
+    }
 
     if (childScope.isValid())
         m_hasValidPaintTree = true;

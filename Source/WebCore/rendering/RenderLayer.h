@@ -58,6 +58,7 @@
 #include <bit>
 #include <memory>
 #include <wtf/CheckedRef.h>
+#include <wtf/Hasher.h>
 #include <wtf/Markable.h>
 #include <wtf/WeakPtr.h>
 
@@ -1688,6 +1689,7 @@ public:
     {}
 
     Vector<PaintItems> paintItems;
+    unsigned contentsHash;
     bool containsPlaceholder { false };
 };
 
@@ -1781,6 +1783,19 @@ inline const ContainerPaintItem* asContainerPaintItem(const PaintItems& item)
         });
 }
 
+inline void add(Hasher& hasher, const PaintItems& item)
+{
+    return WTF::switchOn(item,
+        [&](const DisplayListPaintItem& item) {
+            add(hasher, item.displayList->hash());
+        },
+        [&](const PlaceholderPaintItem&) {
+        },
+        [&](const ContainerPaintItem& container) {
+            add(hasher, container.contentsHash);
+        });
+}
+
 class PaintTreeRecorder
 {
 public:
@@ -1802,6 +1817,9 @@ public:
         if constexpr (std::is_same_v<T, PlaceholderPaintItem>)
             m_containsPlaceholder = true;
 
+        if constexpr (!std::is_same_v<T, DisplayListPaintItem>)
+            add(m_currentHash, item);
+
         m_currentPaintItems->append(WTFMove(item));
     }
 
@@ -1814,6 +1832,7 @@ public:
     bool m_containsPlaceholder { false };
     RefPtr<PaintClip> m_currentClip;
     RefPtr<PaintScroller> m_currentScroller;
+    Hasher m_currentHash;
 };
 
 class ContainerPaintItemScope
@@ -1830,6 +1849,8 @@ public:
             m_recorder->m_currentPaintItems = &m_paintItems;
             m_recorder->m_commonScroller = m_recorder->m_currentScroller;
             m_recorder->m_containsPlaceholder = false;
+            m_previousHasher = m_recorder->m_currentHash;
+            m_recorder->m_currentHash = { };
         } else
             m_recorder = nullptr;
     }
@@ -1840,6 +1861,9 @@ public:
                 m_recorder->m_commonScroller = std::nullopt;
             if (!m_recorder->m_containsPlaceholder)
                 m_recorder->m_containsPlaceholder = m_previousContainsPlaceholder;
+            unsigned current = m_previousHasher.hash();
+            m_recorder->m_currentHash = m_previousHasher;
+            add(m_recorder->m_currentHash, current);
             m_recorder->m_currentPaintItems = m_previousPaintItems;
             m_recorder->m_currentPaintItems->appendVector(WTFMove(m_paintItems));
         }
@@ -1860,6 +1884,8 @@ public:
         if (needsCompositing)
             item.m_needsCompositing = true;
         item.containsPlaceholder = m_recorder->m_containsPlaceholder;
+        item.contentsHash = m_recorder->m_currentHash.hash();
+        m_recorder->m_currentHash = { };
         m_recorder->append(WTFMove(item));
     }
 
@@ -1867,6 +1893,7 @@ private:
     PaintTreeRecorder* m_recorder;
     Vector<PaintItems>* m_previousPaintItems;
     std::optional<RefPtr<PaintScroller>> m_previousCommonScroller;
+    Hasher m_previousHasher;
     bool m_previousContainsPlaceholder;
     Vector<PaintItems> m_paintItems;
 

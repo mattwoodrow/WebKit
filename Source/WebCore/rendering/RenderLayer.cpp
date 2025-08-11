@@ -309,6 +309,7 @@ void PaintTreeRecorder::storeDisplayListOnTopItem(RefPtr<DisplayList::RemoteDisp
         ASSERT(false);
     }
     dlItem.displayList = WTFMove(displayList);
+    add(m_currentHash, dlItem);
 }
 
 #undef ALWAYS_LOG_WITH_STREAM_MULTI

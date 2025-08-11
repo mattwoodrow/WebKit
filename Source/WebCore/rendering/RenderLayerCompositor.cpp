@@ -79,6 +79,7 @@
 #include "ViewTransition.h"
 #include "WillChangeData.h"
 #include "WorkerClient.h"
+#include <wtf/Hasher.h>
 #include <wtf/HexNumber.h>
 #include <wtf/MemoryPressureHandler.h>
 #include <wtf/ObjectIdentifier.h>
@@ -1124,6 +1125,9 @@ public:
                 }
 
                 if (auto* newContainerItem = asContainerPaintItem(newItem)) {
+                    // If the contents match, then no need to traverse the children.
+                    if (newContainerItem->contentsHash == asContainerPaintItem(existingItem)->contentsHash)
+                        continue;
                     // FIXME: Transform containers change coordinate space, and we
                     // need to account for that when invalidating inside the sublist.
                     comparePaintedItems(existingLayer, newContainerItem->paintItems, asContainerPaintItem(existingItem)->paintItems);
@@ -1286,14 +1290,20 @@ public:
                     return;
                 }
 
+                // FIXME: If a layer subtree is entirely unchanged, we should be able
+                // to just use the existing one. This should be detectable by looking
+                // for placeholders, or matching hashes. Unfortunately we've already
+                // resolved placeholders here, but haven't yet matched up against the
+                // old layers to get an existing item to compare to.
                 layers.append(buildContainerLayer(container));
             });
     }
 
-    void resolvePlaceholder(PaintItems& item)
+    void resolvePlaceholder(PaintItems& item, Hasher& hasher)
     {
         WTF::switchOn(item,
-            [&](DisplayListPaintItem&) {
+            [&](DisplayListPaintItem& item) {
+                add(hasher, item.displayList->hash());
             },
             [&](PlaceholderPaintItem& placeholder) {
                 ASSERT(m_prevItemsMap.contains(placeholder.m_id));
@@ -1301,31 +1311,38 @@ public:
                 // this function to try the switch again. The move constructor should
                 // mark the moved-from item as dead.
                 item = WTFMove(*m_prevItemsMap.get(placeholder.m_id));
-                resolvePlaceholder(item);
+                resolvePlaceholder(item, hasher);
             },
             [&](auto& container) {
                 // This only writes if there wasn't an existing value, so if there are multiple nested
                 // containers with the same id, this only stores the outermost.
                 m_itemsMap.add(container.m_id, &item);
-                if (!container.containsPlaceholder)
+                if (!container.containsPlaceholder) {
+                    add(hasher, container.contentsHash);
                     return;
+                }
                 resolvePlaceholders(container.paintItems, &container);
                 container.containsPlaceholder = false;
+                add(hasher, container.contentsHash);
             });
     }
     void resolvePlaceholders(Vector<PaintItems>& items, ContainerPaintItem* container = nullptr)
     {
         std::optional<RefPtr<PaintScroller>> commonScroller;
+        Hasher hasher;
         if (container)
             commonScroller = container->m_scroller;
         for (auto& item : items) {
-            resolvePlaceholder(item);
+            resolvePlaceholder(item, hasher);
             if ((commonScroller && paintItemScroller(item) != *commonScroller) || paintItemNeedsCompositing(item))
                 commonScroller = std::nullopt;
         }
 
-        if (container && !commonScroller)
-            container->m_needsCompositing = true;
+        if (container) {
+            if (!commonScroller)
+                container->m_needsCompositing = true;
+            container->contentsHash = hasher.hash();
+        }
     }
 
     void removeFromOldCache(const Vector<PaintItems>& items)

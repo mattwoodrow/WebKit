@@ -113,7 +113,7 @@ std::optional<WebCore::DestinationColorSpace> RemoteLayerTreeContext::displayCol
 
 UseLosslessCompression RemoteLayerTreeContext::useIOSurfaceLosslessCompression() const
 {
-    return m_webPage->isIOSurfaceLosslessCompressionEnabled() ? UseLosslessCompression::Yes : UseLosslessCompression::No;
+    return m_webPage ? (m_webPage->isIOSurfaceLosslessCompressionEnabled() ? UseLosslessCompression::Yes : UseLosslessCompression::No) : UseLosslessCompression::Yes;
 }
 
 #if PLATFORM(IOS_FAMILY)

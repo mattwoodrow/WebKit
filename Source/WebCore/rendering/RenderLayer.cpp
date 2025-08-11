@@ -2353,8 +2353,7 @@ static inline bool isContainerForPositioned(RenderLayer& layer, PositionType pos
         return layer.renderer().canContainAbsolutelyPositionedObjects();
     
     default:
-        ASSERT_NOT_REACHED();
-        return false;
+        return true;
     }
 }
 
@@ -3431,18 +3430,47 @@ void RenderLayer::paintLayerWithPaintTree(GraphicsContext& context, const LayerP
 
     RecordingClipStateSaver recordingStateSaver(context);
 
-    // Surely there is a better way to do this. We only need to adjust if we've stepped into
-    // a layer where the parent layer isn't on the CB chain
-    if (RenderLayer *containingLayer = enclosingLayerInContainingBlockOrder()) {
-        // This is wrong, need to grab the scroller/clip from our parent document
-        // if one exists, otherwise we're fixing things inside iframes to ICB of the main
-        // frame.
-        if (containingLayer->isRenderViewLayer() && renderer().isFixedPositioned()) {
-            context.asRecorder()->m_currentClip = nullptr;
-            context.asRecorder()->m_currentScroller = nullptr;
+    if (auto* container = this->parent()) {
+        // Walk up to the RenderLayer that is our containing block, collecting any intermediates
+        // that use 'clip'. Use the containing blocks clip, plus those collected clips. This skips
+        // any overflow clips that do not apply.
+        Vector<RenderLayer*, 2> clippedNonContainingAncestors;
+        while (container && !isContainerForPositioned(*container, renderer().style().position(), establishesTopLayer())) {
+            if (container->renderer().hasClip())
+                clippedNonContainingAncestors.append(container);
+            container = container->parent();
+        }
+
+        if (behavesAsFixed()) {
+            if (enclosingFrameRenderLayer()) {
+                context.asRecorder()->m_currentScroller = enclosingFrameRenderLayer()->m_paintScroller;
+                context.asRecorder()->m_currentClip = enclosingFrameRenderLayer()->m_paintClip;
+            } else {
+                context.asRecorder()->m_currentScroller = nullptr;
+                context.asRecorder()->m_currentClip = container->m_paintClip;
+            }
         } else {
-            context.asRecorder()->m_currentClip = containingLayer->m_paintClip;
-            context.asRecorder()->m_currentScroller = containingLayer->m_paintScroller;
+            context.asRecorder()->m_currentScroller = container->m_paintScroller;
+            context.asRecorder()->m_currentClip = container->m_paintClip;
+        }
+
+        for (auto* ancestor : clippedNonContainingAncestors | std::views::reverse) {
+            if (CheckedPtr box = dynamicDowncast<RenderBox>(ancestor->renderer())) {
+                LayoutRect clip = box->clipRect({ });
+                clip.move(ancestor->offsetFromAncestor(paintingInfo.rootLayer));
+                recordingStateSaver.pushClip(clip);
+            }
+        }
+    }
+
+    // Will need to make sure this gets applied to the filter container once implemented,
+    // while making sure the overflow clip below gets applied to the content inside the
+    // filter.
+    if (renderer().hasClip()) {
+        if (CheckedPtr box = dynamicDowncast<RenderBox>(renderer())) {
+            LayoutRect clip = box->clipRect({ });
+            clip.move(offsetFromRoot);
+            recordingStateSaver.pushClip(clip);
         }
     }
 
@@ -3528,6 +3556,9 @@ void RenderLayer::paintLayerWithPaintTree(GraphicsContext& context, const LayerP
 
     // Transforms are always a containing block for all descendants, so we cleared the clip for the
     // subtree build, and now we can put it just on the transform container.
+    // This will also be true for filters too, and maybe some other types. If there are multiple of
+    // these types we need to clear/reset the clip at the right time so that it just goes on the
+    // outermost of the 'capturing' containers.
     if (transformClip)
         context.asRecorder()->m_currentClip = transformClip;
 

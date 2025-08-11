@@ -226,7 +226,7 @@ bool StreamServerConnection::processFence(Decoder& decoder)
 {
     auto fence = decoder.decode<uint64_t>();
     if (!fence) {
-        protectedConnection()->dispatchDidReceiveInvalidMessage(decoder.messageName(), decoder.indexOfObjectFailingDecoding());
+        protectedConnection()->dispatchDidReceiveInvalidMessage(decoder.messageName(), decoder.indicesOfObjectsFailingDecoding());
         return false;
     }
 
@@ -242,7 +242,7 @@ bool StreamServerConnection::processWaitFence(Decoder& decoder)
 {
     auto fence = decoder.decode<uint64_t>();
     if (!fence) {
-        protectedConnection()->dispatchDidReceiveInvalidMessage(decoder.messageName(), decoder.indexOfObjectFailingDecoding());
+        protectedConnection()->dispatchDidReceiveInvalidMessage(decoder.messageName(), decoder.indicesOfObjectsFailingDecoding());
         return false;
     }
 

@@ -1172,8 +1172,10 @@ RefPtr<ThreadedLayerBuilderClient> WebChromeClient::createThreadedLayerBuilderCl
     if (!page)
         return nullptr;
 
+#if ENABLE(TILED_CA_DRAWING_AREA)
     if (page->drawingArea()->type() != DrawingAreaType::RemoteLayerTree)
         return nullptr;
+#endif
 
     Ref remoteRenderingBackendProxy = page->ensureRemoteRenderingBackendProxy();
     return static_cast<RemoteLayerTreeDrawingArea*>(page->drawingArea())->createThreadedLayerBuilderClient(dispatcher, remoteRenderingBackendProxy->renderingBackendIdentifier());

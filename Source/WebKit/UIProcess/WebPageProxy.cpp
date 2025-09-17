@@ -6759,6 +6759,15 @@ void WebPageProxy::updateScrollingMode(IPC::Connection& connection, WebCore::Fra
     }
 }
 
+void WebPageProxy::setFramePrinting(IPC::Connection& connection, WebCore::FrameIdentifier frameID, bool printing, const WebCore::FloatSize& pageSize, const WebCore::FloatSize& originalPageSize, float maximumShrinkRatio, WebCore::AdjustViewSize shouldAdjustViewSize)
+{
+    forEachWebContentProcess([&](auto& webProcess, auto pageID) {
+        if (webProcess.hasConnection(connection))
+            return;
+        webProcess.send(Messages::WebPage::SetFramePrinting(frameID, printing, pageSize, originalPageSize, maximumShrinkRatio, shouldAdjustViewSize), pageID);
+    });
+}
+
 void WebPageProxy::resolveAccessibilityHitTestForTesting(WebCore::FrameIdentifier frameID, WebCore::IntPoint point, CompletionHandler<void(String)>&& callback)
 {
     sendWithAsyncReplyToProcessContainingFrame(frameID, Messages::WebPage::ResolveAccessibilityHitTestForTesting(frameID, point), WTFMove(callback));

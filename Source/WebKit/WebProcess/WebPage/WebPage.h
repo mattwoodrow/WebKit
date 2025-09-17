@@ -223,6 +223,7 @@ class TextCheckingRequest;
 class VisiblePosition;
 
 enum class ActivityState : uint16_t;
+enum class AdjustViewSize : bool;
 enum class COEPDisposition : bool;
 enum class CaretAnimatorType : uint8_t;
 enum class CreateNewGroupForHighlight : bool;
@@ -2019,6 +2020,7 @@ public:
     void setObscuredContentInsets(const WebCore::FloatBoxExtent&);
 
     void updateOpener(WebCore::FrameIdentifier, WebCore::FrameIdentifier);
+    void setFramePrinting(WebCore::FrameIdentifier, bool printing, WebCore::FloatSize pageSize, WebCore::FloatSize originalPageSize, float maximumShrinkRatio, WebCore::AdjustViewSize shouldAdjustViewSize);
 
     WebHistoryItemClient& historyItemClient() const { return m_historyItemClient.get(); }
 

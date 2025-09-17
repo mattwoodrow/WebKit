@@ -198,6 +198,11 @@ void WebRemoteFrameClient::updateOpener(const WebCore::Frame& newOpener)
     WebFrameLoaderClient::updateOpener(newOpener);
 }
 
+void WebRemoteFrameClient::setPrinting(bool printing, FloatSize pageSize, FloatSize originalPageSize, float maximumShrinkRatio, AdjustViewSize adjustViewSize)
+{
+    WebFrameLoaderClient::setPrinting(printing, pageSize, originalPageSize, maximumShrinkRatio, adjustViewSize);
+}
+
 void WebRemoteFrameClient::applyWebsitePolicies(WebsitePoliciesData&& websitePolicies)
 {
     RefPtr coreFrame = m_frame->coreRemoteFrame();

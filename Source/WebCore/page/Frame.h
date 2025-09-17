@@ -40,6 +40,7 @@ namespace WebCore {
 
 class DOMWindow;
 class Event;
+class FloatSize;
 class FrameConsoleClient;
 class FrameView;
 class FrameLoaderClient;
@@ -51,6 +52,8 @@ class RenderWidget;
 class Settings;
 class WeakPtrImplWithEventTargetData;
 class WindowProxy;
+
+enum class AdjustViewSize : bool;
 
 struct OwnerPermissionsPolicyData;
 
@@ -148,6 +151,9 @@ public:
     FrameConsoleClient& console() { return m_consoleClient.get(); }
     const FrameConsoleClient& console() const { return m_consoleClient.get(); }
 
+    WEBCORE_EXPORT virtual void setPrinting(bool printing, FloatSize pageSize, FloatSize originalPageSize, float maximumShrinkRatio, AdjustViewSize, NotifyUIProcess = NotifyUIProcess::Yes);
+    WEBCORE_EXPORT bool isPrinting() const;
+
 protected:
     Frame(Page&, FrameIdentifier, FrameType, HTMLFrameOwnerElement*, Frame* parent, Frame* opener, Ref<FrameTreeSyncData>&&, AddToFrameTree = AddToFrameTree::Yes);
     void resetWindowProxy();
@@ -170,6 +176,7 @@ private:
     WeakPtr<Frame> m_opener;
     WeakHashSet<Frame> m_openedFrames;
     std::unique_ptr<OwnerPermissionsPolicyData> m_ownerPermisssionsPolicyOverride;
+    bool m_isPrinting { false };
 
     Ref<FrameTreeSyncData> m_frameTreeSyncData;
 

@@ -932,7 +932,9 @@ SERIALIZATION_DESCRIPTION_FILES = \
 WEBCORE_SERIALIZATION_DESCRIPTION_FILES = \
 	HTTPHeaderNames.serialization.in \
 	ActivityState.serialization.in \
+	DocumentSyncData.serialization.in \
 	DragActions.serialization.in \
+	FrameTreeSyncData.serialization.in \
 	InbandTextTrackPrivate.serialization.in \
 	IndexedDB.serialization.in \
 	LayoutMilestones.serialization.in \
@@ -943,7 +945,6 @@ WEBCORE_SERIALIZATION_DESCRIPTION_FILES = \
 	PlatformScreen.serialization.in \
 	PlatformWheelEvent.serialization.in \
 	PlaybackSessionModel.serialization.in \
-	ProcessSyncData.serialization.in \
 	ProtectionSpaceBase.serialization.in \
 	ScrollTypes.serialization.in \
 	WebGPU.serialization.in \

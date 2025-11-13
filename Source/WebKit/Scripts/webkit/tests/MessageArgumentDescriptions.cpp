@@ -560,6 +560,7 @@ Vector<ASCIILiteral> serializedIdentifiers()
         "WebKit::RemoteLegacyCDMSessionIdentifier"_s,
         "WebKit::RemoteMediaResourceIdentifier"_s,
         "WebKit::RemoteMediaSourceIdentifier"_s,
+        "WebKit::RemotePathImplIdentifier"_s,
         "WebKit::RemoteRemoteCommandListenerIdentifier"_s,
         "WebKit::RemoteSerializedImageBufferIdentifier"_s,
         "WebKit::RemoteSnapshotIdentifier"_s,

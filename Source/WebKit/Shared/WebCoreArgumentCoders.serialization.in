@@ -1909,6 +1909,11 @@ header: <WebCore/RectEdges.h>
     Vector<WebCore::PathSegment> segments();
 }
 
+header: <WebCore/PlatformPathImpl.h>
+[RefCounted, AdditionalEncoder=StreamConnectionEncoder, ConstructSubclass=PlatformPathImpl] class WebCore::PathImpl {
+    Vector<WebCore::PathSegment> segments();
+}
+
 #if ENABLE(META_VIEWPORT)
 
 [Nested] enum class WebCore::ViewportArguments::Type : uint8_t {

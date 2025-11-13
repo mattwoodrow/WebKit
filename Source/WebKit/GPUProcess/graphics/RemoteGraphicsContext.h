@@ -31,6 +31,7 @@
 #include "RemoteDisplayListIdentifier.h"
 #include "RemoteGradientIdentifier.h"
 #include "RemoteGraphicsContextIdentifier.h"
+#include "RemotePathImplIdentifier.h"
 #include "RemoteRenderingBackend.h"
 #include "StreamMessageReceiver.h"
 #include "StreamServerConnection.h"
@@ -95,6 +96,7 @@ public:
     void clipToImageBuffer(WebCore::RenderingResourceIdentifier, const WebCore::FloatRect& destinationRect);
     void clipOutToPath(const WebCore::Path&);
     void clipPath(const WebCore::Path&, WebCore::WindRule);
+    void clipCachedPath(RemotePathImplIdentifier, WebCore::WindRule);
     void resetClip();
     void drawGlyphs(WebCore::RenderingResourceIdentifier fontIdentifier, IPC::ArrayReferenceTuple<WebCore::GlyphBufferGlyph, WebCore::FloatSize>, WebCore::FloatPoint localAnchor, WebCore::FontSmoothingMode);
     void drawDisplayList(RemoteDisplayListIdentifier);
@@ -134,6 +136,7 @@ public:
 #endif
     void fillPathSegment(const WebCore::PathSegment&);
     void fillPath(const WebCore::Path&);
+    void fillCachedPath(RemotePathImplIdentifier);
     void fillEllipse(const WebCore::FloatRect&);
     void strokeRect(const WebCore::FloatRect&, float lineWidth);
 #if ENABLE(INLINE_PATH_DATA)

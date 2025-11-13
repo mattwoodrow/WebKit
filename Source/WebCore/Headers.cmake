@@ -2716,6 +2716,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/graphics/PlatformLayerIdentifier.h
     platform/graphics/PlatformMediaResourceLoader.h
     platform/graphics/PlatformPath.h
+    platform/graphics/PlatformPathImpl.h
     platform/graphics/PlatformPlaybackSessionInterface.h
     platform/graphics/PlatformTextTrack.h
     platform/graphics/PlatformTimeRanges.h

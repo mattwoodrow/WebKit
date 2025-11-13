@@ -7630,6 +7630,7 @@
 		A7E1503B2B1D6F500000E921 /* RemoteImageBufferSet.messages.in */ = {isa = PBXFileReference; lastKnownFileType = text; path = RemoteImageBufferSet.messages.in; sourceTree = "<group>"; };
 		A7E69BCB2B21179600D43D3F /* BufferAndBackendInfo.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = BufferAndBackendInfo.h; sourceTree = "<group>"; };
 		A7E69BCD2B21196700D43D3F /* BufferAndBackendInfo.serialization.in */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = BufferAndBackendInfo.serialization.in; sourceTree = "<group>"; };
+		A7E6CAE62EBF2361008A3182 /* RemotePathImplIdentifier.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = RemotePathImplIdentifier.h; sourceTree = "<group>"; };
 		A7E93CEB192531AA00A1DC48 /* AuxiliaryProcessIOS.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; name = AuxiliaryProcessIOS.mm; path = ios/AuxiliaryProcessIOS.mm; sourceTree = "<group>"; };
 		A7F35F5A2B194BF100E43D98 /* RemoteLayerWithRemoteRenderingBackingStore.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = RemoteLayerWithRemoteRenderingBackingStore.mm; sourceTree = "<group>"; };
 		A7F35F5B2B194C0800E43D98 /* RemoteLayerWithRemoteRenderingBackingStore.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = RemoteLayerWithRemoteRenderingBackingStore.h; sourceTree = "<group>"; };
@@ -13832,6 +13833,7 @@
 				A78A5FE62B0EE4C3005036D3 /* RemoteImageBufferSetProxy.h */,
 				7BFE47322E8A96FB00F60A1C /* RemoteNativeImageProxy.cpp */,
 				7BFE47312E8A96FB00F60A1C /* RemoteNativeImageProxy.h */,
+				A7E6CAE62EBF2361008A3182 /* RemotePathImplIdentifier.h */,
 				5506409D2407160900AAE045 /* RemoteRenderingBackendProxy.cpp */,
 				5506409E2407160900AAE045 /* RemoteRenderingBackendProxy.h */,
 				550640A0240719E100AAE045 /* RemoteRenderingBackendProxy.messages.in */,

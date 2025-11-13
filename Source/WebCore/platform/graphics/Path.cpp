@@ -154,6 +154,12 @@ RefPtr<const PathImpl> Path::asProtectedImpl() const
     return asImpl();
 }
 
+void Path::setNotTransient()
+{
+    if (RefPtr impl = asImpl())
+        impl->setNotTransient();
+}
+
 static FloatRoundedRect calculateEvenRoundedRect(const FloatRect& rect, const FloatSize& roundingRadii)
 {
     FloatSize radius(roundingRadii);
@@ -337,10 +343,8 @@ RetainPtr<CGPathRef> Path::protectedPlatformPath() const
 
 const Vector<PathSegment>* Path::segmentsIfExists() const
 {
-    if (RefPtr impl = asImpl()) {
-        if (auto* stream = dynamicDowncast<PathStream>((*impl)))
-            return &stream->segments();
-    }
+    if (RefPtr impl = asImpl())
+        return impl->segmentsIfExists();
 
     return nullptr;
 }

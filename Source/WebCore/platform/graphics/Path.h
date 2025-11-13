@@ -49,7 +49,7 @@ public:
     Path(PathSegment&&);
     WEBCORE_EXPORT Path(Vector<PathSegment>&&);
     explicit Path(const Vector<FloatPoint>& points);
-    Path(Ref<PathImpl>&&);
+    WEBCORE_EXPORT Path(Ref<PathImpl>&&);
 
     Path(const Path&) = default;
     Path(Path&&) = default;
@@ -114,6 +114,9 @@ public:
     FloatRect strokeBoundingRect(NOESCAPE const Function<void(GraphicsContext&)>& strokeStyleApplier = { }) const;
 
     WEBCORE_EXPORT void ensureImplForTesting();
+    WEBCORE_EXPORT const PathImpl* asImpl() const;
+
+    void setNotTransient();
 
 private:
     PlatformPathImpl& ensurePlatformPathImpl();
@@ -125,7 +128,6 @@ private:
     const PathSegment* asSingle() const { return std::get_if<PathSegment>(&m_data); }
 
     PathImpl* asImpl();
-    const PathImpl* asImpl() const;
     RefPtr<PathImpl> asProtectedImpl();
     RefPtr<const PathImpl> asProtectedImpl() const;
 

@@ -254,6 +254,9 @@ public:
     bool fullKeyboardAccessEnabled() const { return m_fullKeyboardAccessEnabled; }
 
     void contentWorldDestroyed(ContentWorldIdentifier);
+#if ENABLE(OFFSCREEN_CANVAS)
+    void commitOffscreenCanvasPlaceholderFrame(WebCore::PlaceholderRenderingContextIdentifier, const WebCore::ImageBufferParameters&, const WebCore::ImageBufferBackendInfo&, std::optional<RemoteSerializedImageBufferIdentifier>, std::optional<ImageBufferBackendHandle>&&, bool didApplyToLayer, bool originClean, bool opaque);
+#endif
 
 #if HAVE(MOUSE_DEVICE_OBSERVATION)
     bool hasMouseDevice() const { return m_hasMouseDevice; }

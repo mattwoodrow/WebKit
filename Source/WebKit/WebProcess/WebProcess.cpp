@@ -79,6 +79,20 @@
 #include "WebPermissionController.h"
 #include "WebPlatformStrategies.h"
 #include "WebProcessCreationParameters.h"
+#if ENABLE(OFFSCREEN_CANVAS)
+#include "ImageBufferShareableBitmapBackend.h"
+#include "RemotePlaceholderRenderingContextSource.h"
+#include <WebCore/ImageBuffer.h>
+#include <WebCore/PlaceholderRenderingContextSource.h>
+#include "RemoteRenderingBackendProxy.h"
+#include "WebPage.h"
+#include <WebCore/Document.h>
+#include <WebCore/Page.h>
+#include <WebCore/ProcessCapabilities.h>
+#if HAVE(IOSURFACE)
+#include "ImageBufferShareableMappedIOSurfaceBackend.h"
+#endif
+#endif
 #include "WebProcessDataStoreParameters.h"
 #include "WebProcessMessages.h"
 #include "WebProcessProxyMessages.h"
@@ -291,6 +305,7 @@ static const Seconds nonVisibleProcessMemoryCleanupDelay { 120_s };
 #endif
 
 namespace WebKit {
+
 using namespace WebCore;
 
 WTF_MAKE_TZONE_ALLOCATED_IMPL(WebProcess);
@@ -432,7 +447,31 @@ void WebProcess::initializeProcess(const AuxiliaryProcessInitializationParameter
     }
 
     MessagePortChannelProvider::setSharedProvider(WebMessagePortChannelProvider::singleton());
-    
+
+#if ENABLE(OFFSCREEN_CANVAS)
+    // An OffscreenCanvas transferred here from another process needs a source that relays its
+    // frames back to the process that still owns the placeholder canvas element.
+    WebCore::PlaceholderRenderingContextSource::setRemoteSourceFactory([](WebCore::PlaceholderRenderingContextIdentifier identifier) -> RefPtr<WebCore::PlaceholderRenderingContextSource> {
+        return RemotePlaceholderRenderingContextSource::create(identifier);
+    });
+    // Let the UI process retire any cross-process access it granted to this placeholder.
+    WebCore::PlaceholderRenderingContextSource::setDestructionHandler([](WebCore::PlaceholderRenderingContextIdentifier identifier) {
+        if (RefPtr connection = WebProcess::singleton().parentProcessConnection())
+            connection->send(Messages::WebProcessProxy::OffscreenCanvasPlaceholderDestroyed(identifier), 0);
+    });
+    // Tell the UI process which layer shows the placeholder, so it can put frames committed by
+    // another process on screen directly instead of relaying them through this one.
+    WebCore::PlaceholderRenderingContextSource::setLayerChangeHandler([](WebCore::PlaceholderRenderingContextIdentifier identifier, std::optional<WebCore::PlatformLayerIdentifier> layerID) {
+        RefPtr source = WebCore::PlaceholderRenderingContextSource::sourceWithIdentifier(identifier);
+        RefPtr document = source ? source->placeholderDocument() : nullptr;
+        RefPtr page = document ? document->page() : nullptr;
+        RefPtr webPage = page ? WebPage::fromCorePage(*page) : nullptr;
+        if (!webPage)
+            return;
+        webPage->send(Messages::WebPageProxy::SetOffscreenCanvasPlaceholderLayer(identifier, layerID));
+    });
+#endif
+
     platformInitializeProcess(parameters);
     updateCPULimit();
 }
@@ -2709,6 +2748,65 @@ void WebProcess::contentWorldDestroyed(ContentWorldIdentifier identifier)
 {
     WebUserContentController::removeContentWorld(identifier);
 }
+
+#if ENABLE(OFFSCREEN_CANVAS)
+// Rebuilds a readable ImageBuffer around a frame shared by the process that holds the offscreen
+// half of the canvas. The IOSurface (or shared memory) is mapped in place; no pixels are copied.
+static RefPtr<WebCore::ImageBuffer> createImageBufferFromBackendHandle(const WebCore::ImageBufferParameters& parameters, ImageBufferBackendHandle&& handle)
+{
+    auto backendParameters = WebCore::ImageBuffer::backendParameters(parameters);
+
+#if HAVE(IOSURFACE)
+    // With the GPU process handling rendering, the WebContent sandbox blocks IOKit and this
+    // process cannot map an IOSurface at all (see WebPage::platformInitialize).
+    if (std::holds_alternative<MachSendRight>(handle) && WebCore::ProcessCapabilities::canUseAcceleratedBuffers()) {
+        auto backend = ImageBufferShareableMappedIOSurfaceBackend::create(backendParameters, WTF::move(handle));
+        if (!backend)
+            return nullptr;
+        return WebCore::ImageBuffer::create<ImageBufferShareableMappedIOSurfaceBackend>(parameters.logicalSize, { }, WTF::move(backend));
+    }
+#endif
+
+    if (std::holds_alternative<WebCore::ShareableBitmap::Handle>(handle)) {
+        auto bitmapHandle = std::get<WebCore::ShareableBitmap::Handle>(WTF::move(handle));
+        bitmapHandle.takeOwnershipOfMemory(WebCore::MemoryLedger::Graphics);
+        auto backend = ImageBufferShareableBitmapBackend::create(backendParameters, WTF::move(bitmapHandle));
+        if (!backend)
+            return nullptr;
+        return WebCore::ImageBuffer::create<ImageBufferShareableBitmapBackend>(parameters.logicalSize, { }, WTF::move(backend));
+    }
+
+    return nullptr;
+}
+
+void WebProcess::commitOffscreenCanvasPlaceholderFrame(WebCore::PlaceholderRenderingContextIdentifier identifier, const WebCore::ImageBufferParameters& parameters, const WebCore::ImageBufferBackendInfo& info, std::optional<RemoteSerializedImageBufferIdentifier> transferIdentifier, std::optional<ImageBufferBackendHandle>&& handle, bool didApplyToLayer, bool originClean, bool opaque)
+{
+    RefPtr source = WebCore::PlaceholderRenderingContextSource::sourceWithIdentifier(identifier);
+    if (!source)
+        return;
+
+    RefPtr<WebCore::ImageBuffer> imageBuffer;
+    if (transferIdentifier) {
+        // The committing process handed the buffer to us inside the GPU process; claim it into the
+        // rendering backend of the page holding the placeholder, so the canvas element can read it.
+        RefPtr document = source->placeholderDocument();
+        RefPtr page = document ? document->page() : nullptr;
+        RefPtr webPage = page ? WebPage::fromCorePage(*page) : nullptr;
+        if (webPage)
+            imageBuffer = protect(webPage->ensureRemoteRenderingBackendProxy())->takeTransferredBuffer(*transferIdentifier, parameters, info);
+    } else if (handle)
+        imageBuffer = createImageBufferFromBackendHandle(parameters, WTF::move(*handle));
+
+    if (!imageBuffer)
+        return;
+
+    // Hand the frame to the ordinary local path, so the placeholder canvas element and the
+    // compositing layer are both updated exactly as for a same-process transfer. When the UI
+    // process already put this frame on the placeholder's layer, skip the compositing half so the
+    // same frame is not pushed to the compositor twice.
+    source->setPlaceholderBufferFromRemoteProcess(imageBuffer.releaseNonNull(), originClean, opaque, didApplyToLayer ? WebCore::PlaceholderRenderingContextSource::LayerUpdate::AlreadyApplied : WebCore::PlaceholderRenderingContextSource::LayerUpdate::Needed);
+}
+#endif
 
 } // namespace WebKit
 

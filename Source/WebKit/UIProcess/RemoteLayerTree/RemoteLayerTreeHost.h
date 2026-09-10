@@ -72,7 +72,7 @@ public:
 
     // Returns true if the root layer changed.
     bool updateLayerTree(const IPC::Connection&, const RemoteLayerTreeTransaction&, const std::optional<MainFrameData>&, float indicatorScaleFactor  = 1);
-    void asyncSetLayerContents(WebCore::PlatformLayerIdentifier, RemoteLayerBackingStoreProperties&&);
+    bool asyncSetLayerContents(WebCore::PlatformLayerIdentifier, RemoteLayerBackingStoreProperties&&);
 
     void setIsDebugLayerTreeHost(bool flag) { m_isDebugLayerTreeHost = flag; }
     bool isDebugLayerTreeHost() const { return m_isDebugLayerTreeHost; }

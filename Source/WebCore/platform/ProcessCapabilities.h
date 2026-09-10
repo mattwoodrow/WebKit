@@ -42,7 +42,7 @@ public:
     static bool NODELETE isHardwareAcceleratedDecodingDisabled();
 
     WEBCORE_EXPORT static void NODELETE setCanUseAcceleratedBuffers(bool);
-    static bool NODELETE canUseAcceleratedBuffers();
+    WEBCORE_EXPORT static bool NODELETE canUseAcceleratedBuffers();
 };
 
 } // namespace WebCore

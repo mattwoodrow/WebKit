@@ -25,6 +25,8 @@
 
 #pragma once
 
+#include <WebCore/PlatformLayerIdentifier.h>
+
 #include <wtf/RefCounted.h>
 
 #if !USE(CA) && !USE(COORDINATED_GRAPHICS)
@@ -84,6 +86,10 @@ public:
     virtual ~GraphicsLayerAsyncContentsDisplayDelegate() = default;
 
     virtual bool WEBCORE_EXPORT tryCopyToLayer(ImageBuffer&, bool opaque) = 0;
+
+    // The layer this delegate feeds, when it is hosted in another process and so can be targeted
+    // by a frame committed from a different web content process.
+    virtual std::optional<PlatformLayerIdentifier> destinationLayerID() const { return std::nullopt; }
 
     virtual bool isGraphicsLayerAsyncContentsDisplayDelegateCocoa() const { return false; }
     virtual bool isGraphicsLayerCARemoteAsyncContentsDisplayDelegate() const { return false; }

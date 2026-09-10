@@ -82,6 +82,10 @@
 #include "WebProcessCache.h"
 #include "WebProcessDataStoreParameters.h"
 #include "WebProcessMessages.h"
+#if ENABLE(OFFSCREEN_CANVAS)
+#include "RemoteLayerBackingStore.h"
+#include "RemoteLayerTreeDrawingAreaProxy.h"
+#endif
 #include "WebProcessPool.h"
 #include "WebProcessProxyMessages.h"
 #include "WebSWContextManagerConnectionMessages.h"
@@ -173,6 +177,7 @@
 #define WEBPROCESSPROXY_RELEASE_LOG_ERROR(channel, fmt, ...) RELEASE_LOG_ERROR(channel, "%p - [PID=%i] WebProcessProxy::" fmt, static_cast<const void*>(this), processID(), ##__VA_ARGS__)
 
 namespace WebKit {
+
 using namespace WebCore;
 
 static constexpr unsigned defaultMaxProcessCount { 400 };
@@ -478,6 +483,11 @@ WebProcessProxy::~WebProcessProxy()
 {
     RELEASE_ASSERT(isMainThreadOrCheckDisabled());
     WEBPROCESSPROXY_RELEASE_LOG(Process, "destructor:");
+
+#if ENABLE(OFFSCREEN_CANVAS)
+    // Drop grants this process held, and grants over placeholders it owned.
+    removeOffscreenCanvasPlaceholderGrantsForProcess(coreProcessIdentifier());
+#endif
 
     // ~AuxiliaryProcessProxy() replies to pending messages after our members are gone; a reply
     // handler that upgrades its still-live WeakPtr<WebProcessProxy> would then touch freed members
@@ -3673,6 +3683,113 @@ void WebProcessProxy::takeInvalidMessageStringForTesting(CompletionHandler<void(
     ASCIILiteral error = protect(connection())->takeErrorString();
     String errorString = !error.isNull() ? String::fromUTF8(error) : emptyString();
     callback(WTF::move(errorString));
+}
+#endif
+
+#if ENABLE(OFFSCREEN_CANVAS)
+// Maps a placeholder canvas to the single process currently holding the offscreen half, and so
+// permitted to commit frames to it. Process wide rather than per-process because a canvas can be
+// transferred onward, which must supersede the previous holder's access.
+static HashMap<WebCore::PlaceholderRenderingContextIdentifier, WebCore::ProcessIdentifier>& offscreenCanvasPlaceholderGrants()
+{
+    ASSERT(isMainThreadOrCheckDisabled());
+    static NeverDestroyed<HashMap<WebCore::PlaceholderRenderingContextIdentifier, WebCore::ProcessIdentifier>> grants;
+    return grants;
+}
+
+// Where a placeholder canvas is displayed, so a frame committed by the process holding the
+// offscreen half can be put on screen without a detour through the process that owns the canvas.
+struct OffscreenCanvasPlaceholderLayer {
+    Markable<WebCore::PlatformLayerIdentifier> layerID;
+    Markable<WebPageProxyIdentifier> pageID;
+};
+
+static HashMap<WebCore::PlaceholderRenderingContextIdentifier, OffscreenCanvasPlaceholderLayer>& offscreenCanvasPlaceholderLayers()
+{
+    ASSERT(isMainThreadOrCheckDisabled());
+    static NeverDestroyed<HashMap<WebCore::PlaceholderRenderingContextIdentifier, OffscreenCanvasPlaceholderLayer>> layers;
+    return layers;
+}
+
+void WebProcessProxy::setOffscreenCanvasPlaceholderLayer(WebCore::PlaceholderRenderingContextIdentifier identifier, WebPageProxyIdentifier pageID, std::optional<WebCore::PlatformLayerIdentifier> layerID)
+{
+    if (!layerID) {
+        offscreenCanvasPlaceholderLayers().remove(identifier);
+        return;
+    }
+    offscreenCanvasPlaceholderLayers().set(identifier, OffscreenCanvasPlaceholderLayer { *layerID, pageID });
+}
+
+// Puts a committed frame straight onto the placeholder's layer. Returns false when there is no
+// layer to target, in which case the owning process still has to drive the compositor itself.
+static bool applyFrameToOffscreenCanvasPlaceholderLayer(WebCore::PlaceholderRenderingContextIdentifier identifier, const std::optional<ImageBufferBackendHandle>& handle, WebCore::RenderingResourceIdentifier bufferIdentifier, bool opaque)
+{
+    if (!handle)
+        return false;
+
+    auto& layers = offscreenCanvasPlaceholderLayers();
+    auto entry = layers.find(identifier);
+    if (entry == layers.end())
+        return false;
+
+    RefPtr page = WebProcessProxy::webPage(*entry->value.pageID);
+    if (!page)
+        return false;
+    RefPtr drawingArea = dynamicDowncast<RemoteLayerTreeDrawingAreaProxy>(page->drawingArea());
+    if (!drawingArea)
+        return false;
+
+    RemoteLayerBackingStoreProperties properties(ImageBufferBackendHandle { *handle }, bufferIdentifier, opaque);
+    return drawingArea->asyncSetLayerContents(*entry->value.layerID, WTF::move(properties));
+}
+
+void WebProcessProxy::grantOffscreenCanvasPlaceholderAccess(const Vector<WebCore::PlaceholderRenderingContextIdentifier>& identifiers)
+{
+    for (auto identifier : identifiers)
+        offscreenCanvasPlaceholderGrants().set(identifier, coreProcessIdentifier());
+}
+
+void WebProcessProxy::offscreenCanvasPlaceholderDestroyed(WebCore::PlaceholderRenderingContextIdentifier identifier)
+{
+    // Only the process that owns the placeholder may retire it; the identifier is qualified with
+    // the owner's process, so this cannot be used to revoke another page's grant.
+    MESSAGE_CHECK(identifier.processIdentifier() == coreProcessIdentifier());
+    offscreenCanvasPlaceholderGrants().remove(identifier);
+    offscreenCanvasPlaceholderLayers().remove(identifier);
+}
+
+void WebProcessProxy::removeOffscreenCanvasPlaceholderGrantsForProcess(WebCore::ProcessIdentifier processIdentifier)
+{
+    offscreenCanvasPlaceholderGrants().removeIf([&](auto& entry) {
+        return entry.value == processIdentifier || entry.key.processIdentifier() == processIdentifier;
+    });
+    offscreenCanvasPlaceholderLayers().removeIf([&](auto& entry) {
+        return entry.key.processIdentifier() == processIdentifier;
+    });
+}
+
+void WebProcessProxy::commitOffscreenCanvasPlaceholderFrame(WebCore::PlaceholderRenderingContextIdentifier identifier, const WebCore::ImageBufferParameters& parameters, const WebCore::ImageBufferBackendInfo& info, std::optional<RemoteSerializedImageBufferIdentifier> transferIdentifier, std::optional<ImageBufferBackendHandle>&& handle, WebCore::RenderingResourceIdentifier bufferIdentifier, bool originClean, bool opaque)
+{
+    auto& grants = offscreenCanvasPlaceholderGrants();
+    auto grant = grants.find(identifier);
+    if (grant == grants.end()) {
+        // The placeholder was destroyed, or its control has since moved on, while this frame was
+        // in flight. Benign race: drop the frame rather than terminating the sender.
+        return;
+    }
+    // Committing to a placeholder granted to a different process would let a compromised frame
+    // process paint into another site's canvas.
+    MESSAGE_CHECK(grant->value == coreProcessIdentifier());
+
+    // Get the frame on screen from here, rather than bouncing it through the owning process and
+    // waiting for that process to drive its own compositing update.
+    bool didApplyToLayer = applyFrameToOffscreenCanvasPlaceholderLayer(identifier, handle, bufferIdentifier, opaque);
+
+    RefPtr destination = WebProcessProxy::processForIdentifier(identifier.processIdentifier());
+    if (!destination)
+        return;
+
+    destination->send(Messages::WebProcess::CommitOffscreenCanvasPlaceholderFrame(identifier, parameters, info, transferIdentifier, WTF::move(handle), didApplyToLayer, originClean, opaque), 0);
 }
 #endif
 

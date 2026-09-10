@@ -4269,6 +4269,15 @@ void SerializedScriptValue::setNonSerializedDataToken(std::optional<NonSerialize
     m_internals->nonSerializedDataToken = token;
 }
 
+#if ENABLE(OFFSCREEN_CANVAS_IN_WORKERS)
+Vector<PlaceholderRenderingContextIdentifier> SerializedScriptValue::transferredPlaceholderIdentifiers() const
+{
+    return WTF::compactMap(m_internals->detachedOffscreenCanvases, [](auto& canvas) {
+        return canvas ? canvas->placeholderIdentifier() : std::nullopt;
+    });
+}
+#endif
+
 RefPtr<SerializedScriptValue> SerializedScriptValue::convert(JSGlobalObject& globalObject, JSValue value)
 {
     return create(globalObject, value, SerializationForStorage::Yes);

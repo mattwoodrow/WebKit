@@ -264,13 +264,14 @@ bool RemoteLayerTreeHost::updateLayerTree(const IPC::Connection& connection, con
     return rootLayerChanged;
 }
 
-void RemoteLayerTreeHost::asyncSetLayerContents(PlatformLayerIdentifier layerID, WebKit::RemoteLayerBackingStoreProperties&& properties)
+bool RemoteLayerTreeHost::asyncSetLayerContents(PlatformLayerIdentifier layerID, WebKit::RemoteLayerBackingStoreProperties&& properties)
 {
     RefPtr node = nodeForID(layerID);
     if (!node)
-        return;
+        return false;
 
     node->applyBackingStore(this, properties);
+    return true;
 }
 
 RemoteLayerTreeNode* RemoteLayerTreeHost::nodeForID(std::optional<PlatformLayerIdentifier> layerID) const

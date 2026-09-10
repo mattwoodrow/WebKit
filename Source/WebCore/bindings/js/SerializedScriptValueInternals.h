@@ -88,6 +88,11 @@ struct SerializedScriptValueInternals {
 #endif
     uint64_t exposedMessagePortCount { 0 };
     std::optional<NonSerializedDataToken> nonSerializedDataToken { };
+#if ENABLE(OFFSCREEN_CANVAS_IN_WORKERS)
+    // Serialized: only the placeholder's identity crosses a process boundary. Must stay within the
+    // contiguous run of serialized members at the top of this struct.
+    Vector<std::unique_ptr<DetachedOffscreenCanvas>> detachedOffscreenCanvases { };
+#endif
     Vector<FileSystemHandleKeepAlive> fileSystemHandleKeepAlives { };
 #if ENABLE(WEB_CODECS)
     Vector<WebCodecsVideoFrameData> serializedVideoFrames { };
@@ -107,7 +112,6 @@ struct SerializedScriptValueInternals {
     std::unique_ptr<ArrayBufferContentsArray> sharedBufferContentsArray { nullptr };
     Vector<std::optional<DetachedImageBitmap>> detachedImageBitmaps { };
 #if ENABLE(OFFSCREEN_CANVAS_IN_WORKERS)
-    Vector<std::unique_ptr<DetachedOffscreenCanvas>> detachedOffscreenCanvases { };
     Vector<Ref<OffscreenCanvas>> inMemoryOffscreenCanvases { };
 #endif
     Vector<Ref<MessagePort>> inMemoryMessagePorts { };

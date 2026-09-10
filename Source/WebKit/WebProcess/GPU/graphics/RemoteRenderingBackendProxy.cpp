@@ -339,6 +339,23 @@ Ref<RemoteImageBufferProxy> RemoteRenderingBackendProxy::moveToImageBuffer(Remot
     return result;
 }
 
+#if ENABLE(OFFSCREEN_CANVAS)
+void RemoteRenderingBackendProxy::transferSerializedBufferToProcess(RemoteSerializedImageBufferProxy& serialized, WebCore::ProcessIdentifier destinationProcess)
+{
+    send(Messages::RemoteRenderingBackend::TransferSerializedBufferToProcess(serialized.identifier(), destinationProcess));
+}
+
+RefPtr<RemoteImageBufferProxy> RemoteRenderingBackendProxy::takeTransferredBuffer(RemoteSerializedImageBufferIdentifier transferIdentifier, const WebCore::ImageBufferParameters& parameters, const WebCore::ImageBufferBackend::Info& info)
+{
+    auto result = RemoteImageBufferProxy::create(parameters, info, *this);
+    auto resultIdentifier = result->renderingResourceIdentifier();
+    auto addResult = m_imageBuffers.add(resultIdentifier, result);
+    ASSERT_UNUSED(addResult, addResult.isNewEntry);
+    send(Messages::RemoteRenderingBackend::TakeTransferredBuffer(transferIdentifier, resultIdentifier, result->contextIdentifier()));
+    return result;
+}
+#endif
+
 UniqueRef<RemoteSnapshotRecorderProxy> RemoteRenderingBackendProxy::createSnapshotRecorder(RemoteSnapshotIdentifier snapshotIdentifier)
 {
     auto recorder = makeUniqueRef<RemoteSnapshotRecorderProxy>(*this);

@@ -37,6 +37,7 @@
 #include <WebCore/IDLTypes.h>
 #include <WebCore/ImageBuffer.h>
 #include <WebCore/IntSize.h>
+#include <WebCore/PlaceholderRenderingContextIdentifier.h>
 #include <WebCore/ScriptWrappable.h>
 #include <wtf/FixedVector.h>
 #include <wtf/Forward.h>
@@ -88,14 +89,24 @@ class DetachedOffscreenCanvas {
 
 public:
     DetachedOffscreenCanvas(const IntSize&, bool originClean, RefPtr<PlaceholderRenderingContextSource>&&);
+    // Used when decoding a canvas transferred from another process. The placeholder source is
+    // resolved from the identifier: to the local source if the placeholder lives in this process,
+    // otherwise to a remote source that forwards frames back to the process that owns it.
+    WEBCORE_EXPORT DetachedOffscreenCanvas(const IntSize&, bool originClean, std::optional<PlaceholderRenderingContextIdentifier>);
+    WEBCORE_EXPORT DetachedOffscreenCanvas(DetachedOffscreenCanvas&&);
+    WEBCORE_EXPORT DetachedOffscreenCanvas& operator=(DetachedOffscreenCanvas&&);
     WEBCORE_EXPORT ~DetachedOffscreenCanvas();
     const IntSize& size() const LIFETIME_BOUND { return m_size; }
     bool originClean() const { return m_originClean; }
     const RefPtr<PlaceholderRenderingContextSource>& placeholderSource() const LIFETIME_BOUND { return m_placeholderSource; }
+    WEBCORE_EXPORT std::optional<PlaceholderRenderingContextIdentifier> placeholderIdentifier() const;
     RefPtr<PlaceholderRenderingContextSource> NODELETE takePlaceholderSource();
 
 private:
     RefPtr<PlaceholderRenderingContextSource> m_placeholderSource;
+    // Kept separately from m_placeholderSource: a process that only relays the message (the UI
+    // process) cannot instantiate a source, but must still forward the placeholder's identity.
+    std::optional<PlaceholderRenderingContextIdentifier> m_placeholderIdentifier;
     IntSize m_size;
     bool m_originClean;
 };

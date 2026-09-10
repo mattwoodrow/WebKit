@@ -135,6 +135,11 @@ public:
 
     RemoteSerializedImageBufferProxy(WebCore::ImageBuffer::Parameters, const WebCore::ImageBufferBackend::Info&, RemoteRenderingBackendProxy&);
 
+#if ENABLE(OFFSCREEN_CANVAS)
+    // Hands this buffer to another web process's rendering backend, via the GPU process.
+    bool transferToProcess(WebCore::ProcessIdentifier destinationProcess);
+#endif
+
     size_t memoryCost() const final
     {
         return m_info.memoryCost;
@@ -167,6 +172,9 @@ private:
     const WebCore::ImageBuffer::Parameters m_parameters;
     const WebCore::ImageBufferBackend::Info m_info;
     RefPtr<IPC::Connection> m_connection;
+#if ENABLE(OFFSCREEN_CANVAS)
+    WeakPtr<RemoteRenderingBackendProxy> m_renderingBackend;
+#endif
 };
 
 } // namespace WebKit

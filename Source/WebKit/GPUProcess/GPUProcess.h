@@ -29,6 +29,7 @@
 
 #include "AuxiliaryProcess.h"
 #include "GPUProcessPreferences.h"
+#include "RemoteSerializedImageBufferIdentifier.h"
 #include "RemoteSnapshotIdentifier.h"
 #include "SandboxExtension.h"
 #include "SecurityFlags.h"
@@ -174,6 +175,15 @@ public:
     Ref<RemoteSnapshot> getOrCreateSnapshot(RemoteSnapshotIdentifier);
     RefPtr<RemoteSnapshot> snapshot(RemoteSnapshotIdentifier);
 
+    // Hands an ImageBuffer from one web process's rendering backend to another's. Used when an
+    // OffscreenCanvas is transferred across a site isolation boundary: the process holding the
+    // offscreen half deposits each committed frame here for the process that owns the placeholder
+    // canvas element to claim. Unlike m_snapshots, a slot records the single process permitted to
+    // claim it, so knowing or guessing an identifier is not by itself enough to obtain a buffer.
+    bool addTransferredImageBuffer(RemoteSerializedImageBufferIdentifier, WebCore::ProcessIdentifier sourceProcess, WebCore::ProcessIdentifier destinationProcess, Ref<WebCore::ImageBuffer>&&);
+    RefPtr<WebCore::ImageBuffer> takeTransferredImageBuffer(RemoteSerializedImageBufferIdentifier, WebCore::ProcessIdentifier claimingProcess);
+    void removeTransferredImageBuffersForProcess(WebCore::ProcessIdentifier);
+
 #if PLATFORM(VISION) && ENABLE(MODEL_PROCESS)
 #if HAVE(CORE_RE)
     void requestSharedSimulationConnection(CoreIPCAuditToken&&, CompletionHandler<void(std::optional<IPC::SharedFileHandle>)>&&);
@@ -305,6 +315,13 @@ private:
     // Do not add more globally shared resources.
     Lock m_globalResourceLocker;
     HashMap<RemoteSnapshotIdentifier, Ref<RemoteSnapshot>> m_snapshots WTF_GUARDED_BY_LOCK(m_globalResourceLocker);
+
+    struct TransferredImageBuffer {
+        Markable<WebCore::ProcessIdentifier> sourceProcess;
+        Markable<WebCore::ProcessIdentifier> destinationProcess;
+        RefPtr<WebCore::ImageBuffer> imageBuffer;
+    };
+    HashMap<RemoteSerializedImageBufferIdentifier, TransferredImageBuffer> m_transferredImageBuffers WTF_GUARDED_BY_LOCK(m_globalResourceLocker);
 
     struct GPUSession {
         String mediaCacheDirectory;

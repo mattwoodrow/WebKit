@@ -78,12 +78,37 @@ WTF_MAKE_TZONE_ALLOCATED_IMPL(OffscreenCanvas);
 
 DetachedOffscreenCanvas::DetachedOffscreenCanvas(const IntSize& size, bool originClean, RefPtr<PlaceholderRenderingContextSource>&& placeholderSource)
     : m_placeholderSource(WTF::move(placeholderSource))
+    , m_placeholderIdentifier(m_placeholderSource ? std::optional { m_placeholderSource->identifier() } : std::nullopt)
     , m_size(size)
     , m_originClean(originClean)
 {
 }
 
 DetachedOffscreenCanvas::~DetachedOffscreenCanvas() = default;
+DetachedOffscreenCanvas::DetachedOffscreenCanvas(DetachedOffscreenCanvas&&) = default;
+DetachedOffscreenCanvas& DetachedOffscreenCanvas::operator=(DetachedOffscreenCanvas&&) = default;
+
+static RefPtr<PlaceholderRenderingContextSource> resolvePlaceholderSource(std::optional<PlaceholderRenderingContextIdentifier> identifier)
+{
+    if (!identifier)
+        return nullptr;
+    if (identifier->processIdentifier() == Process::identifier())
+        return PlaceholderRenderingContextSource::sourceWithIdentifier(*identifier);
+    return PlaceholderRenderingContextSource::createRemoteSource(*identifier);
+}
+
+DetachedOffscreenCanvas::DetachedOffscreenCanvas(const IntSize& size, bool originClean, std::optional<PlaceholderRenderingContextIdentifier> identifier)
+    : m_placeholderSource(resolvePlaceholderSource(identifier))
+    , m_placeholderIdentifier(identifier)
+    , m_size(size)
+    , m_originClean(originClean)
+{
+}
+
+std::optional<PlaceholderRenderingContextIdentifier> DetachedOffscreenCanvas::placeholderIdentifier() const
+{
+    return m_placeholderIdentifier;
+}
 
 RefPtr<PlaceholderRenderingContextSource> DetachedOffscreenCanvas::takePlaceholderSource()
 {

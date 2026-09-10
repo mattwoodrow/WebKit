@@ -68,6 +68,11 @@ messages -> RemoteRenderingBackend Stream {
     MoveToSerializedBuffer(WebCore::RenderingResourceIdentifier identifier, WebKit::RemoteSerializedImageBufferIdentifier serializedIdentifier)
     MoveToImageBuffer(WebKit::RemoteSerializedImageBufferIdentifier identifier, WebCore::RenderingResourceIdentifier imageBufferIdentifier, WebKit::RemoteGraphicsContextIdentifier contextIdentifier)
 
+#if ENABLE(OFFSCREEN_CANVAS)
+    TransferSerializedBufferToProcess(WebKit::RemoteSerializedImageBufferIdentifier transferIdentifier, WebCore::ProcessIdentifier destinationProcess)
+    TakeTransferredBuffer(WebKit::RemoteSerializedImageBufferIdentifier transferIdentifier, WebCore::RenderingResourceIdentifier imageBufferIdentifier, WebKit::RemoteGraphicsContextIdentifier contextIdentifier)
+#endif
+
     CreateSnapshotRecorder(WebKit::RemoteSnapshotRecorderIdentifier identifier, WebKit::RemoteSnapshotIdentifier snapshotIdentifier)
     SinkSnapshotRecorderIntoSnapshotFrame(WebKit::RemoteSnapshotRecorderIdentifier identifier, WebCore::FrameIdentifier frameIdentifer) -> (bool success)
 

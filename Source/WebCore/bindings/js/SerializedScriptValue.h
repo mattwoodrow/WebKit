@@ -55,6 +55,10 @@ class JSObject;
 class JSValue;
 }
 
+#if ENABLE(OFFSCREEN_CANVAS_IN_WORKERS)
+#include <WebCore/PlaceholderRenderingContextIdentifier.h>
+#endif
+
 namespace WebCore {
 
 #if ENABLE(OFFSCREEN_CANVAS_IN_WORKERS)
@@ -118,6 +122,12 @@ public:
     WEBCORE_EXPORT std::unique_ptr<Vector<JSC::ArrayBufferContents>>& sharedBufferContentsArray();
     WEBCORE_EXPORT std::optional<NonSerializedDataToken> nonSerializedDataToken() const;
     WEBCORE_EXPORT void setNonSerializedDataToken(std::optional<NonSerializedDataToken>);
+
+#if ENABLE(OFFSCREEN_CANVAS_IN_WORKERS)
+    // The placeholder canvases whose control this message transfers. The UI process uses these to
+    // grant the receiving process permission to commit frames back to those placeholders.
+    WEBCORE_EXPORT Vector<PlaceholderRenderingContextIdentifier> transferredPlaceholderIdentifiers() const;
+#endif
 
     WEBCORE_EXPORT ~SerializedScriptValue();
 

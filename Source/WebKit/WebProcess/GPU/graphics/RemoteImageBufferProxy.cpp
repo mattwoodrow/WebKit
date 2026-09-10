@@ -521,8 +521,23 @@ RemoteSerializedImageBufferProxy::RemoteSerializedImageBufferProxy(WebCore::Imag
     : m_parameters(parameters)
     , m_info(info)
     , m_connection(nullptr/*backend.connection()*/)
+#if ENABLE(OFFSCREEN_CANVAS)
+    , m_renderingBackend(backend)
+#endif
 {
 }
+
+#if ENABLE(OFFSCREEN_CANVAS)
+bool RemoteSerializedImageBufferProxy::transferToProcess(WebCore::ProcessIdentifier destinationProcess)
+{
+    RefPtr renderingBackend = m_renderingBackend.get();
+    if (!renderingBackend)
+        return false;
+    renderingBackend->transferSerializedBufferToProcess(*this, destinationProcess);
+    m_connection = nullptr;
+    return true;
+}
+#endif
 
 RefPtr<ImageBuffer> RemoteSerializedImageBufferProxy::sinkIntoImageBuffer(std::unique_ptr<RemoteSerializedImageBufferProxy> buffer, RemoteRenderingBackendProxy& renderingBackend)
 {

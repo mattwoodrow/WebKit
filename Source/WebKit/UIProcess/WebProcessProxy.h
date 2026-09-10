@@ -96,6 +96,16 @@
 #include "WasmDebuggerDebuggable.h"
 #endif
 
+#if ENABLE(OFFSCREEN_CANVAS)
+#include "ImageBufferBackendHandle.h"
+#include "RemoteSerializedImageBufferIdentifier.h"
+#include <WebCore/ImageBuffer.h>
+#include <WebCore/ImageBufferBackend.h>
+#include <WebCore/PlaceholderRenderingContextIdentifier.h>
+#include <WebCore/PlatformLayerIdentifier.h>
+#include <WebCore/RenderingResourceIdentifier.h>
+#endif
+
 namespace API {
 class Navigation;
 class PageConfiguration;
@@ -375,6 +385,21 @@ public:
 
     void didPostMessage(WebPageProxyIdentifier, UserContentControllerIdentifier, FrameInfoData&&, ScriptMessageHandlerIdentifier, JavaScriptEvaluationResult&&, CompletionHandler<void(Expected<WebKit::JavaScriptEvaluationResult, String>&&)>&&);
     void didPostLegacySynchronousMessage(WebPageProxyIdentifier, UserContentControllerIdentifier, FrameInfoData&&, ScriptMessageHandlerIdentifier, JavaScriptEvaluationResult&&, CompletionHandler<void(Expected<JavaScriptEvaluationResult, String>&&)>&&);
+
+#if ENABLE(OFFSCREEN_CANVAS)
+    // Records that this process was handed control of these placeholder canvases, so it is allowed
+    // to commit frames back to the processes that own them. An OffscreenCanvas is a transferable,
+    // so at most one process holds the offscreen half at a time and a later transfer supersedes an
+    // earlier grant.
+    void grantOffscreenCanvasPlaceholderAccess(const Vector<WebCore::PlaceholderRenderingContextIdentifier>&);
+    void commitOffscreenCanvasPlaceholderFrame(WebCore::PlaceholderRenderingContextIdentifier, const WebCore::ImageBufferParameters&, const WebCore::ImageBufferBackendInfo&, std::optional<RemoteSerializedImageBufferIdentifier>, std::optional<ImageBufferBackendHandle>&&, WebCore::RenderingResourceIdentifier, bool originClean, bool opaque);
+    // Sent by the process owning the placeholder when the canvas element goes away.
+    void offscreenCanvasPlaceholderDestroyed(WebCore::PlaceholderRenderingContextIdentifier);
+    static void removeOffscreenCanvasPlaceholderGrantsForProcess(WebCore::ProcessIdentifier);
+    // Records which layer, if any, displays a placeholder canvas owned by `owner`. Called by
+    // WebPageProxy, which is the authority on the page the layer belongs to.
+    static void setOffscreenCanvasPlaceholderLayer(WebCore::PlaceholderRenderingContextIdentifier, WebPageProxyIdentifier, std::optional<WebCore::PlatformLayerIdentifier>);
+#endif
 
     void enableSuddenTermination();
     void disableSuddenTermination();
@@ -935,6 +960,7 @@ private:
 
 #if ENABLE(ATTACHMENT_ELEMENT)
     HashSet<String> m_allowedAttachmentFilePaths;
+
 #endif
     
     bool m_allowTestOnlyIPC { false };

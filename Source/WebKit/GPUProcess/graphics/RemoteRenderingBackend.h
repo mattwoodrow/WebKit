@@ -155,6 +155,10 @@ private:
     void releaseImageBuffer(WebCore::RenderingResourceIdentifier);
     void moveToSerializedBuffer(WebCore::RenderingResourceIdentifier, RemoteSerializedImageBufferIdentifier);
     void moveToImageBuffer(RemoteSerializedImageBufferIdentifier, WebCore::RenderingResourceIdentifier, RemoteGraphicsContextIdentifier);
+#if ENABLE(OFFSCREEN_CANVAS)
+    void transferSerializedBufferToProcess(RemoteSerializedImageBufferIdentifier, WebCore::ProcessIdentifier destinationProcess);
+    void takeTransferredBuffer(RemoteSerializedImageBufferIdentifier, WebCore::RenderingResourceIdentifier, RemoteGraphicsContextIdentifier);
+#endif
     void createDisplayListRecorder(RemoteDisplayListRecorderIdentifier);
     void sinkDisplayListRecorderIntoDisplayList(RemoteDisplayListRecorderIdentifier, RemoteDisplayListIdentifier);
     void releaseDisplayList(RemoteDisplayListIdentifier);

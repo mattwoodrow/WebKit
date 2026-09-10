@@ -218,6 +218,35 @@ void RemoteRenderingBackend::moveToImageBuffer(RemoteSerializedImageBufferIdenti
     MESSAGE_CHECK(result.isNewEntry, "Duplicate ImageBuffer");
 }
 
+#if ENABLE(OFFSCREEN_CANVAS)
+void RemoteRenderingBackend::transferSerializedBufferToProcess(RemoteSerializedImageBufferIdentifier transferIdentifier, WebCore::ProcessIdentifier destinationProcess)
+{
+    assertIsCurrent(workQueue());
+    // Moves the buffer out of this connection's cache and into the cross-process transfer heap,
+    // from where only destinationProcess may claim it.
+    RefPtr imageBuffer = m_sharedResourceCache->takeSerializedImageBuffer(transferIdentifier);
+    MESSAGE_CHECK(imageBuffer, "Missing SerializedImageBuffer");
+    bool success = GPUProcess::singleton().addTransferredImageBuffer(transferIdentifier, m_gpuConnectionToWebProcess->webProcessIdentifier(), destinationProcess, imageBuffer.releaseNonNull());
+    MESSAGE_CHECK(success, "Duplicate transferred ImageBuffer");
+}
+
+void RemoteRenderingBackend::takeTransferredBuffer(RemoteSerializedImageBufferIdentifier transferIdentifier, RenderingResourceIdentifier imageBufferIdentifier, RemoteGraphicsContextIdentifier contextIdentifier)
+{
+    assertIsCurrent(workQueue());
+    RefPtr imageBuffer = GPUProcess::singleton().takeTransferredImageBuffer(transferIdentifier, m_gpuConnectionToWebProcess->webProcessIdentifier());
+    if (!imageBuffer)
+        return;
+
+    ImageBufferCreationContext creationContext;
+    adjustImageBufferCreationContext(m_sharedResourceCache, creationContext);
+    imageBuffer->transferToNewContext(creationContext);
+    imageBuffer->rebuildFonts();
+    auto result = m_remoteImageBuffers.add(imageBufferIdentifier, RemoteImageBuffer::create(imageBuffer.releaseNonNull(), imageBufferIdentifier, contextIdentifier, *this));
+    MESSAGE_CHECK(result.isNewEntry, "Duplicate ImageBuffer");
+}
+#endif
+
+
 void RemoteRenderingBackend::createSnapshotRecorder(RemoteSnapshotRecorderIdentifier identifier, RemoteSnapshotIdentifier snapshotIdentifier)
 {
     assertIsCurrent(workQueue());

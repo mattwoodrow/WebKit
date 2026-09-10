@@ -19473,8 +19473,30 @@ void WebPageProxy::focusRemoteFrame(IPC::Connection& connection, WebCore::FrameI
     setFocus(true);
 }
 
+#if ENABLE(OFFSCREEN_CANVAS)
+void WebPageProxy::setOffscreenCanvasPlaceholderLayer(IPC::Connection& connection, WebCore::PlaceholderRenderingContextIdentifier identifier, std::optional<WebCore::PlatformLayerIdentifier> layerID)
+{
+    Ref process = WebProcessProxy::fromConnection(connection);
+    // Only the process that owns the placeholder may say where it is displayed, and only using one
+    // of its own layers. Otherwise a compromised process could redirect another site's canvas
+    // frames onto a layer of its choosing.
+    MESSAGE_CHECK_BASE(identifier.processIdentifier() == process->coreProcessIdentifier(), connection);
+    MESSAGE_CHECK_BASE(!layerID || layerID->processIdentifier() == process->coreProcessIdentifier(), connection);
+
+    WebProcessProxy::setOffscreenCanvasPlaceholderLayer(identifier, this->identifier(), layerID);
+}
+#endif
+
 void WebPageProxy::postMessageToRemote(WebCore::FrameIdentifier source, const WebCore::SecurityOriginData& sourceOrigin, WebCore::FrameIdentifier target, std::optional<WebCore::SecurityOriginData> targetOrigin, const WebCore::MessageWithMessagePorts& message, std::optional<WebCore::UserGestureTokenData>&& userGestureToken)
 {
+#if ENABLE(OFFSCREEN_CANVAS)
+    if (RefPtr serializedValue = message.message) {
+        auto placeholders = serializedValue->transferredPlaceholderIdentifiers();
+        if (!placeholders.isEmpty())
+            processContainingFrame(target)->grantOffscreenCanvasPlaceholderAccess(placeholders);
+    }
+#endif
+
     if (message.transferredPorts.isEmpty()) {
         sendToProcessContainingFrame(target, Messages::WebPage::RemotePostMessage(source, sourceOrigin, target, targetOrigin, message, userGestureToken));
         return;

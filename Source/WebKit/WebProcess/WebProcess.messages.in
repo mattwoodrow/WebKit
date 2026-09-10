@@ -257,4 +257,8 @@ messages -> WebProcess : AuxiliaryProcess WantsAsyncDispatchMessage {
 #endif
 
     ContentWorldDestroyed(WebKit::ContentWorldIdentifier identifier)
+
+#if ENABLE(OFFSCREEN_CANVAS)
+    CommitOffscreenCanvasPlaceholderFrame(WebCore::PlaceholderRenderingContextIdentifier identifier, struct WebCore::ImageBufferParameters parameters, struct WebCore::ImageBufferBackendInfo info, std::optional<WebKit::RemoteSerializedImageBufferIdentifier> transferIdentifier, std::optional<WebKit::ImageBufferBackendHandle> handle, bool didApplyToLayer, bool originClean, bool opaque)
+#endif
 }

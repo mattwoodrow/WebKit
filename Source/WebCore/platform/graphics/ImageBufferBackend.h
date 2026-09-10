@@ -103,15 +103,18 @@ public:
     virtual bool isImageBufferBackendHandleSharing() const { return false; }
 };
 
+// At namespace scope, like ImageBufferParameters, so that it can be named in IPC message
+// signatures; the generator only emits file-local coders for nested types.
+struct ImageBufferBackendInfo {
+    RenderingMode renderingMode;
+    AffineTransform baseTransform;
+    size_t memoryCost;
+};
+
 class ImageBufferBackend {
 public:
     using Parameters = ImageBufferBackendParameters;
-
-    struct Info {
-        RenderingMode renderingMode;
-        AffineTransform baseTransform;
-        size_t memoryCost;
-    };
+    using Info = ImageBufferBackendInfo;
 
     WEBCORE_EXPORT virtual ~ImageBufferBackend();
 

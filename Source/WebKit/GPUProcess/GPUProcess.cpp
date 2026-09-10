@@ -166,6 +166,9 @@ void GPUProcess::removeGPUConnectionToWebProcess(GPUConnectionToWebProcess& conn
     ASSERT(m_webProcessConnections.contains(connection.webProcessIdentifier()));
     m_webProcessConnections.remove(connection.webProcessIdentifier());
 
+    // Drop any buffers this process deposited for, or was due to claim from, another process.
+    removeTransferredImageBuffersForProcess(connection.webProcessIdentifier());
+
     if (m_isNowPlayingArbiterActive)
         recomputeNowPlayingOwner();
 
@@ -450,6 +453,36 @@ void GPUProcess::updateSandboxAccess(const Vector<SandboxExtension::Handle>& ext
     RELEASE_LOG(WebRTC, "GPUProcess::updateSandboxAccess: Adding %zu extensions", extensions.size());
     for (auto& extension : extensions)
         SandboxExtension::consumePermanently(extension);
+}
+
+bool GPUProcess::addTransferredImageBuffer(RemoteSerializedImageBufferIdentifier identifier, WebCore::ProcessIdentifier sourceProcess, WebCore::ProcessIdentifier destinationProcess, Ref<WebCore::ImageBuffer>&& imageBuffer)
+{
+    Locker locker(m_globalResourceLocker);
+    return m_transferredImageBuffers.add(identifier, TransferredImageBuffer {
+        sourceProcess, destinationProcess, WTF::move(imageBuffer)
+    }).isNewEntry;
+}
+
+RefPtr<WebCore::ImageBuffer> GPUProcess::takeTransferredImageBuffer(RemoteSerializedImageBufferIdentifier identifier, WebCore::ProcessIdentifier claimingProcess)
+{
+    Locker locker(m_globalResourceLocker);
+    auto iterator = m_transferredImageBuffers.find(identifier);
+    if (iterator == m_transferredImageBuffers.end())
+        return nullptr;
+    // Only the process the buffer was deposited for may claim it.
+    if (iterator->value.destinationProcess != claimingProcess)
+        return nullptr;
+    RefPtr imageBuffer = WTF::move(iterator->value.imageBuffer);
+    m_transferredImageBuffers.remove(iterator);
+    return imageBuffer;
+}
+
+void GPUProcess::removeTransferredImageBuffersForProcess(WebCore::ProcessIdentifier processIdentifier)
+{
+    Locker locker(m_globalResourceLocker);
+    m_transferredImageBuffers.removeIf([&](auto& entry) {
+        return entry.value.sourceProcess == processIdentifier || entry.value.destinationProcess == processIdentifier;
+    });
 }
 
 Ref<RemoteSnapshot> GPUProcess::getOrCreateSnapshot(RemoteSnapshotIdentifier snapshotIdentifier)

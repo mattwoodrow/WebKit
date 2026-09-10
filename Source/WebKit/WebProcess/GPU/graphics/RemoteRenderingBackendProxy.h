@@ -110,6 +110,13 @@ public:
     void transferImageBuffer(std::unique_ptr<RemoteSerializedImageBufferProxy>, WebCore::ImageBuffer&);
     std::unique_ptr<RemoteSerializedImageBufferProxy> moveToSerializedBuffer(RemoteImageBufferProxy&);
     Ref<RemoteImageBufferProxy> moveToImageBuffer(RemoteSerializedImageBufferProxy&);
+#if ENABLE(OFFSCREEN_CANVAS)
+    // Hands the buffer to another web process's rendering backend via the GPU process, and claims
+    // a buffer another process deposited for this one. Used for OffscreenCanvas frames that must
+    // cross a site isolation boundary.
+    void transferSerializedBufferToProcess(RemoteSerializedImageBufferProxy&, WebCore::ProcessIdentifier destinationProcess);
+    RefPtr<RemoteImageBufferProxy> takeTransferredBuffer(RemoteSerializedImageBufferIdentifier, const WebCore::ImageBufferParameters&, const WebCore::ImageBufferBackend::Info&);
+#endif
 
     RefPtr<RemoteImageBufferProxy> cachedImageBuffer(const WebCore::ImageBuffer&) const;
 

@@ -3271,6 +3271,13 @@ header: <WebCore/ImageBuffer.h>
     WebCore::RenderingPurpose purpose;
 };
 
+header: <WebCore/ImageBufferBackend.h>
+[CustomHeader] struct WebCore::ImageBufferBackendInfo {
+    WebCore::RenderingMode renderingMode;
+    WebCore::AffineTransform baseTransform;
+    size_t memoryCost;
+};
+
 [RValue] class WebCore::ProcessIdentity {
 #if HAVE(TASK_IDENTITY_TOKEN)
     MachSendRight m_taskIdToken;
@@ -5957,6 +5964,9 @@ struct WebCore::SerializedScriptValueInternals {
 #endif
     uint64_t exposedMessagePortCount;
     std::optional<WebCore::NonSerializedDataToken> nonSerializedDataToken;
+#if ENABLE(OFFSCREEN_CANVAS_IN_WORKERS)
+    Vector<std::unique_ptr<WebCore::DetachedOffscreenCanvas>> detachedOffscreenCanvases;
+#endif
     [NotSerialized] Vector<WebCore::FileSystemHandleKeepAlive> fileSystemHandleKeepAlives;
 #if ENABLE(WEB_CODECS)
     [NotSerialized] Vector<WebCore::WebCodecsVideoFrameData> serializedVideoFrames;
@@ -5976,7 +5986,6 @@ struct WebCore::SerializedScriptValueInternals {
     [NotSerialized] std::unique_ptr<Vector<JSC::ArrayBufferContents>> sharedBufferContentsArray;
     [NotSerialized] Vector<std::optional<WebCore::DetachedImageBitmap>> detachedImageBitmaps;
 #if ENABLE(OFFSCREEN_CANVAS_IN_WORKERS)
-    [NotSerialized] Vector<std::unique_ptr<WebCore::DetachedOffscreenCanvas>> detachedOffscreenCanvases;
     [NotSerialized] Vector<Ref<WebCore::OffscreenCanvas>> inMemoryOffscreenCanvases;
 #endif
     [NotSerialized] Vector<Ref<WebCore::MessagePort>> inMemoryMessagePorts;
@@ -5987,6 +5996,15 @@ struct WebCore::SerializedScriptValueInternals {
     [NotSerialized] Vector<WebCore::URLKeepingBlobAlive> blobHandles;
     [NotSerialized] uint64_t memoryCost;
 };
+
+#if ENABLE(OFFSCREEN_CANVAS_IN_WORKERS)
+header: <WebCore/OffscreenCanvas.h>
+[CustomHeader] class WebCore::DetachedOffscreenCanvas {
+    WebCore::IntSize size();
+    bool originClean();
+    std::optional<WebCore::PlaceholderRenderingContextIdentifier> placeholderIdentifier();
+};
+#endif
 
 [RefCounted] class WebCore::SerializedScriptValue {
     std::unique_ptr<WebCore::SerializedScriptValueInternals> m_internals;

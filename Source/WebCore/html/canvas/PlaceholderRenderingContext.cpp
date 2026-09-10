@@ -31,32 +31,126 @@
 #include "ContextDestructionObserverInlines.h"
 #include "GraphicsLayer.h"
 #include "GraphicsLayerContentsDisplayDelegate.h"
+#include "Document.h"
 #include "HTMLCanvasElement.h"
 #include "NativeImage.h"
 #include "OffscreenCanvas.h"
+#include <wtf/HashMap.h>
+#include <wtf/NeverDestroyed.h>
 #include <wtf/TZoneMallocInlines.h>
 
 namespace WebCore {
 
 WTF_MAKE_TZONE_ALLOCATED_IMPL(PlaceholderRenderingContextSource);
 
+using PlaceholderRenderingContextSourceMap = HashMap<PlaceholderRenderingContextIdentifier, ThreadSafeWeakPtr<PlaceholderRenderingContextSource>>;
+
+static Lock& sourceMapLock()
+{
+    static NeverDestroyed<Lock> lock;
+    return lock.get();
+}
+
+static PlaceholderRenderingContextSourceMap& sourceMap() WTF_REQUIRES_LOCK(sourceMapLock())
+{
+    static NeverDestroyed<PlaceholderRenderingContextSourceMap> map;
+    return map.get();
+}
+
+static PlaceholderRenderingContextSource::RemoteSourceFactory& remoteSourceFactory()
+{
+    static NeverDestroyed<PlaceholderRenderingContextSource::RemoteSourceFactory> factory;
+    return factory.get();
+}
+
+void PlaceholderRenderingContextSource::setRemoteSourceFactory(RemoteSourceFactory&& factory)
+{
+    remoteSourceFactory() = WTF::move(factory);
+}
+
+static PlaceholderRenderingContextSource::DestructionHandler& destructionHandler()
+{
+    static NeverDestroyed<PlaceholderRenderingContextSource::DestructionHandler> handler;
+    return handler.get();
+}
+
+void PlaceholderRenderingContextSource::setDestructionHandler(DestructionHandler&& handler)
+{
+    destructionHandler() = WTF::move(handler);
+}
+
+static PlaceholderRenderingContextSource::LayerChangeHandler& layerChangeHandler()
+{
+    static NeverDestroyed<PlaceholderRenderingContextSource::LayerChangeHandler> handler;
+    return handler.get();
+}
+
+void PlaceholderRenderingContextSource::setLayerChangeHandler(LayerChangeHandler&& handler)
+{
+    layerChangeHandler() = WTF::move(handler);
+}
+
+RefPtr<PlaceholderRenderingContextSource> PlaceholderRenderingContextSource::createRemoteSource(PlaceholderRenderingContextIdentifier identifier)
+{
+    auto& factory = remoteSourceFactory();
+    if (!factory)
+        return nullptr;
+    return factory(identifier);
+}
+
+RefPtr<PlaceholderRenderingContextSource> PlaceholderRenderingContextSource::sourceWithIdentifier(PlaceholderRenderingContextIdentifier identifier)
+{
+    Locker locker { sourceMapLock() };
+    auto iterator = sourceMap().find(identifier);
+    if (iterator == sourceMap().end())
+        return nullptr;
+    return iterator->value.get();
+}
+
 Ref<PlaceholderRenderingContextSource> PlaceholderRenderingContextSource::create(PlaceholderRenderingContext& context)
 {
     return adoptRef(*new PlaceholderRenderingContextSource(context));
 }
 
-PlaceholderRenderingContextSource::PlaceholderRenderingContextSource(PlaceholderRenderingContext& placeholder)
-    : m_placeholder(placeholder)
+PlaceholderRenderingContextSource::PlaceholderRenderingContextSource(PlaceholderRenderingContextIdentifier identifier)
+    : m_identifier(identifier)
 {
 }
 
-void PlaceholderRenderingContextSource::setPlaceholderBuffer(ImageBuffer& imageBuffer, bool originClean, bool opaque)
+PlaceholderRenderingContextSource::PlaceholderRenderingContextSource(PlaceholderRenderingContext& placeholder)
+    : m_identifier(PlaceholderRenderingContextIdentifier::generate())
+    , m_placeholder(placeholder)
+{
+    Locker locker { sourceMapLock() };
+    sourceMap().add(m_identifier, ThreadSafeWeakPtr<PlaceholderRenderingContextSource> { *this });
+}
+
+PlaceholderRenderingContextSource::~PlaceholderRenderingContextSource()
+{
+    // Only sources that own a placeholder in this process are registered; remote sources are
+    // identified by an identifier generated in the process that owns the placeholder.
+    if (m_identifier.processIdentifier() != Process::identifier())
+        return;
+    {
+        Locker locker { sourceMapLock() };
+        sourceMap().remove(m_identifier);
+    }
+    // The last reference can be dropped on the thread holding the offscreen half, so hop to the
+    // main thread where the WebKit layer's IPC connection lives.
+    ensureOnMainThread([identifier = m_identifier] {
+        if (auto& handler = destructionHandler())
+            handler(identifier);
+    });
+}
+
+void PlaceholderRenderingContextSource::setPlaceholderBuffer(ImageBuffer& imageBuffer, bool originClean, bool opaque, LayerUpdate layerUpdate)
 {
     auto bufferVersion = ++m_bufferVersion;
     {
         Locker locker { m_lock };
         if (m_delegate) {
-            m_delegate->tryCopyToLayer(imageBuffer, opaque);
+            if (layerUpdate == LayerUpdate::Needed)
+                m_delegate->tryCopyToLayer(imageBuffer, opaque);
             m_delegateBufferVersion = bufferVersion;
         }
     }
@@ -92,16 +186,63 @@ void PlaceholderRenderingContextSource::setPlaceholderBuffer(ImageBuffer& imageB
     });
 }
 
+void PlaceholderRenderingContextSource::setPlaceholderBufferFromRemoteProcess(Ref<ImageBuffer>&& imageBuffer, bool originClean, bool opaque, LayerUpdate layerUpdate)
+{
+    assertIsMainThread();
+    RefPtr placeholder = m_placeholder.get();
+    if (!placeholder)
+        return;
+
+    auto bufferVersion = ++m_bufferVersion;
+    {
+        Locker locker { m_lock };
+        if (m_delegate) {
+            if (layerUpdate == LayerUpdate::Needed)
+                m_delegate->tryCopyToLayer(imageBuffer, opaque);
+            m_delegateBufferVersion = bufferVersion;
+        }
+    }
+
+    placeholder->setPlaceholderBuffer(WTF::move(imageBuffer), originClean, opaque);
+    m_placeholderBufferVersion = bufferVersion;
+}
+
+Document* PlaceholderRenderingContextSource::placeholderDocument() const
+{
+    assertIsMainThread();
+    RefPtr placeholder = m_placeholder.get();
+    if (!placeholder)
+        return nullptr;
+    return &placeholder->canvas().document();
+}
+
 void PlaceholderRenderingContextSource::setContentsToLayer(GraphicsLayer& layer, ImageBuffer* buffer, bool opaque)
 {
     assertIsMainThread();
-    Locker locker { m_lock };
-    if ((m_delegate = layer.createAsyncContentsDisplayDelegate(m_delegate.get()))) {
-        if (buffer) {
-            m_delegate->tryCopyToLayer(*buffer, opaque);
-            m_delegateBufferVersion = m_placeholderBufferVersion;
+    std::optional<PlatformLayerIdentifier> layerID;
+    {
+        Locker locker { m_lock };
+        if ((m_delegate = layer.createAsyncContentsDisplayDelegate(m_delegate.get()))) {
+            if (buffer) {
+                m_delegate->tryCopyToLayer(*buffer, opaque);
+                m_delegateBufferVersion = m_placeholderBufferVersion;
+            }
+            layerID = m_delegate->destinationLayerID();
         }
     }
+    reportLayerChange(layerID);
+}
+
+void PlaceholderRenderingContextSource::reportLayerChange(std::optional<PlatformLayerIdentifier> layerID)
+{
+    assertIsMainThread();
+    if (m_identifier.processIdentifier() != Process::identifier())
+        return;
+    if (m_reportedLayerID.asOptional() == layerID)
+        return;
+    m_reportedLayerID = layerID;
+    if (auto& handler = layerChangeHandler())
+        handler(m_identifier, layerID);
 }
 
 WTF_MAKE_TZONE_ALLOCATED_IMPL(PlaceholderRenderingContext);

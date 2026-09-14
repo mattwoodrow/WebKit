@@ -103,12 +103,15 @@ void RemoteSnapshot::abandonFrame(FrameIdentifier frameIdentifier)
 {
     Locker locker(m_lock);
     auto result = m_frames.add(frameIdentifier, Frame { .displayList = std::nullopt, .isAbandoned = true });
-    if (result.isNewEntry)
+    if (result.isNewEntry) {
+        m_hasAbandonedFrames = true;
         return;
+    }
     auto& frame = result.iterator->value;
     if (frame.isResolved())
         return;
     frame.isAbandoned = true;
+    m_hasAbandonedFrames = true;
     resolveFrameWithLockHeld(frame);
 }
 
@@ -181,6 +184,12 @@ void RemoteSnapshot::fail()
     Locker locker(m_lock);
     m_hasFailed = true;
     dispatchCompletionHandlersIfComplete();
+}
+
+bool RemoteSnapshot::hasAbandonedFrames() const
+{
+    Locker locker(m_lock);
+    return m_hasAbandonedFrames;
 }
 
 bool RemoteSnapshot::isComplete() const

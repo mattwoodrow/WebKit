@@ -1826,7 +1826,7 @@ public:
 
     using StartViewTransitionCallbackOptions = Variant<RefPtr<JSViewTransitionUpdateCallback>, StartViewTransitionOptions>;
     RefPtr<ViewTransition> startViewTransition(StartViewTransitionCallbackOptions&&);
-    ViewTransition* NODELETE activeViewTransition() const;
+    WEBCORE_EXPORT ViewTransition* NODELETE activeViewTransition() const;
     bool activeViewTransitionCapturedDocumentElement() const;
     void setActiveViewTransition(RefPtr<ViewTransition>&&);
 

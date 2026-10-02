@@ -391,6 +391,10 @@ def parse_args(args):
             "--load-in-cross-origin-iframe", action="store_true", default=False,
             help=("Run each test in a cross origin iframe.")),
         optparse.make_option(
+            "--cg-delegate-round-trip", action="store_true", default=False,
+            help=("Paint test pages (but not reference pages) through a CGContext whose CGContextDelegate forwards back to the GraphicsContext. "
+                  "Equivalent to '--additional-header=GraphicsContextCGDelegateRoundTripEnabled=true'")),
+        optparse.make_option(
             "--no-use-gpu-process", action="store_true", default=False,
             help=("Disable GPU process for DOM rendering.")),
         optparse.make_option(
@@ -503,6 +507,10 @@ def _set_up_derived_options(port, options):
 
     if options.load_in_cross_origin_iframe:
         options.additional_header = 'runInCrossOriginFrame=true'
+
+    if options.cg_delegate_round_trip:
+        # additional_header is only applied to the test, not to its references, so references render normally.
+        options.additional_header = ' '.join(filter(None, [options.additional_header, 'GraphicsContextCGDelegateRoundTripEnabled=true']))
 
     if port.port_name == "mac" and options.site_isolation:
         host = Host()

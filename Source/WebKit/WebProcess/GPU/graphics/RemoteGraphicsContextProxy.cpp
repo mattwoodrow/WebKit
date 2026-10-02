@@ -213,6 +213,8 @@ void RemoteGraphicsContextProxy::setMiterLimit(float limit)
 void RemoteGraphicsContextProxy::clip(const FloatRect& rect)
 {
     sendPendingDrawsIfNecessary();
+    // Clips are antialiased according to the current state.
+    appendStateChangeItemIfNecessary();
     updateStateForClip(rect);
     send(Messages::RemoteGraphicsContext::Clip(rect));
 }
@@ -220,6 +222,8 @@ void RemoteGraphicsContextProxy::clip(const FloatRect& rect)
 void RemoteGraphicsContextProxy::clipRoundedRect(const FloatRoundedRect& rect)
 {
     sendPendingDrawsIfNecessary();
+    // Clips are antialiased according to the current state.
+    appendStateChangeItemIfNecessary();
     updateStateForClipRoundedRect(rect);
     send(Messages::RemoteGraphicsContext::ClipRoundedRect(rect));
 }
@@ -227,6 +231,8 @@ void RemoteGraphicsContextProxy::clipRoundedRect(const FloatRoundedRect& rect)
 void RemoteGraphicsContextProxy::clipOut(const FloatRect& rect)
 {
     sendPendingDrawsIfNecessary();
+    // Clips are antialiased according to the current state.
+    appendStateChangeItemIfNecessary();
     updateStateForClipOut(rect);
     send(Messages::RemoteGraphicsContext::ClipOut(rect));
 }
@@ -234,6 +240,8 @@ void RemoteGraphicsContextProxy::clipOut(const FloatRect& rect)
 void RemoteGraphicsContextProxy::clipOutRoundedRect(const FloatRoundedRect& rect)
 {
     sendPendingDrawsIfNecessary();
+    // Clips are antialiased according to the current state.
+    appendStateChangeItemIfNecessary();
     updateStateForClipOutRoundedRect(rect);
     send(Messages::RemoteGraphicsContext::ClipOutRoundedRect(rect));
 }
@@ -250,6 +258,8 @@ void RemoteGraphicsContextProxy::clipToImageBuffer(ImageBuffer& imageBuffer, con
 void RemoteGraphicsContextProxy::clipOut(const Path& path)
 {
     sendPendingDrawsIfNecessary();
+    // Clips are antialiased according to the current state.
+    appendStateChangeItemIfNecessary();
     updateStateForClipOut(path);
     send(Messages::RemoteGraphicsContext::ClipOutToPath(path));
 }
@@ -257,6 +267,8 @@ void RemoteGraphicsContextProxy::clipOut(const Path& path)
 void RemoteGraphicsContextProxy::clipPath(const Path& path, WindRule rule)
 {
     sendPendingDrawsIfNecessary();
+    // Clips are antialiased according to the current state.
+    appendStateChangeItemIfNecessary();
     updateStateForClipPath(path);
     if (RefPtr impl = path.asImpl(); impl && !impl->isTransient()) {
         if (auto identifier = recordResourceUse(*impl)) {

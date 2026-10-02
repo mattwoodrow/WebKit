@@ -82,6 +82,7 @@
 #include <WebCore/FloatPoint.h>
 #include <WebCore/GeometryUtilities.h>
 #include <WebCore/GraphicsContext.h>
+#include <WebCore/GraphicsContextCGDelegate.h>
 #include <WebCore/GraphicsLayer.h>
 #include <WebCore/GraphicsLayerClient.h>
 #include <WebCore/GraphicsLayerFactory.h>
@@ -1002,9 +1003,16 @@ void UnifiedPDFPlugin::paintPDFContent(const WebCore::GraphicsLayer* layer, Grap
 
         if (!asyncRenderer) {
             LOG_WITH_STREAM(PDF, stream << "UnifiedPDFPlugin: painting PDF page " << pageInfo.pageIndex << " into rect " << pageDestinationRect << " with clip " << clipRect);
-            RetainPtr platformContext = context.platformContext();
-            applyPDFContentAXColorAdjustment(platformContext, page.get(), displayMode);
-            [page drawWithBox:kPDFDisplayBoxCropBox toContext:platformContext];
+            RetainPtr<CGContextRef> platformContext;
+            if (context.hasPlatformContext())
+                platformContext = context.platformContext();
+            else {
+                // The context has no CGContext (e.g. it records for printing or a snapshot in the GPU
+                // process), so let PDFKit draw into a CGContext that forwards its drawing to the context.
+                platformContext = GraphicsContextCGDelegate::createCGContext(context);
+            }
+            applyPDFContentAXColorAdjustment(platformContext.get(), page.get(), displayMode);
+            [page drawWithBox:kPDFDisplayBoxCropBox toContext:platformContext.get()];
         }
 
         if constexpr (hasFullAnnotationSupport) {

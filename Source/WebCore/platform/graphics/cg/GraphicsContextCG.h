@@ -184,6 +184,9 @@ private:
 
 CGAffineTransform getUserToBaseCTM(CGContextRef);
 
+// The radius of the focus rings drawn by GraphicsContextCG::drawFocusRing() at zoom factor 1, in base space.
+CGFloat defaultFocusRingRadius();
+
 enum class SingularValueSelection : bool { Smallest, Largest };
 CGFloat singularValue(const CGAffineTransform& userToBaseCTM, SingularValueSelection);
 

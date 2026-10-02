@@ -44,6 +44,7 @@
 #import <WebCore/LocalFrameView.h>
 #import <WebCore/Page.h>
 #import <WebCore/PixelFormat.h>
+#import <WebCore/Settings.h>
 #import <wtf/SetForScope.h>
 #import <wtf/SystemTracing.h>
 #import <wtf/TZoneMallocInlines.h>
@@ -102,6 +103,12 @@ std::optional<WebCore::ColorSpace> RemoteLayerTreeContext::displayColorSpace() c
 UseLosslessCompression RemoteLayerTreeContext::useIOSurfaceLosslessCompression() const
 {
     return webPage().isIOSurfaceLosslessCompressionEnabled() ? UseLosslessCompression::Yes : UseLosslessCompression::No;
+}
+
+bool RemoteLayerTreeContext::isGraphicsContextCGDelegateRoundTripEnabled() const
+{
+    RefPtr page = webPage().corePage();
+    return page && page->settings().graphicsContextCGDelegateRoundTripEnabled();
 }
 
 #if PLATFORM(IOS_FAMILY)

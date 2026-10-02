@@ -32,6 +32,7 @@
 #import "RemoteLayerBackingStoreCollection.h"
 #import "RemoteLayerTreeContext.h"
 #import "RemoteRenderingBackendProxy.h"
+#import <WebCore/GraphicsContextCGDelegate.h>
 #import <WebCore/PlatformCALayerClient.h>
 #import <wtf/TZoneMallocInlines.h>
 
@@ -119,7 +120,13 @@ void RemoteLayerWithRemoteRenderingBackingStore::createContextAndPaintContents()
         return;
     }
 
-    drawInContext(bufferSet->context());
+    RefPtr layerTreeContext = m_layer->context();
+    if (layerTreeContext && layerTreeContext->isGraphicsContextCGDelegateRoundTripEnabled()) {
+        // Testing mode: paint through a CGContext whose delegate forwards back to the remote GraphicsContext.
+        auto roundTripContext = GraphicsContextCGDelegate::createGraphicsContext(bufferSet->context());
+        drawInContext(roundTripContext.get());
+    } else
+        drawInContext(bufferSet->context());
     m_cleared = false;
 }
 

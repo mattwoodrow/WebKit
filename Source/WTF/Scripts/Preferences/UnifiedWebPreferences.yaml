@@ -2583,6 +2583,14 @@ GoogleAntiFlickerOptimizationQuirkEnabled:
   humanReadableDescription: "Quirk to prevent delayed initial painting on sites using Google's Anti-Flicker optimization"
   defaultValue: true
 
+GraphicsContextCGDelegateRoundTripEnabled:
+  type: bool
+  status: internal
+  humanReadableName: "CGContextDelegate round-trip painting"
+  humanReadableDescription: "Paint layer contents through a CGContext that forwards back to the GraphicsContext, for testing"
+  condition: USE(CG)
+  defaultValue: false
+
 GraphicsContextFiltersEnabled:
   type: bool
   status: stable

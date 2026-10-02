@@ -92,6 +92,7 @@
 #import <WebCore/FrameLoader.h>
 #import <WebCore/FrameView.h>
 #import <WebCore/GraphicsContextCG.h>
+#import <WebCore/GraphicsContextCGDelegate.h>
 #import <WebCore/HTMLAnchorElement.h>
 #import <WebCore/HTMLAreaElement.h>
 #import <WebCore/HTMLBodyElement.h>
@@ -1628,7 +1629,7 @@ static inline CGFloat roundCGFloat(CGFloat f)
     return static_cast<CGFloat>(round(f));
 }
 
-static void drawPDFPage(PDFDocument *pdfDocument, CFIndex pageIndex, CGContextRef context, CGFloat pageSetupScaleFactor, CGSize paperSize)
+static void drawPDFPage(PDFDocument *pdfDocument, CFIndex pageIndex, CGContextRef context, CGFloat pageSetupScaleFactor, CGSize paperSize, GraphicsContext* delegateTarget = nullptr)
 {
     CGContextSaveGState(context);
 
@@ -1674,10 +1675,30 @@ static void drawPDFPage(PDFDocument *pdfDocument, CFIndex pageIndex, CGContextRe
             continue;
 
         CGRect transformedRect = CGRectApplyAffineTransform(annotation.bounds, transform);
+        if (delegateTarget) {
+            // `context` forwards its drawing to `delegateTarget` (its CTM is in the same space as the
+            // target's), but it isn't a PDF context, so add the link to the target instead.
+            if (auto inverse = delegateTarget->getCTM().inverse())
+                delegateTarget->setURLForRect(url.get(), inverse->mapRect(FloatRect { transformedRect }));
+            continue;
+        }
         CGPDFContextSetURLForRect(context, (CFURLRef)url.get(), transformedRect);
     }
 
     CGContextRestoreGState(context);
+}
+
+static void drawPDFPage(PDFDocument *pdfDocument, CFIndex pageIndex, GraphicsContext& context, CGFloat pageSetupScaleFactor, CGSize paperSize)
+{
+    if (context.hasPlatformContext()) {
+        drawPDFPage(pdfDocument, pageIndex, protect(context.platformContext()).get(), pageSetupScaleFactor, paperSize);
+        return;
+    }
+
+    // The context has no CGContext (e.g. it records the printed pages for the GPU process), so
+    // let PDFKit draw into a CGContext that forwards its drawing to the context.
+    RetainPtr delegateContext = GraphicsContextCGDelegate::createCGContext(context);
+    drawPDFPage(pdfDocument, pageIndex, delegateContext.get(), pageSetupScaleFactor, paperSize, &context);
 }
 
 void WebPage::drawPDFDocument(CGContextRef context, PDFDocument *pdfDocument, const PrintInfo& printInfo, const WebCore::IntRect& rect)
@@ -1706,7 +1727,7 @@ void WebPage::drawPagesToPDFFromPDFDocument(GraphicsContext& context, PDFDocumen
             break;
 
         context.beginPage(mediaBox);
-        drawPDFPage(pdfDocument, page, protect(context.platformContext()).get(), printInfo.pageSetupScaleFactor, CGSizeMake(printInfo.availablePaperWidth, printInfo.availablePaperHeight));
+        drawPDFPage(pdfDocument, page, context, printInfo.pageSetupScaleFactor, CGSizeMake(printInfo.availablePaperWidth, printInfo.availablePaperHeight));
         context.endPage();
     }
 }
@@ -2003,9 +2024,15 @@ void WebPage::drawPrintContextPagesToGraphicsContext(GraphicsContext& context, c
 
         context.beginPage(pageRect);
 
-        context.scale(FloatSize(1, -1));
-        context.translate(0, -printContext->pageRect(page).height());
-        printContext->spoolPage(context, page, printContext->pageRect(page).width());
+        {
+            // Each page starts with a fresh graphics state in the PDF, so don't let this page's
+            // transform leak into the next one in contexts that track the state themselves
+            // (e.g. a recorder).
+            GraphicsContextStateSaver stateSaver(context);
+            context.scale(FloatSize(1, -1));
+            context.translate(0, -printContext->pageRect(page).height());
+            printContext->spoolPage(context, page, printContext->pageRect(page).width());
+        }
 
         context.endPage();
     }
@@ -2025,12 +2052,8 @@ void WebPage::drawPrintingRectToSnapshot(RemoteSnapshotIdentifier snapshotIdenti
         return;
     }
 
-    if (pdfDocumentForPrintingFrame(coreFrame.get())) {
-        // Can't do this remotely.
-        completionHandler(false);
-        return;
-    }
-    ASSERT(coreFrame->document()->printing());
+    RetainPtr pdfDocument = pdfDocumentForPrintingFrame(coreFrame.get());
+    ASSERT(coreFrame->document()->printing() || pdfDocument);
     PrintContextAccessScope scope { *this };
 
     Ref remoteRenderingBackend = ensureRemoteRenderingBackendProxy();
@@ -2046,7 +2069,14 @@ void WebPage::drawPrintingRectToSnapshot(RemoteSnapshotIdentifier snapshotIdenti
     float printingScale = static_cast<float>(imageSize.width()) / rect.width();
     context.scale(printingScale);
 
-    Ref { *m_printContext }->spoolRect(context, rect);
+    if (pdfDocument) {
+        ASSERT(!m_printContext);
+        context.scale(FloatSize(1, -1));
+        context.translate(0, -rect.height());
+        // The recorder has no CGContext, so let PDFKit draw into one that forwards to the recorder.
+        drawPDFDocument(GraphicsContextCGDelegate::createCGContext(context).get(), pdfDocument.get(), printInfo, rect);
+    } else
+        Ref { *m_printContext }->spoolRect(context, rect);
 
     remoteRenderingBackend->sinkSnapshotRecorderIntoSnapshotFrame(WTF::move(m_remoteSnapshotState->recorder), frameID, Ref { m_remoteSnapshotState->callback }->chain());
     m_remoteSnapshotState = std::nullopt;
@@ -2066,19 +2096,14 @@ void WebPage::drawPrintingPagesToSnapshot(RemoteSnapshotIdentifier snapshotIdent
         return;
     }
 
-    if (pdfDocumentForPrintingFrame(coreFrame.get())) {
-        // Can't do this remotely.
-        completionHandler({ });
-        return;
-    }
-
-    if (!m_printContext) {
+    RetainPtr pdfDocument = pdfDocumentForPrintingFrame(coreFrame.get());
+    if (!pdfDocument && !m_printContext) {
         completionHandler({ });
         return;
     }
 
     PrintContextAccessScope scope { *this };
-    ASSERT(coreFrame->document()->printing());
+    ASSERT(coreFrame->document()->printing() || pdfDocument);
 
     FloatRect mediaBox = (m_printContext && m_printContext->pageCount()) ? m_printContext->pageRect(0) : FloatRect { 0, 0, printInfo.availablePaperWidth, printInfo.availablePaperHeight };
 
@@ -2093,7 +2118,11 @@ void WebPage::drawPrintingPagesToSnapshot(RemoteSnapshotIdentifier snapshotIdent
 
     GraphicsContext& context = m_remoteSnapshotState->recorder.get();
 
-    drawPrintContextPagesToGraphicsContext(context, mediaBox, first, count);
+    if (pdfDocument) {
+        ASSERT(!m_printContext);
+        drawPagesToPDFFromPDFDocument(context, pdfDocument.get(), printInfo, mediaBox, first, count);
+    } else
+        drawPrintContextPagesToGraphicsContext(context, mediaBox, first, count);
 
     remoteRenderingBackend->sinkSnapshotRecorderIntoSnapshotFrame(WTF::move(m_remoteSnapshotState->recorder), frameID, Ref { m_remoteSnapshotState->callback }->chain());
     m_remoteSnapshotState = std::nullopt;

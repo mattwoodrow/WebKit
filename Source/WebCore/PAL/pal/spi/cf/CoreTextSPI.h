@@ -71,6 +71,7 @@ typedef CF_OPTIONS(CFOptionFlags, CTFontShapeOptions) {
 typedef CF_OPTIONS(uint32_t, CTFontDescriptorOptions) {
     kCTFontDescriptorOptionSystemUIFont = 1 << 1,
     kCTFontDescriptorOptionPreferAppleSystemFont = kCTFontOptionsPreferSystemFont,
+    kCTFontDescriptorOptionIncludeHiddenFonts = 1 << 16,
     kCTFontDescriptorOptionThisIsNotARealOption = 0xFFFFFFFF
 };
 

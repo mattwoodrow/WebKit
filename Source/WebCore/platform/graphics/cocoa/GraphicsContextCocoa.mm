@@ -100,11 +100,8 @@ ImageDrawResult GraphicsContext::drawMultiRepresentationHEIC(Image& image, const
 
 #endif
 
-void GraphicsContextCG::drawFocusRing(const Path& path, float, const Color& color, float zoomFactor)
+static CGFocusRingStyle defaultFocusRingStyle()
 {
-    if (path.isEmpty())
-        return;
-
     CGFocusRingStyle focusRingStyle;
 #if USE(APPKIT)
     NSInitializeCGFocusRingStyleForTime(NSFocusRingOnly, &focusRingStyle, std::numeric_limits<double>::max());
@@ -117,6 +114,20 @@ void GraphicsContextCG::drawFocusRing(const Path& path, float, const Color& colo
     focusRingStyle.threshold = [PAL::getUIFocusRingStyleClassSingleton() alphaThreshold];
     focusRingStyle.bounds = CGRectZero;
 #endif
+    return focusRingStyle;
+}
+
+CGFloat defaultFocusRingRadius()
+{
+    return defaultFocusRingStyle().radius;
+}
+
+void GraphicsContextCG::drawFocusRing(const Path& path, float, const Color& color, float zoomFactor)
+{
+    if (path.isEmpty())
+        return;
+
+    auto focusRingStyle = defaultFocusRingStyle();
 
     // zoomFactor covers CSS zoom / page zoom (Cmd+/-). ctmScale covers page scale (pinch-to-zoom), canvas transforms, etc.
     CGContextRef platformContext = this->platformContext();

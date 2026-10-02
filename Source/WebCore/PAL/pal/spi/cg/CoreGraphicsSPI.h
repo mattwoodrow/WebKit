@@ -84,12 +84,38 @@ typedef struct CGFontHMetrics CGFontHMetrics;
 
 typedef CF_ENUM (int32_t, CGContextDelegateCallbackName)
 {
+    deFinalize = 0,
+    deGetColorTransform = 1,
+    deGetTransform = 2,
+    deGetBounds = 3,
+    deDrawLines = 4,
+    deDrawRects = 5,
     deDrawPath = 6,
     deDrawImage = 7,
     deDrawGlyphs = 8,
+    deDrawShading = 9,
+    deDrawDisplayList = 10,
+    deDrawImages = 11,
+    deBeginPage = 12,
+    deEndPage = 13,
+    deOperation = 14,
+    deDrawWindowContents = 15,
     deBeginLayer = 17,
     deEndLayer = 18,
+    deGetLayer = 19,
+    deDrawLayer = 20,
+    deDrawLinearGradient = 21,
+    deDrawRadialGradient = 22,
+    deDrawImageFromRect = 23,
+    deGetDelegateName = 24,
+    deDrawPathDirect = 25,
+    deCreateImage = 26,
+    deDrawConicGradient = 27,
+    deGetBitmapContextInfo = 28,
+    deSerializeDisplayList = 29,
     deGetColorSpace = 30,
+    deDrawImageApplyingToneMapping = 31,
+    deStrokeArc = 32,
 };
 
 typedef const struct CGColorTransform* CGColorTransformRef;
@@ -108,9 +134,114 @@ typedef enum {
 } CGContextType;
 
 typedef enum {
+    kCGCompositeClear = 0,
     kCGCompositeCopy = 1,
     kCGCompositeSover = 2,
+    kCGCompositeSin = 3,
+    kCGCompositeSout = 4,
+    kCGCompositeSatop = 5,
+    kCGCompositeDover = 6,
+    kCGCompositeDin = 7,
+    kCGCompositeDout = 8,
+    kCGCompositeDatop = 9,
+    kCGCompositeXor = 10,
+    kCGCompositePlusd = 11,
+    kCGCompositePlusl = 12,
+    kCGCompositeMultiply = 13,
+    kCGCompositeScreen = 14,
+    kCGCompositeOverlay = 15,
+    kCGCompositeDarken = 16,
+    kCGCompositeLighten = 17,
+    kCGCompositeColorDodge = 18,
+    kCGCompositeColorBurn = 19,
+    kCGCompositeSoftLight = 20,
+    kCGCompositeHardLight = 21,
+    kCGCompositeDifference = 22,
+    kCGCompositeExclusion = 23,
+    kCGCompositeHue = 24,
+    kCGCompositeSaturation = 25,
+    kCGCompositeColor = 26,
+    kCGCompositeLuminosity = 27,
 } CGCompositeOperation;
+
+typedef CF_ENUM (int32_t, CGClipMode)
+{
+    kCGNoClip = -1,
+    kCGClip,
+    kCGEOClip,
+    kCGStrokeClip
+};
+
+typedef CF_ENUM (int32_t, CGClipType)
+{
+    kCGClipTypeNone = -1,
+    kCGClipTypeRect,
+    kCGClipTypeGlyphs_obsolete,
+    kCGClipTypePath,
+    kCGClipTypeMask,
+    kCGClipTypeTextClipping
+};
+
+typedef struct CGClip *CGClipRef;
+typedef const struct CGClipStack *CGClipStackRef;
+typedef struct CGClipMask CGClipMask;
+typedef struct CGClipStroke CGClipStroke;
+typedef struct CGDash *CGDashRef;
+typedef struct CGSoftMask *CGSoftMaskRef;
+
+typedef CF_ENUM (int32_t, CGShadingType)
+{
+    kCGShadingProcedural,
+    kCGShadingAxial,
+    kCGShadingRadial,
+    kCGShadingConic,
+    kCGShadingCustom
+};
+
+struct CGShadingAxialInfo {
+    CGPoint start;
+    bool extendStart;
+    CGPoint end;
+    bool extendEnd;
+    CGFloat domain[2];
+    CGFunctionRef function;
+};
+typedef struct CGShadingAxialInfo CGShadingAxialInfo;
+
+struct CGShadingRadialInfo {
+    CGPoint start;
+    CGFloat startRadius;
+    bool extendStart;
+    CGPoint end;
+    CGFloat endRadius;
+    bool extendEnd;
+    CGFloat domain[2];
+    CGFunctionRef function;
+};
+typedef struct CGShadingRadialInfo CGShadingRadialInfo;
+
+struct CGShadingConicInfo {
+    CGPoint center;
+    CGFloat angle;
+    CGFloat domain[2];
+    CGFunctionRef function;
+};
+typedef struct CGShadingConicInfo CGShadingConicInfo;
+
+struct CGShadingCustomInfo {
+    CGFloat domain[4];
+    CGFunctionRef function;
+    CGAffineTransform matrix;
+};
+typedef struct CGShadingCustomInfo CGShadingCustomInfo;
+
+union CGShadingDescriptor {
+    CGShadingAxialInfo axial;
+    CGShadingRadialInfo radial;
+    CGShadingConicInfo conic;
+    CGShadingCustomInfo custom;
+};
+typedef union CGShadingDescriptor CGShadingDescriptor;
 
 enum {
     kCGFontRenderingStyleAntialiasing = 1 << 0,
@@ -332,6 +463,7 @@ typedef void (*CGContextDelegateCallback)(void);
 typedef struct CGRenderingState *CGRenderingStateRef;
 typedef struct CGGState *CGGStateRef;
 typedef struct CGStyle *CGStyleRef;
+typedef struct CGDisplayList *CGDisplayListRef;
 
 #if ENABLE(UNIFIED_PDF)
 
@@ -439,8 +571,18 @@ CGPatternRef CGPatternCreateWithImage2(CGImageRef, CGAffineTransform, CGPatternT
 
 CGContextDelegateRef CGContextDelegateCreate(void* info);
 void CGContextDelegateSetCallback(CGContextDelegateRef, CGContextDelegateCallbackName, CGContextDelegateCallback);
+CGContextDelegateCallback CGContextDelegateGetCallback(CGContextDelegateRef, CGContextDelegateCallbackName);
 CGContextRef CGContextCreateWithDelegate(CGContextDelegateRef, CGContextType, CGRenderingStateRef, CGGStateRef);
 void* CGContextDelegateGetInfo(CGContextDelegateRef);
+extern const CFStringRef kCGContextClear;
+extern const CFStringRef kCGContextErase;
+extern const CFStringRef kCGContextFlush;
+extern const CFStringRef kCGContextSynchronize;
+extern const CFStringRef kCGContextSynchronizeAttributes;
+extern const CFStringRef kCGContextWait;
+CGRect CGDisplayListGetBoundingBox(CGDisplayListRef);
+void CGDisplayListDrawInContext(CGDisplayListRef, CGContextRef);
+void CGDisplayListDrawInContextDelegate(CGDisplayListRef, CGContextDelegateRef, CGRenderingStateRef, CGGStateRef, CFDictionaryRef auxiliaryInfo);
 void CGContextDelegateRelease(CGContextDelegateRef);
 CGFloat CGGStateGetAlpha(CGGStateRef);
 CGFontRef CGGStateGetFont(CGGStateRef);
@@ -449,6 +591,85 @@ const CGAffineTransform *CGGStateGetCTM(CGGStateRef);
 CGColorRef CGGStateGetFillColor(CGGStateRef);
 CGColorRef CGGStateGetStrokeColor(CGGStateRef);
 CGStyleRef CGGStateGetStyle(CGGStateRef);
+CGClipStackRef CGGStateGetClipStack(CGGStateRef);
+const CGAffineTransform* CGRenderingStateGetBaseCTM(CGRenderingStateRef);
+bool CGRenderingStateGetAllowsAntialiasing(CGRenderingStateRef);
+CGRect CGGStateGetClipBoundingBox(CGGStateRef);
+CGCompositeOperation CGGStateGetCompositeOperation(CGGStateRef);
+bool CGGStateGetShouldAntialias(CGGStateRef);
+CGInterpolationQuality CGGStateGetInterpolationQuality(CGGStateRef);
+CGSoftMaskRef CGGStateGetSoftMask(CGGStateRef);
+CGRect CGSoftMaskGetBounds(CGSoftMaskRef);
+CGAffineTransform CGSoftMaskGetMatrix(CGSoftMaskRef);
+CGColorRef CGSoftMaskGetBackground(CGSoftMaskRef);
+CGFunctionRef CGSoftMaskGetTransfer(CGSoftMaskRef);
+void CGSoftMaskDelegateDrawSoftMask(CGContextDelegateRef, CGRenderingStateRef, CGGStateRef, CGSoftMaskRef);
+CGContextDelegateRef CGContextGetDelegate(CGContextRef);
+CGRenderingStateRef CGContextGetRenderingState(CGContextRef);
+CGGStateRef CGContextGetGState(CGContextRef);
+bool CGFunctionIsIdentity(CGFunctionRef);
+CGSize CGGStateGetPatternPhase(CGGStateRef);
+CGFloat CGGStateGetLineWidth(CGGStateRef);
+CGFloat CGGStateGetAdjustedLineWidth(CGGStateRef, CGAffineTransform);
+CGLineCap CGGStateGetLineCap(CGGStateRef);
+CGLineJoin CGGStateGetLineJoin(CGGStateRef);
+CGFloat CGGStateGetMiterLimit(CGGStateRef);
+CGDashRef CGGStateGetLineDash(CGGStateRef);
+CGTextDrawingMode CGGStateGetTextDrawingMode(CGGStateRef);
+CGFontAntialiasingStyle CGGStateGetFontAntialiasingStyle(CGGStateRef);
+bool CGGStateGetShouldAntialiasFonts(CGGStateRef);
+bool CGGStateGetShouldSmoothFonts(CGGStateRef);
+bool CGGStateGetShouldSubpixelQuantizeFonts(CGGStateRef);
+bool CGRenderingStateGetAllowsFontAntialiasing(CGRenderingStateRef);
+bool CGRenderingStateGetAllowsFontSmoothing(CGRenderingStateRef);
+bool CGRenderingStateGetAllowsFontSubpixelQuantization(CGRenderingStateRef);
+#if HAVE(SUPPORT_HDR_DISPLAY_APIS)
+float CGGStateGetEDRTargetHeadroom(CGGStateRef);
+CGContentToneMappingInfo CGGStateGetContentToneMappingInfo(CGGStateRef);
+#endif
+CGImageRef CGImageGetMask(CGImageRef);
+const CGFloat* CGImageGetMaskingColors(CGImageRef);
+const CGFloat* CGDashGetPattern(CGDashRef, CGFloat* phase, size_t* count);
+extern const CGFloat kCGLineWidthHairline;
+bool CGClipStackIsInfinite(CGClipStackRef);
+size_t CGClipStackGetCount(CGClipStackRef);
+CGClipRef CGClipStackGetClipAtIndex(CGClipStackRef, size_t index);
+unsigned CGClipGetIdentifier(CGClipRef);
+CGClipType CGClipGetType(CGClipRef);
+CGClipMode CGClipGetMode(CGClipRef);
+bool CGClipGetShouldAntialias(CGClipRef);
+CGRect CGClipGetRect(CGClipRef);
+CGClipStroke* CGClipGetStroke(CGClipRef);
+CGClipMask* CGClipGetMask(CGClipRef);
+CGPathRef CGClipCreateClipPath(CGClipRef);
+CGAffineTransform CGClipMaskGetMatrix(CGClipMask*);
+CGImageRef CGClipMaskGetImage(CGClipMask*);
+CGRect CGClipMaskGetRect(CGClipMask*);
+CGRect CGPatternGetBounds(CGPatternRef);
+CGAffineTransform CGPatternGetMatrix(CGPatternRef);
+CGSize CGPatternGetStep(CGPatternRef);
+bool CGPatternIsColored(CGPatternRef);
+CGImageRef CGPatternGetImage(CGPatternRef);
+void CGContextDrawPatternCell(CGContextRef, CGPatternRef);
+bool CGPathIsEllipse(CGPathRef, CGRect*);
+bool CGPathIsLine(CGPathRef, CGPoint points[2]);
+bool CGPathIsRectWithTransform(CGPathRef, CGRect*, CGAffineTransform*);
+bool CGPathIsEllipseWithTransform(CGPathRef, CGRect*, CGAffineTransform*);
+bool CGPathIsRoundedRect(CGPathRef, CGRect*, CGFloat* cornerWidth, CGFloat* cornerHeight);
+bool CGPathIsRoundedRectWithTransform(CGPathRef, CGRect*, CGFloat* cornerWidth, CGFloat* cornerHeight, CGAffineTransform*);
+bool CGPathIsUnevenCornersRoundedRectWithTransform(CGPathRef, CGRect*, CGSize corners[4], CGAffineTransform*);
+CGColorSpaceRef CGGradientGetColorSpace(CGGradientRef);
+CGFunctionRef CGGradientGetFunction(CGGradientRef);
+bool CGGradientUsesPremultipliedInterpolation(CGGradientRef);
+typedef void (*CGGradientApplierFunction)(void* info, CGFloat location, const CGFloat* components);
+void CGGradientApply(CGGradientRef, void* info, CGGradientApplierFunction);
+size_t CGFunctionGetDomainDimension(CGFunctionRef);
+size_t CGFunctionGetRangeDimension(CGFunctionRef);
+void CGFunctionEvaluate(CGFunctionRef, const CGFloat* in, CGFloat* out);
+CGShadingType CGShadingGetType(CGShadingRef);
+CGColorSpaceRef CGShadingGetColorSpace(CGShadingRef);
+CGRect CGShadingGetBounds(CGShadingRef);
+const CGShadingDescriptor* CGShadingGetDescriptor(CGShadingRef);
 CGStyleType CGStyleGetType(CGStyleRef);
 const void *CGStyleGetData(CGStyleRef);
 CGColorRef CGStyleGetColor(CGStyleRef);

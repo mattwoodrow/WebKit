@@ -84,6 +84,7 @@ public:
     std::optional<DrawingAreaIdentifier> NODELETE drawingAreaIdentifier() const;
 
     WebCore::UseLosslessCompression NODELETE useIOSurfaceLosslessCompression() const;
+    bool isGraphicsContextCGDelegateRoundTripEnabled() const;
 
     void buildTransaction(RemoteLayerTreeTransaction&, WebCore::PlatformCALayer& rootLayer, WebCore::FrameIdentifier);
 

@@ -28,6 +28,8 @@
 
 #import "DrawingAreaMessages.h"
 #import "DrawingAreaProxyMessages.h"
+#import "GPUProcessProxy.h"
+#import "GPUProcessProxyMessages.h"
 #import "LayerProperties.h"
 #import "Logging.h"
 #import "MessageSenderInlines.h"
@@ -47,6 +49,7 @@
 #import "WebPageProxy.h"
 #import "WebProcessProxy.h"
 #import "WindowKind.h"
+#import "WrappedMessage.h"
 #import <QuartzCore/CATextLayer.h>
 #import <QuartzCore/QuartzCore.h>
 #import <WebCore/AnimationFrameRate.h>
@@ -305,11 +308,29 @@ bool RemoteLayerTreeDrawingAreaProxy::isFromPreviousWebPage(const ProcessState& 
     return true;
 }
 
+bool RemoteLayerTreeDrawingAreaProxy::canBeForwardedThroughGPUProcess(IPC::MessageName messageName)
+{
+    return messageName == IPC::MessageName::RemoteLayerTreeDrawingAreaProxy_NotifyPendingCommitLayerTree
+        || messageName == IPC::MessageName::RemoteLayerTreeDrawingAreaProxy_NotifyFlushingLayerTree
+        || messageName == IPC::MessageName::RemoteLayerTreeDrawingAreaProxy_CommitLayerTree;
+}
+
+bool ProcessState::hasReceived(TransactionID transactionID, PendingCommitMessage message) const
+{
+    if (committedLayerTreeTransactionID && transactionID.processIdentifier() == committedLayerTreeTransactionID->processIdentifier() && transactionID.object() <= committedLayerTreeTransactionID->object())
+        return true;
+    return std::ranges::any_of(pendingCommits, [&](auto& pendingCommit) {
+        return pendingCommit.transactionID == transactionID && pendingCommit.pendingMessage > message;
+    });
+}
+
 void RemoteLayerTreeDrawingAreaProxy::notifyPendingCommitLayerTree(IPC::Connection& connection, std::optional<TransactionID> transactionID, WebCore::PageIdentifier webPageID)
 {
     ProcessState& state = processStateForConnection(connection);
     LOG_WITH_STREAM(RemoteLayerTree, stream << "RemoteLayerTreeDrawingAreaProxy::notifyPendingCommitLayerTree " << transactionID << " old state: " << state.pendingCommits);
     if (isFromPreviousWebPage(state, webPageID, "notifyPendingCommitLayerTree"_s))
+        return;
+    if (transactionID && state.hasReceived(*transactionID, PendingCommitMessage::NotifyPendingCommitLayerTree))
         return;
 
     if (transactionID) {
@@ -348,6 +369,8 @@ void RemoteLayerTreeDrawingAreaProxy::notifyFlushingLayerTree(IPC::Connection& c
     LOG_WITH_STREAM(RemoteLayerTree, stream << "RemoteLayerTreeDrawingAreaProxy::notifyFlushingLayerTree " << transactionID << " old state: " << state.pendingCommits);
     if (isFromPreviousWebPage(state, webPageID, "notifyFlushingLayerTree"_s))
         return;
+    if (state.hasReceived(transactionID, PendingCommitMessage::NotifyFlushingLayerTree))
+        return;
 
     MESSAGE_CHECK_BASE(state.pendingCommits[0].pendingMessage == PendingCommitMessage::NotifyFlushingLayerTree && state.pendingCommits[0].transactionID == transactionID, connection);
     state.pendingCommits[0].pendingMessage = PendingCommitMessage::CommitLayerTree;
@@ -368,6 +391,8 @@ void RemoteLayerTreeDrawingAreaProxy::commitLayerTree(IPC::Connection& connectio
             LOG_WITH_STREAM(RemoteLayerTree, stream << "RemoteLayerTreeDrawingAreaProxy::commitLayerTree main frame data: " << bundle.mainFrameData->description());
         LOG_WITH_STREAM(RemoteLayerTree, stream << "RemoteLayerTreeDrawingAreaProxy::commitLayerTree bundle data: " << bundle.description());
         if (isFromPreviousWebPage(state, bundle.webPageID, "commitLayerTree"_s))
+            return;
+        if (state.hasReceived(bundle.transactionID, PendingCommitMessage::CommitLayerTree))
             return;
         MESSAGE_CHECK_BASE(state.pendingCommits.size(), connection);
         MESSAGE_CHECK_BASE(state.pendingCommits.last().pendingMessage == PendingCommitMessage::CommitLayerTree, connection);
@@ -933,6 +958,15 @@ void RemoteLayerTreeDrawingAreaProxy::waitForDidUpdateActivityState(ActivityStat
         return;
 
     Ref connection = webProcessProxy().connection();
+    RefPtr gpuProcessConnection = [&] -> RefPtr<IPC::Connection> {
+#if ENABLE(GPU_PROCESS)
+        if (webProcessProxy().drawingAreaMessagesAreForwardedThroughGPUProcess()) {
+            if (RefPtr gpuProcess = GPUProcessProxy::singletonIfCreated(); gpuProcess && gpuProcess->hasConnection())
+                return &gpuProcess->connection();
+        }
+#endif
+        return nullptr;
+    }();
 
     static Seconds activityStateUpdateTimeout = [] {
         if (RetainPtr<id> value = [[NSUserDefaults standardUserDefaults] objectForKey:@"WebKitOverrideActivityStateUpdateTimeout"])
@@ -947,6 +981,10 @@ void RemoteLayerTreeDrawingAreaProxy::waitForDidUpdateActivityState(ActivityStat
         IPC::Error error;
         if (!m_webPageProxyProcessState.pendingCommits.size())
             error = didRefreshDisplay(m_webPageProxyProcessState, connection.get());
+#if ENABLE(GPU_PROCESS)
+        else if (gpuProcessConnection)
+            error = gpuProcessConnection->waitForAndDispatchImmediately<Messages::GPUProcessProxy::ForwardedDrawingAreaMessage>(identifier(), activityStateUpdateTimeout - (MonotonicTime::now() - startTime), IPC::WaitForOption::InterruptWaitingIfSyncMessageArrives);
+#endif
         else {
             // Only the most recent outstanding frame can be in NotifyPendingCommitLayerTree state
             if (m_webPageProxyProcessState.pendingCommits[0].pendingMessage == PendingCommitMessage::NotifyPendingCommitLayerTree)

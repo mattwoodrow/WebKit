@@ -441,6 +441,9 @@ public:
     void didCommitMeaningfulProvisionalLoad() { m_hasCommittedAnyMeaningfulProvisionalLoads = true; }
     bool hasCommittedAnyMeaningfulProvisionalLoads() const { return m_hasCommittedAnyMeaningfulProvisionalLoads; }
 
+    void setDrawingAreaMessagesAreForwardedThroughGPUProcess() { m_drawingAreaMessagesAreForwardedThroughGPUProcess = true; }
+    bool drawingAreaMessagesAreForwardedThroughGPUProcess() const { return m_drawingAreaMessagesAreForwardedThroughGPUProcess; }
+
 #if PLATFORM(WATCHOS)
     void startBackgroundActivityForFullscreenInput();
     void endBackgroundActivityForFullscreenInput();
@@ -973,6 +976,7 @@ private:
     bool m_hasCommittedAnyProvisionalLoads { false };
     bool m_hasCommittedAnyMeaningfulProvisionalLoads { false }; // True if the process has committed a provisional load to a URL that was not about:*.
     bool m_hasCommittedWebArchive { false };
+    bool m_drawingAreaMessagesAreForwardedThroughGPUProcess { false };
     bool m_isPrewarmed;
     bool m_isPrintProcess { false };
     LockdownMode m_lockdownMode { LockdownMode::Disabled };

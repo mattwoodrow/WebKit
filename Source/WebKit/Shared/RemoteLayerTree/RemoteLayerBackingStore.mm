@@ -99,6 +99,26 @@ private:
 
 WTF_MAKE_TZONE_ALLOCATED_IMPL(DelegatedContentsFenceFlusher);
 
+class GPUProcessBufferSetFlusher final : public ThreadSafeImageBufferSetFlusher {
+    WTF_MAKE_TZONE_ALLOCATED_INLINE(GPUProcessBufferSetFlusher);
+public:
+    explicit GPUProcessBufferSetFlusher(ImageBufferSetIdentifier identifier)
+        : m_identifier(identifier)
+    {
+    }
+
+    bool flushAndCollectHandles(HashMap<ImageBufferSetIdentifier, std::unique_ptr<BufferSetBackendHandle>>&) final
+    {
+        ASSERT_NOT_REACHED();
+        return false;
+    }
+
+    std::optional<ImageBufferSetIdentifier> bufferSetFlushedByGPUProcess() const final { return m_identifier; }
+
+private:
+    ImageBufferSetIdentifier m_identifier;
+};
+
 }
 
 WTF_MAKE_TZONE_ALLOCATED_IMPL(RemoteLayerBackingStore);
@@ -200,11 +220,11 @@ void RemoteLayerBackingStore::prepareToDisplay()
     m_contentsBufferHandle = std::nullopt;
 }
 
-std::unique_ptr<ThreadSafeImageBufferSetFlusher> RemoteLayerBackingStore::createFlusher(ThreadSafeImageBufferSetFlusher::FlushType flushType)
+std::unique_ptr<ThreadSafeImageBufferSetFlusher> RemoteLayerBackingStore::createFlusher(ThreadSafeImageBufferSetFlusher::FlushType)
 {
     if (!m_bufferSet)
         return { };
-    return m_bufferSet->flushFrontBufferAsync(flushType);
+    return makeUnique<GPUProcessBufferSetFlusher>(m_bufferSet->identifier());
 }
 
 void RemoteLayerBackingStore::submitDrawingCommands()

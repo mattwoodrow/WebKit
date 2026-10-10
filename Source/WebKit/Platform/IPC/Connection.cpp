@@ -1244,6 +1244,12 @@ void Connection::dispatchIncomingMessageForTesting(UniqueRef<Decoder>&& decoder)
 }
 #endif
 
+void Connection::dispatchRelayedMessage(UniqueRef<Decoder>&& decoder)
+{
+    assertIsCurrent(dispatcher());
+    dispatchMessage(WTF::move(decoder));
+}
+
 void Connection::connectionDidClose()
 {
     // The connection is now invalid.

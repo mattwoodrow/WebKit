@@ -39,12 +39,6 @@ enum class WebKit::SwapBuffersDisplayRequirement : uint8_t {
     bool requiresClearedPixels;
 };
 
-[CustomHeader, RValue] struct WebKit::ImageBufferSetPrepareBufferForDisplayOutputData {
-    std::optional<WebKit::ImageBufferBackendHandle> backendHandle;
-    WebKit::SwapBuffersDisplayRequirement displayRequirement;
-    WebKit::BufferIdentifierSet bufferCacheIdentifiers;
-};
-
 #endif
 
 header: "ImageBufferBackendHandle.h"

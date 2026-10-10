@@ -49,7 +49,6 @@ class StreamClientConnection;
 
 namespace WebKit {
 
-class RemoteImageBufferSetProxyFlushFence;
 struct BufferSetBackendHandle;
 
 // FIXME: We should have a generic 'ImageBufferSet' class that contains
@@ -68,6 +67,9 @@ public:
     virtual ~ThreadSafeImageBufferSetFlusher() = default;
     // Returns true if flush succeeded, false if it failed.
     virtual bool flushAndCollectHandles(HashMap<ImageBufferSetIdentifier, std::unique_ptr<BufferSetBackendHandle>>&) = 0;
+
+    // The buffer set that the GPU process flushes when forwarding the commit, instead of this flusher.
+    virtual std::optional<ImageBufferSetIdentifier> bufferSetFlushedByGPUProcess() const { return std::nullopt; }
 };
 
 class ImageBufferSetClient : public AbstractCanMakeCheckedPtr {
@@ -103,6 +105,7 @@ public:
 
     // True if the GPU process reported that the last prepare didn't produce a front buffer.
     bool remoteFrontBufferIsMissing();
+    void setRemoteFrontBufferIsMissing();
 
 #if PLATFORM(COCOA)
     void prepareToDisplay(const WebCore::Region& dirtyRegion, bool supportsPartialRepaint, bool hasEmptyDirtyRegion, bool drawingRequiresClearedPixels);
@@ -113,7 +116,6 @@ public:
 
     RemoteGraphicsContextIdentifier contextIdentifier() const { return m_contextIdentifier; }
 
-    std::unique_ptr<ThreadSafeImageBufferSetFlusher> flushFrontBufferAsync(ThreadSafeImageBufferSetFlusher::FlushType);
     void submitDrawingCommands();
 
     void setConfiguration(RemoteImageBufferSetConfiguration&&);
@@ -124,14 +126,12 @@ public:
     std::optional<WebCore::DynamicContentScalingDisplayList> dynamicContentScalingDisplayList();
 #endif
 
-    unsigned generation() const { return m_generation; }
     void close();
 
 private:
     RemoteImageBufferSetProxy(RemoteRenderingBackendProxy&, ImageBufferSetClient&);
     template<typename T> auto send(T&& message);
     template<typename T> auto sendSync(T&& message);
-    template<typename T, typename C> auto sendWithAsyncReply(T&& message, C&& handler);
     RefPtr<IPC::StreamClientConnection> connection() const;
     void didBecomeUnresponsive() const;
 
@@ -146,7 +146,6 @@ private:
 
     RemoteImageBufferSetConfiguration m_configuration;
 
-    unsigned m_generation { 0 };
     bool m_remoteNeedsConfigurationUpdate { false };
 
     Lock m_lock;

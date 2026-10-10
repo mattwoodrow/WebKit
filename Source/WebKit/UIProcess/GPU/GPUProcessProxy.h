@@ -53,6 +53,10 @@
 #include <CoreGraphics/CGDisplayConfiguration.h>
 #endif
 
+namespace IPC {
+class WrappedMessage;
+}
+
 namespace WebCore {
 class CaptureDevice;
 class SecurityOriginData;
@@ -238,6 +242,9 @@ private:
     void didBecomeUnresponsive() final;
 
     void terminateWebProcess(WebCore::ProcessIdentifier, IPC::MessageName);
+#if PLATFORM(COCOA)
+    void forwardedDrawingAreaMessage(IPC::Connection&, WebCore::ProcessIdentifier, IPC::WrappedMessage&&);
+#endif
     void processIsReadyToExit();
 
 #if HAVE(VISIBILITY_PROPAGATION_VIEW)

@@ -589,6 +589,10 @@ public:
 
     void NODELETE enableIncomingMessagesThrottling();
 
+    // Dispatches a message that another process relayed on behalf of this connection's peer, as if
+    // it had been received on this connection. Must be called on the dispatcher.
+    void dispatchRelayedMessage(UniqueRef<Decoder>&&);
+
 #if ENABLE(IPC_TESTING_API)
     void addMessageObserver(const MessageObserver&);
 

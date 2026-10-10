@@ -524,7 +524,6 @@
     [Legacy] MessageParamReply WebPage.TakeSnapshot image
     [Legacy] StructureParam WebKit::RemoteLayerBackingStoreProperties.m_bufferHandle
     [Legacy] StructureParam WebKit::BufferSetBackendHandle.bufferHandle
-    [Legacy] StructureParam WebKit::ImageBufferSetPrepareBufferForDisplayOutputData.backendHandle
     [Legacy] StructureParam WebKit::WCBackingStore.handle()
 }
 

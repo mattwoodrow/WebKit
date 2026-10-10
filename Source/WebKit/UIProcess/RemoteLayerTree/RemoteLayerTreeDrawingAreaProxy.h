@@ -85,6 +85,9 @@ struct ProcessState {
     ProcessState& operator=(ProcessState&&) = default;
 
     bool canSendDisplayDidRefresh(RemoteLayerTreeDrawingAreaProxy&);
+    // When the GPU process exits, the web process sends the messages that it was forwarding again,
+    // so some of them may already have arrived.
+    bool hasReceived(TransactionID, PendingCommitMessage) const;
 
     Vector<PendingCommit, 2> pendingCommits;
     TransactionID nextLayerTreeTransactionID;
@@ -120,6 +123,8 @@ public:
     void releaseDisplayOnlyImage(RemoteSnapshotIdentifier);
 
     virtual ~RemoteLayerTreeDrawingAreaProxy();
+
+    static bool canBeForwardedThroughGPUProcess(IPC::MessageName);
 
     void ref() const final { RefCounted::ref(); }
     void deref() const final { RefCounted::deref(); }

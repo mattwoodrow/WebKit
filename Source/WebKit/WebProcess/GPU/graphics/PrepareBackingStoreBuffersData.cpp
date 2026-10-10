@@ -42,13 +42,6 @@ TextStream& operator<<(TextStream& ts, const ImageBufferSetPrepareBufferForDispl
     return ts;
 }
 
-TextStream& operator<<(TextStream& ts, const ImageBufferSetPrepareBufferForDisplayOutputData& outputData)
-{
-    ts << "displayRequirement: "_s << outputData.displayRequirement;
-    ts << "bufferCacheIdentifiers: "_s << outputData.bufferCacheIdentifiers;
-    return ts;
-}
-
 TextStream& operator<<(TextStream& ts, SwapBuffersDisplayRequirement displayRequirement)
 {
     switch (displayRequirement) {

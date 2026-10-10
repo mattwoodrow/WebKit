@@ -29,6 +29,7 @@
 #include "DrawingArea.h"
 #include "GraphicsLayerCARemote.h"
 #include "RemoteLayerTreeTransaction.h"
+#include "WrappedMessage.h"
 #include <WebCore/AnimationFrameRate.h>
 #include <WebCore/GraphicsLayerClient.h>
 #include <WebCore/Timer.h>
@@ -37,6 +38,10 @@
 #include <wtf/HashMap.h>
 #include <wtf/TZoneMalloc.h>
 #include <wtf/WeakPtr.h>
+
+namespace IPC {
+class StreamClientConnection;
+}
 
 namespace WebCore {
 class PlatformCALayer;
@@ -152,6 +157,7 @@ private:
 
         // Returns true when flush succeeds. False if it failed, for example due to timeout.
         bool flush(UniqueRef<IPC::Encoder>&&, Vector<std::unique_ptr<ThreadSafeImageBufferSetFlusher>>&&);
+        static bool flushAndCollectHandles(Vector<std::unique_ptr<ThreadSafeImageBufferSetFlusher>>&, HashMap<ImageBufferSetIdentifier, std::unique_ptr<BufferSetBackendHandle>>&);
 
         bool hasPendingFlush() const { return m_pendingFlushes; }
         void markHasPendingFlush()
@@ -193,6 +199,27 @@ private:
 
     const Ref<WorkQueue> m_commitQueue;
     const RefPtr<BackingStoreFlusher> m_backingStoreFlusher;
+
+    // With remote rendering, the messages that are ordered with commits go through the GPU process,
+    // which adds the layer buffers to the commits.
+    bool forwardsMessagesThroughGPUProcess() const;
+    template<typename Message> void sendOrForwardThroughGPUProcess(Message&&);
+    void forwardThroughGPUProcess(UniqueRef<IPC::Encoder>&&);
+    void forwardCommitThroughGPUProcess(UniqueRef<IPC::Encoder>&&, IPC::StreamClientConnection* layerBuffersConnection, HashMap<ImageBufferSetIdentifier, std::unique_ptr<BufferSetBackendHandle>>&&);
+    void didForwardThroughGPUProcess(uint64_t messageIdentifier, bool forwarded);
+    void resendMessagesLostWithGPUProcess();
+
+    struct MessageForwardedThroughGPUProcess {
+        uint64_t identifier;
+        bool isCommit;
+        IPC::WrappedMessage message;
+    };
+    // Kept until the GPU process confirms that it forwarded them, to send again if it exits first.
+    Vector<MessageForwardedThroughGPUProcess> m_messagesForwardedThroughGPUProcess;
+    uint64_t m_nextForwardedMessageIdentifier { 0 };
+    bool m_needsToResendMessagesLostWithGPUProcess { false };
+    // Commits wait on the commit queue for the flushers in this process, and later commits wait behind them.
+    unsigned m_commitsWaitingForWebProcessFlushers { 0 };
 
     TransactionID m_currentTransactionID { TransactionID::generateMonotonic() };
     Vector<IPC::AsyncReplyID> m_pendingCallbackIDs;

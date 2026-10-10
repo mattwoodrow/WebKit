@@ -49,6 +49,10 @@ messages -> GPUProcessProxy {
 #endif
 #endif
 
+#if PLATFORM(COCOA)
+    ForwardedDrawingAreaMessage(WebCore::ProcessIdentifier webProcessIdentifier, IPC::WrappedMessage message) CanDispatchOutOfOrder
+#endif
+
     ProcessIsReadyToExit()
     TerminateWebProcess(WebCore::ProcessIdentifier webProcessIdentifier, enum:uint16_t IPC::MessageName invalidMessageName)
 }

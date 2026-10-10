@@ -53,15 +53,8 @@ struct ImageBufferSetPrepareBufferForDisplayInputData {
     bool requiresClearedPixels { true };
 };
 
-struct ImageBufferSetPrepareBufferForDisplayOutputData {
-    std::optional<ImageBufferBackendHandle> backendHandle;
-    SwapBuffersDisplayRequirement displayRequirement { SwapBuffersDisplayRequirement::NeedsNoDisplay };
-    BufferIdentifierSet bufferCacheIdentifiers;
-};
-
 WTF::TextStream& operator<<(WTF::TextStream&, SwapBuffersDisplayRequirement);
 WTF::TextStream& operator<<(WTF::TextStream&, const ImageBufferSetPrepareBufferForDisplayInputData&);
-WTF::TextStream& operator<<(WTF::TextStream&, const ImageBufferSetPrepareBufferForDisplayOutputData&);
 
 } // namespace WebKit
 

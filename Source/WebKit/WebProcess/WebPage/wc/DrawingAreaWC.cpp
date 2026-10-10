@@ -416,7 +416,7 @@ RefPtr<ImageBuffer> DrawingAreaWC::createImageBuffer(FloatSize size, float devic
     return ImageBuffer::create<ImageBufferShareableBitmapBackend>(size, deviceScaleFactor, ColorSpace::SRGB(), { PixelFormat::BGRA8 }, RenderingPurpose::DOM, { });
 }
 
-void DrawingAreaWC::displayDidRefresh(MonotonicTime)
+void DrawingAreaWC::displayDidRefresh(MonotonicTime, std::optional<TransactionID>)
 {
     m_waitDidUpdate = false;
     didCompleteRenderingUpdateDisplay();

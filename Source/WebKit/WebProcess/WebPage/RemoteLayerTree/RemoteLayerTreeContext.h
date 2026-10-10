@@ -95,6 +95,8 @@ public:
     RemoteLayerBackingStoreCollection& backingStoreCollection() LIFETIME_BOUND { return m_backingStoreCollection; }
 
     void adoptLayersFromContext(RemoteLayerTreeContext&);
+    // For a transaction that replaces the layer tree in the UI process.
+    void recreateAllLayersInUIProcess();
 
     RemoteRenderingBackendProxy& ensureRemoteRenderingBackendProxy();
 

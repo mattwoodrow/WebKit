@@ -32,4 +32,8 @@ header: "BufferAndBackendInfo.h"
     std::optional<WebKit::BufferAndBackendInfo> frontBufferInfo;
     std::optional<WebKit::BufferAndBackendInfo> backBufferInfo;
     std::optional<WebKit::BufferAndBackendInfo> secondaryBackBufferInfo;
+
+#if ENABLE(RE_DYNAMIC_CONTENT_SCALING)
+    std::optional<WebCore::DynamicContentScalingDisplayList> displayList;
+#endif
 };

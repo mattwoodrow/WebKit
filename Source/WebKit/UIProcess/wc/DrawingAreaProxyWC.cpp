@@ -79,7 +79,7 @@ void DrawingAreaProxyWC::update(uint64_t backingStoreStateID, UpdateInfo&& updat
 {
     if (backingStoreStateID == m_currentBackingStoreStateID)
         incorporateUpdate(WTF::move(updateInfo));
-    send(Messages::DrawingArea::DisplayDidRefresh(MonotonicTime::now()));
+    send(Messages::DrawingArea::DisplayDidRefresh(MonotonicTime::now(), std::nullopt));
 }
 
 void DrawingAreaProxyWC::enterAcceleratedCompositingMode(uint64_t backingStoreStateID, const LayerTreeContext&)

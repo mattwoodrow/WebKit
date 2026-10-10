@@ -144,23 +144,40 @@ PlatformCALayerRemote::~PlatformCALayerRemote()
         context->layerWillLeaveContext(*this);
 }
 
+void PlatformCALayerRemote::enterContext(RemoteLayerTreeContext& context, RemoteLayerTreeContext* previousContext)
+{
+#if HAVE(AVKIT)
+    if (RefPtr videoElement = previousContext ? previousContext->videoElementForLayer(layerID()) : nullptr) {
+        context.layerDidEnterContext(*this, layerType(), *videoElement);
+        return;
+    }
+#else
+    UNUSED_PARAM(previousContext);
+#endif
+    context.layerDidEnterContext(*this, layerType());
+}
+
 void PlatformCALayerRemote::moveToContext(RemoteLayerTreeContext& context)
 {
     RefPtr oldContext = m_context.get();
 
-#if HAVE(AVKIT)
-    RefPtr videoElement = oldContext ? oldContext->videoElementForLayer(layerID()) : nullptr;
-    if (videoElement)
-        context.layerDidEnterContext(*this, layerType(), *videoElement);
-    else
-#endif // HAVE(AVKIT)
-        context.layerDidEnterContext(*this, layerType());
+    enterContext(context, oldContext.get());
 
     if (oldContext)
         oldContext->layerWillLeaveContext(*this);
 
     m_context = context;
 
+    m_properties.notePropertiesChanged(m_properties.everChangedProperties);
+}
+
+void PlatformCALayerRemote::recreateInUIProcess()
+{
+    RefPtr context = m_context.get();
+    if (!context)
+        return;
+
+    enterContext(*context, context.get());
     m_properties.notePropertiesChanged(m_properties.everChangedProperties);
 }
 

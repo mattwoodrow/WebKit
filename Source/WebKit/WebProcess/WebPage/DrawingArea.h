@@ -29,6 +29,7 @@
 #include "DrawingAreaInfo.h"
 #include "LayerTreeContext.h"
 #include "MessageReceiver.h"
+#include "TransactionID.h"
 #include "WebPage.h"
 #include <WebCore/ActivityState.h>
 #include <WebCore/DisplayRefreshMonitorFactory.h>
@@ -227,7 +228,8 @@ private:
 #endif
 
     virtual void setDeviceScaleFactor(float, CompletionHandler<void()>&& completionHandler) { completionHandler(); }
-    virtual void displayDidRefresh(MonotonicTime) { }
+    // The UI process passes the last transaction it committed, if it tracks them.
+    virtual void displayDidRefresh(MonotonicTime, std::optional<TransactionID> /* committedTransactionID */) { }
 
     // DisplayRefreshMonitorFactory.
     RefPtr<WebCore::DisplayRefreshMonitor> createDisplayRefreshMonitor(WebCore::PlatformDisplayID) override;

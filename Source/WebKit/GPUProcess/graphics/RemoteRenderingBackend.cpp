@@ -44,6 +44,7 @@
 #include "RemoteImageBuffer.h"
 #include "RemoteImageBufferProxyMessages.h"
 #include "RemoteImageBufferSet.h"
+#include "RemoteLayerTreeDrawingAreaProxyMessages.h"
 #include "RemoteMediaPlayerManagerProxy.h"
 #include "RemoteMediaPlayerProxy.h"
 #include "RemoteRenderingBackendMessages.h"
@@ -56,6 +57,7 @@
 #include "ShapeDetectionObjectHeap.h"
 #include "SharedFont.h"
 #include "WebPageProxy.h"
+#include "WrappedMessage.h"
 #include <WebCore/Filter.h>
 #include <WebCore/FontCustomPlatformData.h>
 #include <WebCore/Gradient.h>
@@ -680,6 +682,70 @@ void RemoteRenderingBackend::prepareImageBufferSetsForDisplaySync(Vector<ImageBu
         if (outputData[i] != SwapBuffersDisplayRequirement::NeedsNoDisplay)
             remoteImageBufferSet->prepareBufferForDisplay(swapBuffersInput[i].dirtyRegion, swapBuffersInput[i].requiresClearedPixels);
     }
+}
+
+static bool isForwardedDrawingAreaMessage(IPC::MessageName messageName)
+{
+    return messageName == IPC::MessageName::RemoteLayerTreeDrawingAreaProxy_ResetLayerTree
+        || messageName == IPC::MessageName::RemoteLayerTreeDrawingAreaProxy_NotifyPendingCommitLayerTree
+        || messageName == IPC::MessageName::RemoteLayerTreeDrawingAreaProxy_NotifyFlushingLayerTree;
+}
+
+void RemoteRenderingBackend::sendForwardedDrawingAreaMessage(IPC::WrappedMessage&& message, HashMap<ImageBufferSetIdentifier, std::unique_ptr<BufferSetBackendHandle>>&& layerBuffers)
+{
+    auto drawingAreaIdentifier = message.destinationID();
+    protect(GPUProcess::singleton().parentProcessConnection())->send(Messages::GPUProcessProxy::ForwardedDrawingAreaMessage(m_gpuConnectionToWebProcess->webProcessIdentifier(), WTF::move(message), WTF::move(layerBuffers)), drawingAreaIdentifier);
+}
+
+void RemoteRenderingBackend::forwardDrawingAreaMessage(IPC::WrappedMessage&& message)
+{
+    assertIsCurrent(workQueue());
+
+    auto messageName = message.messageName();
+    MESSAGE_CHECK(messageName && isForwardedDrawingAreaMessage(*messageName), "Only drawing area messages that are ordered with commits can be forwarded");
+
+    sendForwardedDrawingAreaMessage(WTF::move(message));
+}
+
+// Everything drawn into the buffer sets for a commit precedes this in the stream, so their front
+// buffers are complete. The web process forwards the commit once it has waited for its fences.
+void RemoteRenderingBackend::flushLayerBuffersForCommit(TransactionIdentifier transactionID, Vector<ImageBufferSetIdentifier>&& bufferSetIdentifiers)
+{
+    assertIsCurrent(workQueue());
+
+    FlushedLayerBuffers flushedBuffers { transactionID, { }, { } };
+    for (auto bufferSetIdentifier : bufferSetIdentifiers) {
+        RefPtr bufferSet = m_remoteImageBufferSets.get(bufferSetIdentifier);
+        MESSAGE_CHECK(bufferSet, "BufferSet is being flushed before being created");
+
+        auto handle = bufferSet->flushFrontBufferForDisplay();
+        if (!handle.frontBufferInfo)
+            flushedBuffers.bufferSetsWithoutFrontBuffer.append(bufferSetIdentifier);
+        flushedBuffers.handles.set(bufferSetIdentifier, makeUnique<BufferSetBackendHandle>(WTF::move(handle)));
+    }
+    m_flushedLayerBuffers.append(WTF::move(flushedBuffers));
+}
+
+void RemoteRenderingBackend::forwardLayerTreeCommit(IPC::WrappedMessage&& commit, std::optional<TransactionIdentifier> flushedLayerBuffers, CompletionHandler<void(Vector<ImageBufferSetIdentifier>&&, bool)>&& completionHandler)
+{
+    assertIsCurrent(workQueue());
+
+    MESSAGE_CHECK_COMPLETION_BASE(commit.messageName() == IPC::MessageName::RemoteLayerTreeDrawingAreaProxy_CommitLayerTree, m_streamConnection, completionHandler({ }, false));
+
+    HashMap<ImageBufferSetIdentifier, std::unique_ptr<BufferSetBackendHandle>> handles;
+    Vector<ImageBufferSetIdentifier> bufferSetsWithoutFrontBuffer;
+    if (flushedLayerBuffers) {
+        // The buffers flushed for commits that weren't forwarded are no longer needed.
+        while (!m_flushedLayerBuffers.isEmpty() && m_flushedLayerBuffers.first().transactionID != *flushedLayerBuffers)
+            m_flushedLayerBuffers.removeFirst();
+        MESSAGE_CHECK_COMPLETION_BASE(!m_flushedLayerBuffers.isEmpty(), m_streamConnection, completionHandler({ }, false));
+        auto flushedBuffers = m_flushedLayerBuffers.takeFirst();
+        handles = WTF::move(flushedBuffers.handles);
+        bufferSetsWithoutFrontBuffer = WTF::move(flushedBuffers.bufferSetsWithoutFrontBuffer);
+    }
+
+    sendForwardedDrawingAreaMessage(WTF::move(commit), WTF::move(handles));
+    completionHandler(WTF::move(bufferSetsWithoutFrontBuffer), true);
 }
 #endif
 

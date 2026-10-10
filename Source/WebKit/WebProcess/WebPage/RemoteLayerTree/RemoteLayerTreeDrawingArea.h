@@ -29,14 +29,18 @@
 #include "DrawingArea.h"
 #include "GraphicsLayerCARemote.h"
 #include "RemoteLayerTreeTransaction.h"
+#include "WrappedMessage.h"
 #include <WebCore/AnimationFrameRate.h>
 #include <WebCore/GraphicsLayerClient.h>
 #include <WebCore/Timer.h>
-#include <atomic>
 #include <dispatch/dispatch.h>
 #include <wtf/HashMap.h>
 #include <wtf/TZoneMalloc.h>
 #include <wtf/WeakPtr.h>
+
+namespace IPC {
+class StreamClientConnection;
+}
 
 namespace WebCore {
 class PlatformCALayer;
@@ -118,7 +122,7 @@ private:
     WebCore::FloatRect exposedContentRect() const final;
     void setExposedContentRect(const WebCore::FloatRect&) final;
 
-    void displayDidRefresh(MonotonicTime) final;
+    void displayDidRefresh(MonotonicTime, std::optional<TransactionID> committedTransactionID) final;
 
     void setDeviceScaleFactor(float, CompletionHandler<void()>&&) final;
 
@@ -142,26 +146,6 @@ private:
 
     void scheduleRenderingUpdateTimerFired();
     void postRenderingUpdateRunLoopCallback();
-
-    class BackingStoreFlusher : public ThreadSafeRefCounted<BackingStoreFlusher> {
-    public:
-        static Ref<BackingStoreFlusher> create(Ref<IPC::Connection>&&);
-
-        // Returns true when flush succeeds. False if it failed, for example due to timeout.
-        bool flush(UniqueRef<IPC::Encoder>&&, Vector<std::unique_ptr<ThreadSafeImageBufferSetFlusher>>&&);
-
-        bool hasPendingFlush() const { return m_pendingFlushes; }
-        void markHasPendingFlush()
-        {
-            m_pendingFlushes++;
-        }
-
-    private:
-        explicit BackingStoreFlusher(Ref<IPC::Connection>&&);
-
-        const Ref<IPC::Connection> m_connection;
-        std::atomic<uint32_t> m_pendingFlushes { 0 };
-    };
 
     const Ref<RemoteLayerTreeContext> m_remoteLayerTreeContext;
     
@@ -187,8 +171,30 @@ private:
     bool m_waitingForBackingStoreSwap { false };
     bool m_deferredRenderingUpdateWhileWaitingForBackingStoreSwap { false };
 
+    // Waits for the fences of delegated contents, which the GPU process doesn't know about.
     const Ref<WorkQueue> m_commitQueue;
-    const RefPtr<BackingStoreFlusher> m_backingStoreFlusher;
+
+    // The messages that are ordered with commits go through the GPU process, which adds the layer
+    // buffers to the commits. The messages that a GPU process hadn't forwarded when it exited are
+    // lost, so the first commit through the next one replaces the whole layer tree.
+    template<typename Message> void forwardThroughGPUProcess(Message&&);
+    template<typename Message> void sendThroughGPUProcess(Message&&);
+    bool gpuProcessWasReplaced();
+    void resetLayerTreeIfGPUProcessWasReplaced();
+    // What a commit delivers once, which the next commit takes if it isn't forwarded.
+    struct CommitDeliverables {
+        Vector<IPC::AsyncReplyID> callbackIDs;
+        OptionSet<WebCore::LayoutMilestone> newlyReachedPaintingMilestones;
+    };
+    void forwardCommitThroughGPUProcess(UniqueRef<IPC::Encoder>&&, std::optional<TransactionIdentifier> flushedLayerBuffers, IPC::StreamClientConnection* connectionAtCommit, CommitDeliverables&&);
+    void commitWasNotForwarded(CommitDeliverables&&);
+    RefPtr<IPC::StreamClientConnection> m_connectionForwardingCommits;
+    bool m_needsToReplaceLayerTree { false };
+    // The UI process may have reported display refreshes for the commits from before the last
+    // reset, which don't follow the commits after it.
+    std::optional<TransactionID> m_firstTransactionAfterLayerTreeReset;
+    // Later commits wait behind a commit that waits for delegated contents fences.
+    unsigned m_commitsWaitingForDelegatedContentsFences { 0 };
 
     TransactionID m_currentTransactionID { TransactionID::generateMonotonic() };
     Vector<IPC::AsyncReplyID> m_pendingCallbackIDs;

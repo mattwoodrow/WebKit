@@ -27,8 +27,9 @@
 ]
 messages -> RemoteLayerTreeDrawingAreaProxy : DrawingAreaProxy {
     void SetPreferredFramesPerSecond(unsigned preferredFramesPerSecond)
+    void ResetLayerTree(WebKit::TransactionID nextTransactionID, WebCore::PageIdentifier webPageID) CanDispatchOutOfOrder
     void NotifyPendingCommitLayerTree(std::optional<WebKit::TransactionID> transactionID, WebCore::PageIdentifier webPageID) CanDispatchOutOfOrder
     void NotifyFlushingLayerTree(WebKit::TransactionID transactionID, WebCore::PageIdentifier webPageID) CanDispatchOutOfOrder
-    void CommitLayerTree(struct WebKit::RemoteLayerTreeCommitBundle bundle, HashMap<WebKit::ImageBufferSetIdentifier, std::unique_ptr<WebKit::BufferSetBackendHandle>> handlesMap) CanDispatchOutOfOrder
+    void CommitLayerTree(struct WebKit::RemoteLayerTreeCommitBundle bundle) CanDispatchOutOfOrder
     void AsyncSetLayerContents(WebCore::PlatformLayerIdentifier layer, WebKit::RemoteLayerBackingStoreProperties properties)
 }

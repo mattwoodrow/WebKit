@@ -39,6 +39,7 @@
 #include "OverrideLanguages.h"
 #include "ProcessTerminationReason.h"
 #include "ProvisionalPageProxy.h"
+#include "RemoteLayerTreeDrawingAreaProxy.h"
 #include "RemoteMediaSessionManagerProxy.h"
 #include "SecurityFlagsController.h"
 #include "SharedFileHandle.h"
@@ -51,6 +52,7 @@
 #include "WebProcessPool.h"
 #include "WebProcessProxy.h"
 #include "WebProcessProxyMessages.h"
+#include "WrappedMessage.h"
 #include <WebCore/DisplayCapturePromptType.h>
 #include <WebCore/LogInitialization.h>
 #include <WebCore/MockRealtimeMediaSourceCenter.h>
@@ -791,6 +793,23 @@ void GPUProcessProxy::terminateWebProcess(WebCore::ProcessIdentifier webProcessI
     if (auto process = WebProcessProxy::processForIdentifier(webProcessIdentifier))
         process->requestTermination(ProcessTerminationReason::RequestedByGPUProcess, invalidMessageName);
 }
+
+#if PLATFORM(COCOA)
+// Drawing area messages that have to be ordered with layer tree commits go through the GPU process,
+// which adds the layer buffers to the commits.
+void GPUProcessProxy::forwardedDrawingAreaMessage(IPC::Connection& connection, WebCore::ProcessIdentifier webProcessIdentifier, IPC::WrappedMessage&& message, HashMap<ImageBufferSetIdentifier, std::unique_ptr<BufferSetBackendHandle>>&& layerBuffers)
+{
+    RefPtr process = WebProcessProxy::processForIdentifier(webProcessIdentifier);
+    if (!process || !process->hasConnection())
+        return;
+    MESSAGE_CHECK_BASE(process->hasGPUProcessConnection(), connection);
+
+    auto decoder = WTF::move(message).createDecoder();
+    MESSAGE_CHECK_BASE(decoder && RemoteLayerTreeDrawingAreaProxy::canBeForwardedThroughGPUProcess(decoder->messageName()), connection);
+
+    RemoteLayerTreeDrawingAreaProxy::dispatchMessageForwardedThroughGPUProcess(protect(process->connection()), makeUniqueRefFromNonNullUniquePtr(WTF::move(decoder)), WTF::move(layerBuffers));
+}
+#endif
 
 #if ENABLE(VIDEO) || ENABLE(WEB_AUDIO)
 static RefPtr<WebPageProxy> pageForNowPlayingOwner(const WebCore::QualifiedPageIdentifier& owner)

@@ -45,7 +45,7 @@ class RemoteLayerBackingStore;
 class RemoteLayerTreeContext;
 class RemoteLayerTreeTransaction;
 class RemoteImageBufferSetProxy;
-class ThreadSafeImageBufferSetFlusher;
+struct BackingStoreFlushes;
 
 enum class BufferInSetType : uint8_t;
 enum class SwapBuffersDisplayRequirement : uint8_t;
@@ -78,7 +78,7 @@ public:
     void willFlushLayers();
     void willBuildTransaction();
     void willCommitLayerTree(RemoteLayerTreeTransaction&);
-    Vector<std::unique_ptr<ThreadSafeImageBufferSetFlusher>> didFlushLayers(RemoteLayerTreeTransaction&);
+    void didFlushLayers(RemoteLayerTreeTransaction&, BackingStoreFlushes&);
 
     virtual void tryMarkAllBackingStoreVolatile(CompletionHandler<void(bool)>&&);
 

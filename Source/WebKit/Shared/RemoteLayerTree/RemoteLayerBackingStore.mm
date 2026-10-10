@@ -72,35 +72,6 @@ namespace WebKit {
 
 using namespace WebCore;
 
-namespace {
-
-class DelegatedContentsFenceFlusher final : public ThreadSafeImageBufferSetFlusher {
-    WTF_MAKE_TZONE_ALLOCATED(DelegatedContentsFenceFlusher);
-    WTF_MAKE_NONCOPYABLE(DelegatedContentsFenceFlusher);
-public:
-    static std::unique_ptr<DelegatedContentsFenceFlusher> create(Ref<PlatformCALayerDelegatedContentsFence> fence)
-    {
-        return std::unique_ptr<DelegatedContentsFenceFlusher> { new DelegatedContentsFenceFlusher(WTF::move(fence)) };
-    }
-
-    bool flushAndCollectHandles(HashMap<ImageBufferSetIdentifier, std::unique_ptr<BufferSetBackendHandle>>&) final
-    {
-        return m_fence->waitFor(delegatedContentsFinishedTimeout);
-    }
-
-private:
-    DelegatedContentsFenceFlusher(Ref<PlatformCALayerDelegatedContentsFence> fence)
-        : m_fence(WTF::move(fence))
-    {
-    }
-
-    const Ref<PlatformCALayerDelegatedContentsFence> m_fence;
-};
-
-WTF_MAKE_TZONE_ALLOCATED_IMPL(DelegatedContentsFenceFlusher);
-
-}
-
 WTF_MAKE_TZONE_ALLOCATED_IMPL(RemoteLayerBackingStore);
 
 RemoteLayerBackingStore::RemoteLayerBackingStore(PlatformCALayerRemote& layer)
@@ -200,13 +171,6 @@ void RemoteLayerBackingStore::prepareToDisplay()
     m_contentsBufferHandle = std::nullopt;
 }
 
-std::unique_ptr<ThreadSafeImageBufferSetFlusher> RemoteLayerBackingStore::createFlusher(ThreadSafeImageBufferSetFlusher::FlushType flushType)
-{
-    if (!m_bufferSet)
-        return { };
-    return m_bufferSet->flushFrontBufferAsync(flushType);
-}
-
 void RemoteLayerBackingStore::submitDrawingCommands()
 {
     if (!m_bufferSet)
@@ -242,9 +206,8 @@ std::optional<DynamicContentScalingDisplayList> RemoteLayerBackingStore::display
     if (!m_layer->owner())
         return { };
 
-    if (auto list = m_layer->owner()->platformCALayerDynamicContentScalingDisplayList(m_layer.ptr()))
-        return list;
-    return m_bufferSet ? m_bufferSet->dynamicContentScalingDisplayList() : std::nullopt;
+    // The GPU process adds the display lists of buffer sets when it forwards the commit.
+    return m_layer->owner()->platformCALayerDynamicContentScalingDisplayList(m_layer.ptr());
 }
 #endif
 
@@ -260,9 +223,8 @@ void RemoteLayerBackingStore::dump(WTF::TextStream& ts) const
 
 void RemoteLayerBackingStore::encode(IPC::Encoder& encoder) const
 {
-    // Only delegated contents encode their handle here. Buffer sets encode their handles
-    // out of line (and on a different thread) using the flushAndCollectHandles method
-    // on their async flusher.
+    // Only delegated contents encode their handle here. The GPU process adds the handles of
+    // buffer sets when it forwards the commit.
     std::optional<ImageBufferBackendHandle> handle;
     if (m_contentsBufferHandle) {
         ASSERT(m_parameters.type == Type::IOSurface);
@@ -420,7 +382,7 @@ void RemoteLayerBackingStore::setDelegatedContents(const PlatformCALayerRemoteDe
 {
     m_contentsBufferHandle = ImageBufferBackendHandle { contents.surface };
     if (contents.finishedFence)
-        m_frontBufferFlushers.append(DelegatedContentsFenceFlusher::create(Ref { *contents.finishedFence }));
+        m_delegatedContentsFences.append(*contents.finishedFence);
     m_contentsFrameIdentifier = contents.frameIdentifier;
     m_dirtyRegion = { };
     m_paintingRects.clear();
@@ -492,8 +454,7 @@ void RemoteLayerBackingStore::paintContents()
         return;
 
     if (hasEmptyDirtyRegion()) {
-        if (auto flusher = createFlusher(ThreadSafeImageBufferSetFlusher::FlushType::BackendHandlesOnly))
-            m_frontBufferFlushers.append(WTF::move(flusher));
+        m_bufferSetNeedsFlush = true;
         return;
     }
 
@@ -576,16 +537,13 @@ void RemoteLayerBackingStore::drawInContext(GraphicsContext& context)
         return;
     }
 #endif
-    if (auto flusher = createFlusher())
-        m_frontBufferFlushers.append(WTF::move(flusher));
-
+    m_bufferSetNeedsFlush = true;
 }
 
 void RemoteLayerBackingStore::flush()
 {
     if (m_needsFlush) {
-        if (auto flusher = createFlusher())
-            m_frontBufferFlushers.append(WTF::move(flusher));
+        m_bufferSetNeedsFlush = true;
         m_needsFlush = false;
     }
 }
@@ -799,11 +757,17 @@ void RemoteLayerBackingStoreProperties::setBackendHandle(BufferSetBackendHandle&
     m_frontBufferInfo = bufferSetHandle.frontBufferInfo;
     m_backBufferInfo = bufferSetHandle.backBufferInfo;
     m_secondaryBackBufferInfo = bufferSetHandle.secondaryBackBufferInfo;
+#if ENABLE(RE_DYNAMIC_CONTENT_SCALING)
+    if (bufferSetHandle.displayList)
+        m_displayListBufferHandle = std::exchange(bufferSetHandle.displayList, std::nullopt);
+#endif
 }
 
-Vector<std::unique_ptr<ThreadSafeImageBufferSetFlusher>> RemoteLayerBackingStore::takePendingFlushers()
+void RemoteLayerBackingStore::takePendingFlushes(BackingStoreFlushes& flushes)
 {
-    return std::exchange(m_frontBufferFlushers, { });
+    if (std::exchange(m_bufferSetNeedsFlush, false) && m_bufferSet)
+        flushes.bufferSets.append(m_bufferSet->identifier());
+    flushes.delegatedContentsFences.appendVector(std::exchange(m_delegatedContentsFences, { }));
 }
 
 void RemoteLayerBackingStore::purgeFrontBufferForTesting()

@@ -210,7 +210,7 @@ void DrawingAreaProxyCoordinatedGraphics::enterAcceleratedCompositingMode(uint64
 void DrawingAreaProxyCoordinatedGraphics::update(uint64_t, UpdateInfo&& updateInfo)
 {
     if (m_isWaitingForDidUpdateGeometry && updateInfo.viewSize != m_lastSentSize) {
-        send(Messages::DrawingArea::DisplayDidRefresh(MonotonicTime::now()));
+        send(Messages::DrawingArea::DisplayDidRefresh(MonotonicTime::now(), std::nullopt));
         return;
     }
 
@@ -219,7 +219,7 @@ void DrawingAreaProxyCoordinatedGraphics::update(uint64_t, UpdateInfo&& updateIn
     incorporateUpdate(WTF::move(updateInfo));
 
     if (!m_isWaitingForDidUpdateGeometry)
-        send(Messages::DrawingArea::DisplayDidRefresh(MonotonicTime::now()));
+        send(Messages::DrawingArea::DisplayDidRefresh(MonotonicTime::now(), std::nullopt));
 }
 
 void DrawingAreaProxyCoordinatedGraphics::exitAcceleratedCompositingMode(uint64_t, UpdateInfo&& updateInfo)

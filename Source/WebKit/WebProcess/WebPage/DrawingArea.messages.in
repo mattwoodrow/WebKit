@@ -38,7 +38,7 @@ messages -> DrawingArea {
 #endif
 
     SetDeviceScaleFactor(float deviceScaleFactor) -> ()
-    DisplayDidRefresh(MonotonicTime start)
+    DisplayDidRefresh(MonotonicTime start, std::optional<WebKit::TransactionID> committedTransactionID)
 
 #if PLATFORM(COCOA)
     UpdateGeometry(WebCore::IntSize viewSize, bool flushSynchronously, MachSendRight fencePort) -> ()

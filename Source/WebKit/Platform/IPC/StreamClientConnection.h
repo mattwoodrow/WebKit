@@ -78,6 +78,7 @@ public:
     // Ensures that all sent messages are receiveable by the receiver.
     Error flushSentMessages();
     void invalidate();
+    bool isValid() const { return m_connection->isValid(); }
 
     template<typename T, typename U, typename V>
     Error send(T&& message, ObjectIdentifierGeneric<U, V> destinationID);

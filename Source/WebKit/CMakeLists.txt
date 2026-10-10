@@ -491,6 +491,7 @@ set(WebKit_SERIALIZATION_IN_FILES
     Platform/IPC/SharedFileHandle.serialization.in
     Platform/IPC/StreamServerConnection.serialization.in
     Platform/IPC/TransferString.serialization.in
+    Platform/IPC/WrappedMessage.serialization.in
 
     Shared/AccessibilityPreferences.serialization.in
     Shared/AuxiliaryProcessCreationParameters.serialization.in

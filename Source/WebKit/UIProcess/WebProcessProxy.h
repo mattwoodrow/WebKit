@@ -441,6 +441,10 @@ public:
     void didCommitMeaningfulProvisionalLoad() { m_hasCommittedAnyMeaningfulProvisionalLoads = true; }
     bool hasCommittedAnyMeaningfulProvisionalLoads() const { return m_hasCommittedAnyMeaningfulProvisionalLoads; }
 
+#if ENABLE(GPU_PROCESS)
+    bool hasGPUProcessConnection() const { return !!m_gpuProcessConnectionIdentifier; }
+#endif
+
 #if PLATFORM(WATCHOS)
     void startBackgroundActivityForFullscreenInput();
     void endBackgroundActivityForFullscreenInput();

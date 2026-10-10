@@ -85,7 +85,7 @@ private:
 
     // IPC message handlers.
     void updateGeometry(const WebCore::IntSize&, CompletionHandler<void()>&&) override;
-    void displayDidRefresh(MonotonicTime) override;
+    void displayDidRefresh(MonotonicTime, std::optional<TransactionID>) override;
     void setDeviceScaleFactor(float, CompletionHandler<void()>&&) override;
     void forceUpdate() override;
     void didDiscardBackingStore() override;

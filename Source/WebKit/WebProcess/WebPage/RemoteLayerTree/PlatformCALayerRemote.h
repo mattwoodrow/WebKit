@@ -272,6 +272,8 @@ public:
     void didCommit();
 
     void moveToContext(RemoteLayerTreeContext&);
+    // Sends the layer as a new layer, with all the properties it ever set.
+    void recreateInUIProcess();
     RemoteLayerTreeContext* context() const { return m_context.get(); }
 
     void markFrontBufferVolatileForTesting() override;
@@ -297,6 +299,7 @@ protected:
 
 private:
     Type type() const override { return Type::Remote; }
+    void enterContext(RemoteLayerTreeContext&, RemoteLayerTreeContext* previousContext);
     void ensureBackingStore();
     void updateBackingStore();
     void removeSublayer(PlatformCALayerRemote*);

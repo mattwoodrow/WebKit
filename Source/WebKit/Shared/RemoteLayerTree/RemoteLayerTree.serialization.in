@@ -309,4 +309,5 @@ struct WebKit::RemoteLayerTreeCommitBundle {
     WebCore::PageIdentifier webPageID;
     MonotonicTime startTime;
     Vector<std::pair<WebCore::FrameIdentifier, WebCore::FixedContainerEdges>> fixedContainerEdges;
+    bool replacesLayerTree;
 };

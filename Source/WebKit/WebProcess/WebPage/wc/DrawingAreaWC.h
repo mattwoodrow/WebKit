@@ -69,7 +69,7 @@ private:
     void attachViewOverlayGraphicsLayer(WebCore::FrameIdentifier, WebCore::GraphicsLayer*) override;
     void updatePreferences(const WebPreferencesStore&) override;
     bool shouldUseTiledBackingForFrameView(const WebCore::LocalFrameView&) const override;
-    void displayDidRefresh(MonotonicTime = MonotonicTime::now()) override;
+    void displayDidRefresh(MonotonicTime = MonotonicTime::now(), std::optional<TransactionID> = std::nullopt) override;
     // GraphicsLayerWC::Observer
     void graphicsLayerAdded(GraphicsLayerWC&) override;
     void graphicsLayerRemoved(GraphicsLayerWC&) override;

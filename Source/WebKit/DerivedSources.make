@@ -687,6 +687,7 @@ SERIALIZATION_DESCRIPTION_FILES = \
 	Platform/IPC/SharedFileHandle.serialization.in \
 	Platform/IPC/StreamServerConnection.serialization.in \
 	Platform/IPC/TransferString.serialization.in \
+	Platform/IPC/WrappedMessage.serialization.in \
 	Platform/cocoa/MediaPlaybackTargetContextSerialized.serialization.in \
 	Shared/AuxiliaryProcessCreationParameters.serialization.in \
 	Shared/JavaScriptEvaluationResult.serialization.in \

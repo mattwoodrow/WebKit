@@ -45,6 +45,10 @@ struct BufferSetBackendHandle {
     std::optional<BufferAndBackendInfo> frontBufferInfo;
     std::optional<BufferAndBackendInfo> backBufferInfo;
     std::optional<BufferAndBackendInfo> secondaryBackBufferInfo;
+
+#if ENABLE(RE_DYNAMIC_CONTENT_SCALING)
+    std::optional<WebCore::DynamicContentScalingDisplayList> displayList;
+#endif
 };
 
 } // namespace WebKit

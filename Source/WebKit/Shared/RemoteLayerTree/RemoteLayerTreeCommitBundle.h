@@ -117,6 +117,10 @@ struct RemoteLayerTreeCommitBundle {
 
     Vector<std::pair<WebCore::FrameIdentifier, WebCore::FixedContainerEdges>> fixedContainerEdges;
 
+    // The web process lost track of what the UI process received, so this commit creates all of
+    // its layers again, replacing the ones that the UI process has.
+    bool replacesLayerTree { false };
+
 #if !defined(NDEBUG) || !LOG_DISABLED
     String description() const;
 #endif

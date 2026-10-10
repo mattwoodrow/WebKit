@@ -34,6 +34,7 @@
 #include <WebCore/ImageBuffer.h>
 #include <WebCore/PlaceholderFrameIdentifier.h>
 #include <WebCore/PlatformCALayer.h>
+#include <WebCore/PlatformCALayerDelegatedContents.h>
 #include <WebCore/Region.h>
 #include <wtf/MachSendRight.h>
 #include <wtf/MonotonicTime.h>
@@ -56,9 +57,14 @@ class PlatformCALayerRemote;
 class RemoteLayerBackingStoreCollection;
 class RemoteLayerTreeNode;
 class RemoteLayerTreeHost;
-class ThreadSafeImageBufferSetFlusher;
 enum class SwapBuffersDisplayRequirement : uint8_t;
 struct PlatformCALayerRemoteDelegatedContents;
+
+// What a commit waits for before the UI process can display its backing stores.
+struct BackingStoreFlushes {
+    Vector<ImageBufferSetIdentifier> bufferSets;
+    Vector<Ref<WebCore::PlatformCALayerDelegatedContentsFence>> delegatedContentsFences;
+};
 
 enum class BackingStoreNeedsDisplayReason : uint8_t {
     None,
@@ -128,7 +134,6 @@ public:
 
     RemoteImageBufferSetProxy* bufferSet() { return m_bufferSet.get(); }
 
-    std::unique_ptr<ThreadSafeImageBufferSetFlusher> createFlusher(ThreadSafeImageBufferSetFlusher::FlushType = ThreadSafeImageBufferSetFlusher::FlushType::BackendHandlesAndDrawing);
     void submitDrawingCommands();
 
     WebCore::FloatSize size() const { return m_parameters.size; }
@@ -151,7 +156,7 @@ public:
     bool hasFrontBuffer() const;
     bool frontBufferMayBeVolatile() const;
 
-    Vector<std::unique_ptr<ThreadSafeImageBufferSetFlusher>> takePendingFlushers();
+    void takePendingFlushes(BackingStoreFlushes&);
 
     const WebCore::Region& dirtyRegion() LIFETIME_BOUND { return m_dirtyRegion; }
     bool hasEmptyDirtyRegion() const { return m_dirtyRegion.isEmpty() || m_parameters.size.isEmpty(); }
@@ -194,7 +199,7 @@ private:
     std::optional<ImageBufferBackendHandle> m_contentsBufferHandle;
     std::optional<WebCore::PlaceholderFrameIdentifier> m_contentsFrameIdentifier;
 
-    Vector<std::unique_ptr<ThreadSafeImageBufferSetFlusher>> m_frontBufferFlushers;
+    Vector<Ref<WebCore::PlatformCALayerDelegatedContentsFence>> m_delegatedContentsFences;
 
     PaintRectList m_paintingRects;
 
@@ -205,6 +210,7 @@ private:
     float m_maxRequestedEDRHeadroom { 1 };
 #endif
     bool m_needsFlush { false };
+    bool m_bufferSetNeedsFlush { false };
     bool m_cleared { true };
 };
 

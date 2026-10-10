@@ -27,6 +27,7 @@
 
 #if ENABLE(GPU_PROCESS)
 
+#include "BufferAndBackendInfo.h"
 #include "IPCEvent.h"
 #include "ImageBufferSetIdentifier.h"
 #include "PrepareBackingStoreBuffersData.h"
@@ -62,6 +63,8 @@ public:
     // to be drawn (unless drawing will be opaque).
     void prepareBufferForDisplay(const WebCore::Region& dirtyRegion, bool requiresClearedPixels);
 
+    BufferSetBackendHandle flushFrontBufferForDisplay();
+
     bool makeBuffersVolatile(OptionSet<BufferInSetType> requestedBuffers, OptionSet<BufferInSetType>& volatileBuffers, bool forcePurge);
 
     bool isPreparingForDisplay() const { return m_context.get(); }
@@ -81,11 +84,9 @@ private:
 
     // Messages
     void updateConfiguration(const RemoteImageBufferSetConfiguration&);
-    void endPrepareForDisplay(RenderingUpdateID, CompletionHandler<void(ImageBufferSetPrepareBufferForDisplayOutputData, RenderingUpdateID)>&&);
     void submitDrawingCommands();
 
 #if ENABLE(RE_DYNAMIC_CONTENT_SCALING)
-    void dynamicContentScalingDisplayList(CompletionHandler<void(std::optional<WebCore::DynamicContentScalingDisplayList>&&)>&&);
     WebCore::DynamicContentScalingResourceCache ensureDynamicContentScalingResourceCache();
 #endif
 

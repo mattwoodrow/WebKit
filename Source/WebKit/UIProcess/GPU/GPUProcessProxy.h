@@ -30,6 +30,7 @@
 #include "AuxiliaryProcessProxy.h"
 #include "GPUProcessMediaCodecCapabilities.h"
 #include "ImageBufferBackendHandle.h"
+#include "ImageBufferSetIdentifier.h"
 #include "ProcessLauncher.h"
 #include "ProcessThrottler.h"
 #include <WebCore/ColorSpace.h>
@@ -53,6 +54,10 @@
 #include <CoreGraphics/CGDisplayConfiguration.h>
 #endif
 
+namespace IPC {
+class WrappedMessage;
+}
+
 namespace WebCore {
 class CaptureDevice;
 class SecurityOriginData;
@@ -74,6 +79,7 @@ void enableMetalShaderValidationInNextGPUProcessForTesting();
 
 enum class ProcessTerminationReason : uint8_t;
 enum class RotationMonitoringReason : uint8_t;
+struct BufferSetBackendHandle;
 
 class SandboxExtensionHandle;
 class WebPageProxy;
@@ -247,6 +253,9 @@ private:
     void didBecomeUnresponsive() final;
 
     void terminateWebProcess(WebCore::ProcessIdentifier, IPC::MessageName);
+#if PLATFORM(COCOA)
+    void forwardedDrawingAreaMessage(IPC::Connection&, WebCore::ProcessIdentifier, IPC::WrappedMessage&&, HashMap<ImageBufferSetIdentifier, std::unique_ptr<BufferSetBackendHandle>>&&);
+#endif
     void processIsReadyToExit();
 
 #if HAVE(VISIBILITY_PROPAGATION_VIEW)

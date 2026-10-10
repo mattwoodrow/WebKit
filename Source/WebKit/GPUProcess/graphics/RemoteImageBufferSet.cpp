@@ -37,6 +37,7 @@
 #include <WebCore/ImageBuffer.h>
 #include <WebCore/NullImageBufferBackend.h>
 #include <wtf/Borrow.h>
+#include <wtf/CryptographicallyRandomNumber.h>
 
 #if ENABLE(GPU_PROCESS)
 
@@ -100,7 +101,7 @@ void RemoteImageBufferSet::submitDrawingCommands()
         frontBuffer->submitDrawingCommands();
 }
 
-void RemoteImageBufferSet::endPrepareForDisplay(RenderingUpdateID renderingUpdateID, CompletionHandler<void(ImageBufferSetPrepareBufferForDisplayOutputData, RenderingUpdateID)>&& completionHandler)
+BufferSetBackendHandle RemoteImageBufferSet::flushFrontBufferForDisplay()
 {
     m_context.reset();
 
@@ -108,24 +109,27 @@ void RemoteImageBufferSet::endPrepareForDisplay(RenderingUpdateID renderingUpdat
     if (frontBuffer)
         frontBuffer->flushDrawingContext();
 
-    auto bufferIdentifier = [](RefPtr<WebCore::ImageBuffer> buffer) -> std::optional<WebCore::RenderingResourceIdentifier> {
+    // The UI process caches buffers by identifier, so distinguish them from the buffers of any
+    // GPU process that previously used the same identifiers.
+    static const unsigned bufferGeneration = cryptographicallyRandomNumber<unsigned>();
+    auto bufferInfo = [](RefPtr<WebCore::ImageBuffer> buffer) -> std::optional<BufferAndBackendInfo> {
         if (!buffer)
             return std::nullopt;
-        return buffer->renderingResourceIdentifier();
+        return BufferAndBackendInfo { buffer->renderingResourceIdentifier(), bufferGeneration };
     };
 
-    ImageBufferSetPrepareBufferForDisplayOutputData outputData;
+    BufferSetBackendHandle handle;
     if (frontBuffer) {
         auto* sharing = frontBuffer->toBackendSharing();
-        outputData.backendHandle = downcast<ImageBufferBackendHandleSharing>(*sharing).createBackendHandle();
+        handle.bufferHandle = downcast<ImageBufferBackendHandleSharing>(*sharing).createBackendHandle();
+#if ENABLE(RE_DYNAMIC_CONTENT_SCALING)
+        handle.displayList = frontBuffer->dynamicContentScalingDisplayList();
+#endif
     }
-
-    outputData.bufferCacheIdentifiers = BufferIdentifierSet { bufferIdentifier(frontBuffer), bufferIdentifier(m_backBuffer), bufferIdentifier(m_secondaryBackBuffer) };
-    // If we failed to allocate a front buffer then nothing was painted, so let the web process
-    // know that it needs to repaint the whole layer next time.
-    if (!frontBuffer)
-        outputData.displayRequirement = SwapBuffersDisplayRequirement::NeedsFullDisplay;
-    completionHandler(WTF::move(outputData), renderingUpdateID);
+    handle.frontBufferInfo = bufferInfo(frontBuffer);
+    handle.backBufferInfo = bufferInfo(m_backBuffer);
+    handle.secondaryBackBufferInfo = bufferInfo(m_secondaryBackBuffer);
+    return handle;
 }
 
 SwapBuffersDisplayRequirement RemoteImageBufferSet::swapBuffersForDisplay(bool hasEmptyDirtyRegion, bool supportsPartialRepaint)
@@ -289,15 +293,6 @@ bool RemoteImageBufferSet::makeBuffersVolatile(OptionSet<BufferInSetType> reques
 }
 
 #if ENABLE(RE_DYNAMIC_CONTENT_SCALING)
-void RemoteImageBufferSet::dynamicContentScalingDisplayList(CompletionHandler<void(std::optional<WebCore::DynamicContentScalingDisplayList>&&)>&& completionHandler)
-{
-    MESSAGE_CHECK(!isPreparingForDisplay(), "DynamicContentScalingDisplayList requested while preparing for display");
-    std::optional<WebCore::DynamicContentScalingDisplayList> displayList;
-    if (m_frontBuffer)
-        displayList = m_frontBuffer->dynamicContentScalingDisplayList();
-    completionHandler({ WTF::move(displayList) });
-}
-
 WebCore::DynamicContentScalingResourceCache RemoteImageBufferSet::ensureDynamicContentScalingResourceCache()
 {
     if (!m_dynamicContentScalingResourceCache)

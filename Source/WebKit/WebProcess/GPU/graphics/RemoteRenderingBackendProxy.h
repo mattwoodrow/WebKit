@@ -44,6 +44,7 @@
 #include "RenderingUpdateID.h"
 #include "StreamClientConnection.h"
 #include "ThreadSafeObjectHeap.h"
+#include "TransactionID.h"
 #include "WorkQueueMessageReceiver.h"
 #include <WebCore/ImageBufferResourceLimits.h>
 #include <WebCore/RenderingResourceIdentifier.h>
@@ -177,6 +178,12 @@ public:
     void endPreparingImageBufferSetsForDisplay();
 
     void prepareImageBufferSetForDisplay(LayerPrepareBuffersData&&);
+
+    // The commit and the messages ordered with it go through the GPU process, which adds the layer buffers to the commit.
+    bool flushLayerBuffersForCommit(TransactionIdentifier, Vector<ImageBufferSetIdentifier>&&);
+    void forwardDrawingAreaMessage(IPC::WrappedMessage&&);
+    // The completion handler is passed false if the GPU process didn't forward the commit.
+    void forwardLayerTreeCommit(IPC::WrappedMessage&&, std::optional<TransactionIdentifier> flushedLayerBuffers, CompletionHandler<void(bool forwarded)>&&);
 #endif
 
     void finalizeRenderingUpdate();

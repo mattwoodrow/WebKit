@@ -49,24 +49,6 @@ class StreamClientConnection;
 
 namespace WebKit {
 
-class RemoteImageBufferSetProxyFlushFence;
-struct BufferSetBackendHandle;
-
-class ThreadSafeImageBufferSetFlusher {
-    WTF_MAKE_TZONE_ALLOCATED_INLINE(ThreadSafeImageBufferSetFlusher);
-    WTF_MAKE_NONCOPYABLE(ThreadSafeImageBufferSetFlusher);
-public:
-    enum class FlushType {
-        BackendHandlesOnly,
-        BackendHandlesAndDrawing,
-    };
-
-    ThreadSafeImageBufferSetFlusher() = default;
-    virtual ~ThreadSafeImageBufferSetFlusher() = default;
-    // Returns true if flush succeeded, false if it failed.
-    virtual bool flushAndCollectHandles(HashMap<ImageBufferSetIdentifier, std::unique_ptr<BufferSetBackendHandle>>&) = 0;
-};
-
 class ImageBufferSetClient : public AbstractCanMakeCheckedPtr {
 public:
     virtual ~ImageBufferSetClient() = default;
@@ -99,6 +81,7 @@ public:
 
     // True if the GPU process reported that the last prepare didn't produce a front buffer.
     bool remoteFrontBufferIsMissing();
+    void setRemoteFrontBufferIsMissing();
 
 #if PLATFORM(COCOA)
     void prepareToDisplay(const WebCore::Region& dirtyRegion, bool supportsPartialRepaint, bool hasEmptyDirtyRegion, bool drawingRequiresClearedPixels);
@@ -109,25 +92,18 @@ public:
 
     RemoteGraphicsContextIdentifier contextIdentifier() const { return m_contextIdentifier; }
 
-    std::unique_ptr<ThreadSafeImageBufferSetFlusher> flushFrontBufferAsync(ThreadSafeImageBufferSetFlusher::FlushType);
     void submitDrawingCommands();
 
     void setConfiguration(RemoteImageBufferSetConfiguration&&);
     void willPrepareForDisplay();
     void disconnect();
 
-#if ENABLE(RE_DYNAMIC_CONTENT_SCALING)
-    std::optional<WebCore::DynamicContentScalingDisplayList> dynamicContentScalingDisplayList();
-#endif
-
-    unsigned generation() const { return m_generation; }
     void close();
 
 private:
     RemoteImageBufferSetProxy(RemoteRenderingBackendProxy&, ImageBufferSetClient&);
     template<typename T> auto send(T&& message);
     template<typename T> auto sendSync(T&& message);
-    template<typename T, typename C> auto sendWithAsyncReply(T&& message, C&& handler);
     RefPtr<IPC::StreamClientConnection> connection() const;
     void didBecomeUnresponsive() const;
 
@@ -142,7 +118,6 @@ private:
 
     RemoteImageBufferSetConfiguration m_configuration;
 
-    unsigned m_generation { 0 };
     bool m_remoteNeedsConfigurationUpdate { false };
 
     Lock m_lock;

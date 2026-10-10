@@ -28,6 +28,8 @@
 
 #import "DrawingAreaMessages.h"
 #import "DrawingAreaProxyMessages.h"
+#import "GPUProcessProxy.h"
+#import "GPUProcessProxyMessages.h"
 #import "LayerProperties.h"
 #import "Logging.h"
 #import "MessageSenderInlines.h"
@@ -47,6 +49,7 @@
 #import "WebPageProxy.h"
 #import "WebProcessProxy.h"
 #import "WindowKind.h"
+#import "WrappedMessage.h"
 #import <QuartzCore/CATextLayer.h>
 #import <QuartzCore/QuartzCore.h>
 #import <WebCore/AnimationFrameRate.h>
@@ -59,6 +62,7 @@
 #import <wtf/Borrow.h>
 #import <wtf/CallbackAggregator.h>
 #import <wtf/MachSendRight.h>
+#import <wtf/SetForScope.h>
 #import <wtf/StdLibExtras.h>
 #import <wtf/SystemTracing.h>
 #import <wtf/TZoneMallocInlines.h>
@@ -141,10 +145,17 @@ void RemoteLayerTreeDrawingAreaProxy::removeRemotePageDrawingAreaProxy(RemotePag
 
 ProcessState::ProcessState(WebProcessProxy& webProcess, std::optional<WebCore::PageIdentifier> webPageID)
     : webPageID(webPageID)
-    , nextLayerTreeTransactionID(TransactionID(TransactionIdentifier(), webProcess.coreProcessIdentifier()).next())
+    , nextLayerTreeTransactionID(TransactionID(TransactionIdentifier(), webProcess.coreProcessIdentifier()))
 {
-    pendingCommits.insert(0, { nextLayerTreeTransactionID, PendingCommitMessage::NotifyPendingCommitLayerTree, CommitDelayState::IntentionallyDeferred });
-    nextLayerTreeTransactionID.increment();
+    reset(nextLayerTreeTransactionID.next());
+}
+
+void ProcessState::reset(TransactionID nextTransactionID)
+{
+    pendingCommits = { { nextTransactionID, PendingCommitMessage::NotifyPendingCommitLayerTree, CommitDelayState::IntentionallyDeferred } };
+    nextLayerTreeTransactionID = nextTransactionID.next();
+    committedLayerTreeTransactionID = std::nullopt;
+    delayedCommits = 0;
 }
 
 std::unique_ptr<RemoteLayerTreeHost> RemoteLayerTreeDrawingAreaProxy::detachRemoteLayerTreeHost()
@@ -305,10 +316,43 @@ bool RemoteLayerTreeDrawingAreaProxy::isFromPreviousWebPage(const ProcessState& 
     return true;
 }
 
+bool RemoteLayerTreeDrawingAreaProxy::canBeForwardedThroughGPUProcess(IPC::MessageName messageName)
+{
+    return messageName == IPC::MessageName::RemoteLayerTreeDrawingAreaProxy_ResetLayerTree
+        || messageName == IPC::MessageName::RemoteLayerTreeDrawingAreaProxy_NotifyPendingCommitLayerTree
+        || messageName == IPC::MessageName::RemoteLayerTreeDrawingAreaProxy_NotifyFlushingLayerTree
+        || messageName == IPC::MessageName::RemoteLayerTreeDrawingAreaProxy_CommitLayerTree;
+}
+
+// Set while dispatching a message that the GPU process forwarded. The web process can't send these
+// messages directly, so that only the GPU process can attach layer buffers to commits.
+static HashMap<ImageBufferSetIdentifier, std::unique_ptr<BufferSetBackendHandle>>* layerBuffersOfMessageForwardedThroughGPUProcess;
+
+void RemoteLayerTreeDrawingAreaProxy::dispatchMessageForwardedThroughGPUProcess(IPC::Connection& webProcessConnection, UniqueRef<IPC::Decoder>&& decoder, HashMap<ImageBufferSetIdentifier, std::unique_ptr<BufferSetBackendHandle>>&& layerBuffers)
+{
+    ASSERT(isMainRunLoop());
+    SetForScope scope { layerBuffersOfMessageForwardedThroughGPUProcess, &layerBuffers };
+    webProcessConnection.dispatchRelayedMessage(WTF::move(decoder));
+}
+
+// The web process lost the messages that the GPU process hadn't forwarded when it exited.
+void RemoteLayerTreeDrawingAreaProxy::resetLayerTree(IPC::Connection& connection, TransactionID nextTransactionID, WebCore::PageIdentifier webPageID)
+{
+    MESSAGE_CHECK_BASE(layerBuffersOfMessageForwardedThroughGPUProcess, connection);
+    ProcessState& state = processStateForConnection(connection);
+    if (isFromPreviousWebPage(state, webPageID, "resetLayerTree"_s))
+        return;
+    MESSAGE_CHECK_BASE(nextTransactionID.processIdentifier() == state.nextLayerTreeTransactionID.processIdentifier(), connection);
+    MESSAGE_CHECK_BASE(!state.committedLayerTreeTransactionID || nextTransactionID.object() > state.committedLayerTreeTransactionID->object(), connection);
+
+    state.reset(nextTransactionID);
+}
+
 void RemoteLayerTreeDrawingAreaProxy::notifyPendingCommitLayerTree(IPC::Connection& connection, std::optional<TransactionID> transactionID, WebCore::PageIdentifier webPageID)
 {
     ProcessState& state = processStateForConnection(connection);
     LOG_WITH_STREAM(RemoteLayerTree, stream << "RemoteLayerTreeDrawingAreaProxy::notifyPendingCommitLayerTree " << transactionID << " old state: " << state.pendingCommits);
+    MESSAGE_CHECK_BASE(layerBuffersOfMessageForwardedThroughGPUProcess, connection);
     if (isFromPreviousWebPage(state, webPageID, "notifyPendingCommitLayerTree"_s))
         return;
 
@@ -346,6 +390,7 @@ void RemoteLayerTreeDrawingAreaProxy::notifyFlushingLayerTree(IPC::Connection& c
 {
     ProcessState& state = processStateForConnection(connection);
     LOG_WITH_STREAM(RemoteLayerTree, stream << "RemoteLayerTreeDrawingAreaProxy::notifyFlushingLayerTree " << transactionID << " old state: " << state.pendingCommits);
+    MESSAGE_CHECK_BASE(layerBuffersOfMessageForwardedThroughGPUProcess, connection);
     if (isFromPreviousWebPage(state, webPageID, "notifyFlushingLayerTree"_s))
         return;
 
@@ -358,8 +403,11 @@ void RemoteLayerTreeDrawingAreaProxy::notifyFlushingLayerTree(IPC::Connection& c
     }
 }
 
-void RemoteLayerTreeDrawingAreaProxy::commitLayerTree(IPC::Connection& connection, const RemoteLayerTreeCommitBundle& bundle, HashMap<ImageBufferSetIdentifier, std::unique_ptr<BufferSetBackendHandle>>&& handlesMap)
+void RemoteLayerTreeDrawingAreaProxy::commitLayerTree(IPC::Connection& connection, const RemoteLayerTreeCommitBundle& bundle)
 {
+    MESSAGE_CHECK_BASE(layerBuffersOfMessageForwardedThroughGPUProcess, connection);
+    auto handlesMap = std::exchange(*layerBuffersOfMessageForwardedThroughGPUProcess, { });
+
     {
         ProcessState& state = processStateForConnection(connection);
         LOG_WITH_STREAM(RemoteLayerTree, stream << "RemoteLayerTreeDrawingAreaProxy::commitLayerTree old state: " << state.pendingCommits);
@@ -445,6 +493,15 @@ void RemoteLayerTreeDrawingAreaProxy::commitLayerTree(IPC::Connection& connectio
         page->didReceiveFixedContainerEdges(connection, frameID, edges);
 
     WeakPtr weakThis { *this };
+
+    if (bundle.replacesLayerTree) {
+        RefPtr scrollingCoordinator = page->scrollingCoordinatorProxy();
+        if (scrollingCoordinator)
+            scrollingCoordinator->willCommitLayerAndScrollingTrees();
+        m_remoteLayerTreeHost->removeLayersFromProcess(WebProcessProxy::fromConnection(connection)->coreProcessIdentifier());
+        if (scrollingCoordinator)
+            scrollingCoordinator->didCommitLayerAndScrollingTrees();
+    }
 
     for (auto& transaction : borrowedTransactions) {
         commitLayerTreeTransaction(connection, CheckedRef { transaction.first }.get(), transaction.second,  transaction.first.remoteContextHostedIdentifier() ? std::nullopt : bundle.mainFrameData, bundle.pageData, bundle.transactionID);
@@ -899,7 +956,7 @@ IPC::Error RemoteLayerTreeDrawingAreaProxy::didRefreshDisplay(ProcessState& stat
     // Waiting for CA to commit is insufficient, because the render server can still be
     // using our backing store. We can improve this by waiting for the render server to commit
     // if we find API to do so, but for now we will make extra buffers if need be.
-    return connection.send(Messages::DrawingArea::DisplayDidRefresh(MonotonicTime::now()), identifier());
+    return connection.send(Messages::DrawingArea::DisplayDidRefresh(MonotonicTime::now(), state.committedLayerTreeTransactionID), identifier());
 }
 
 void RemoteLayerTreeDrawingAreaProxy::didRefreshDisplay(IPC::Connection* connection)
@@ -933,6 +990,9 @@ void RemoteLayerTreeDrawingAreaProxy::waitForDidUpdateActivityState(ActivityStat
         return;
 
     Ref connection = webProcessProxy().connection();
+    // The messages that this waits for come through the GPU process.
+    RefPtr gpuProcess = GPUProcessProxy::singletonIfCreated();
+    RefPtr gpuProcessConnection = gpuProcess && gpuProcess->hasConnection() ? &gpuProcess->connection() : nullptr;
 
     static Seconds activityStateUpdateTimeout = [] {
         if (RetainPtr<id> value = [[NSUserDefaults standardUserDefaults] objectForKey:@"WebKitOverrideActivityStateUpdateTimeout"])
@@ -947,15 +1007,10 @@ void RemoteLayerTreeDrawingAreaProxy::waitForDidUpdateActivityState(ActivityStat
         IPC::Error error;
         if (!m_webPageProxyProcessState.pendingCommits.size())
             error = didRefreshDisplay(m_webPageProxyProcessState, connection.get());
-        else {
-            // Only the most recent outstanding frame can be in NotifyPendingCommitLayerTree state
-            if (m_webPageProxyProcessState.pendingCommits[0].pendingMessage == PendingCommitMessage::NotifyPendingCommitLayerTree)
-                error = connection->waitForAndDispatchImmediately<Messages::RemoteLayerTreeDrawingAreaProxy::NotifyPendingCommitLayerTree>(identifier(), activityStateUpdateTimeout - (MonotonicTime::now() - startTime), IPC::WaitForOption::InterruptWaitingIfSyncMessageArrives);
-            else if (m_webPageProxyProcessState.pendingCommits[0].pendingMessage == PendingCommitMessage::NotifyFlushingLayerTree)
-                error = connection->waitForAndDispatchImmediately<Messages::RemoteLayerTreeDrawingAreaProxy::NotifyFlushingLayerTree>(identifier(), activityStateUpdateTimeout - (MonotonicTime::now() - startTime), IPC::WaitForOption::InterruptWaitingIfSyncMessageArrives);
-            else
-                error = connection->waitForAndDispatchImmediately<Messages::RemoteLayerTreeDrawingAreaProxy::CommitLayerTree>(identifier(), activityStateUpdateTimeout - (MonotonicTime::now() - startTime), IPC::WaitForOption::InterruptWaitingIfSyncMessageArrives);
-        }
+        else if (gpuProcessConnection)
+            error = gpuProcessConnection->waitForAndDispatchImmediately<Messages::GPUProcessProxy::ForwardedDrawingAreaMessage>(identifier(), activityStateUpdateTimeout - (MonotonicTime::now() - startTime), IPC::WaitForOption::InterruptWaitingIfSyncMessageArrives);
+        else
+            return;
 
         if (error != IPC::Error::NoError)
             return;

@@ -78,6 +78,19 @@ void RemoteLayerTreeContext::adoptLayersFromContext(RemoteLayerTreeContext& oldC
         Ref { (*graphicsLayers.begin()).get() }->moveToContext(*this);
 }
 
+void RemoteLayerTreeContext::recreateAllLayersInUIProcess()
+{
+    m_destroyedLayers.clear();
+
+    Vector<RefPtr<PlatformCALayerRemote>> layers;
+    for (auto& layer : m_livePlatformLayers.values())
+        layers.append(layer.get());
+    for (auto& layer : layers) {
+        if (layer)
+            layer->recreateInUIProcess();
+    }
+}
+
 float RemoteLayerTreeContext::deviceScaleFactor() const
 {
     return webPage().deviceScaleFactor();

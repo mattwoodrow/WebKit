@@ -135,7 +135,9 @@ auto RemoteRenderingBackendProxy::send(T&& message, ObjectIdentifierGeneric<U, V
     auto result = connection->send(std::forward<T>(message), destination);
     if (result != IPC::Error::NoError) [[unlikely]] {
         RELEASE_LOG(RemoteLayerBuffers, "[renderingBackend=%" PRIu64 "] RemoteRenderingBackendProxy::send - failed, name:%" PUBLIC_LOG_STRING ", error:%" PUBLIC_LOG_STRING, m_identifier.toUInt64(), IPC::description(T::name()).characters(), IPC::errorAsString(result).characters());
-        didBecomeUnresponsive();
+        // The connection is invalid once the GPU process has exited, and didClose() follows.
+        if (result != IPC::Error::InvalidConnection)
+            didBecomeUnresponsive();
     }
     return result;
 }
@@ -163,7 +165,9 @@ auto RemoteRenderingBackendProxy::sendWithAsyncReply(T&& message, C&& callback, 
     auto replyID = connection->sendWithAsyncReply(std::forward<T>(message), std::forward<C>(callback), destination);
     if (!replyID) [[unlikely]] {
         RELEASE_LOG(RemoteLayerBuffers, "[renderingBackend=%" PRIu64 "] RemoteRenderingBackendProxy::sendWithAsyncReply - failed, name:%" PUBLIC_LOG_STRING, m_identifier.toUInt64(), IPC::description(T::name()).characters());
-        didBecomeUnresponsive();
+        // The connection is invalid once the GPU process has exited, and didClose() follows.
+        if (connection->isValid())
+            didBecomeUnresponsive();
         return IPC::Error::Unspecified;
     }
     return IPC::Error::NoError;
@@ -639,6 +643,30 @@ void RemoteRenderingBackendProxy::endPreparingImageBufferSetsForDisplay()
 void RemoteRenderingBackendProxy::prepareImageBufferSetForDisplay(LayerPrepareBuffersData&& bufferSetToPrepare)
 {
     m_bufferSetsToPrepare.append(WTF::move(bufferSetToPrepare));
+}
+
+bool RemoteRenderingBackendProxy::flushLayerBuffersForCommit(TransactionIdentifier transactionID, Vector<ImageBufferSetIdentifier>&& bufferSets)
+{
+    return send(Messages::RemoteRenderingBackend::FlushLayerBuffersForCommit(transactionID, WTF::move(bufferSets))) == IPC::Error::NoError;
+}
+
+void RemoteRenderingBackendProxy::forwardDrawingAreaMessage(IPC::WrappedMessage&& message)
+{
+    send(Messages::RemoteRenderingBackend::ForwardDrawingAreaMessage(WTF::move(message)));
+}
+
+void RemoteRenderingBackendProxy::forwardLayerTreeCommit(IPC::WrappedMessage&& commit, std::optional<TransactionIdentifier> flushedLayerBuffers, CompletionHandler<void(bool)>&& completionHandler)
+{
+    CompletionHandler<void(Vector<ImageBufferSetIdentifier>&&, bool)> replyHandler = [protectedThis = Ref { *this }, completionHandler = WTF::move(completionHandler)](Vector<ImageBufferSetIdentifier>&& bufferSetsWithoutFrontBuffer, bool forwarded) mutable {
+        for (auto identifier : bufferSetsWithoutFrontBuffer) {
+            if (RefPtr bufferSet = protectedThis->m_imageBufferSets.get(identifier).get())
+                bufferSet->setRemoteFrontBufferIsMissing();
+        }
+        completionHandler(forwarded);
+    };
+    // A message that fails to send may already have taken the reply handler, which is then cancelled.
+    if (sendWithAsyncReply(Messages::RemoteRenderingBackend::ForwardLayerTreeCommit(WTF::move(commit), flushedLayerBuffers), WTF::move(replyHandler)) != IPC::Error::NoError && replyHandler) [[unlikely]]
+        replyHandler({ }, false);
 }
 #endif
 

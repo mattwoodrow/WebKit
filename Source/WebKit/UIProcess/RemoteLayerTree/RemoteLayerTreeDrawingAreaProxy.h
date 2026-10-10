@@ -86,6 +86,8 @@ struct ProcessState {
     ProcessState& operator=(ProcessState&&) = default;
 
     bool canSendDisplayDidRefresh(RemoteLayerTreeDrawingAreaProxy&);
+    // Starts again as if the next transaction were the first.
+    void reset(TransactionID nextTransactionID);
 
     std::optional<WebCore::PageIdentifier> webPageID;
     Vector<PendingCommit, 2> pendingCommits;
@@ -122,6 +124,10 @@ public:
     void releaseDisplayOnlyImage(RemoteSnapshotIdentifier);
 
     virtual ~RemoteLayerTreeDrawingAreaProxy();
+
+    static bool canBeForwardedThroughGPUProcess(IPC::MessageName);
+    // Dispatches a message as if it came from the web process, with the layer buffers that the GPU process added.
+    static void dispatchMessageForwardedThroughGPUProcess(IPC::Connection& webProcessConnection, UniqueRef<IPC::Decoder>&&, HashMap<ImageBufferSetIdentifier, std::unique_ptr<BufferSetBackendHandle>>&& layerBuffers);
 
     void ref() const final { RefCounted::ref(); }
     void deref() const final { RefCounted::deref(); }
@@ -239,10 +245,11 @@ private:
     // per-frame.
     virtual void setPreferredFramesPerSecond(IPC::Connection&, WebCore::FramesPerSecond) { }
 
+    void resetLayerTree(IPC::Connection&, TransactionID nextTransactionID, WebCore::PageIdentifier);
     void notifyPendingCommitLayerTree(IPC::Connection&, std::optional<TransactionID>, WebCore::PageIdentifier);
     void notifyFlushingLayerTree(IPC::Connection&, TransactionID, WebCore::PageIdentifier);
     bool isFromPreviousWebPage(const ProcessState&, WebCore::PageIdentifier, ASCIILiteral messageName) const;
-    void commitLayerTree(IPC::Connection&, const RemoteLayerTreeCommitBundle&, HashMap<ImageBufferSetIdentifier, std::unique_ptr<BufferSetBackendHandle>>&&);
+    void commitLayerTree(IPC::Connection&, const RemoteLayerTreeCommitBundle&);
     void commitLayerTreeTransaction(IPC::Connection&, const RemoteLayerTreeTransaction&, const RemoteScrollingCoordinatorTransaction&, const std::optional<MainFrameData>&, const PageData&, const TransactionID&);
     virtual void didCommitLayerTree(IPC::Connection&, const RemoteLayerTreeTransaction&, const RemoteScrollingCoordinatorTransaction&, const std::optional<MainFrameData>&, const TransactionID&) { }
 

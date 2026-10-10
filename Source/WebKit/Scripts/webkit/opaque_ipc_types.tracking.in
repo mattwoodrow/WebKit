@@ -238,6 +238,7 @@
 }
 
 [UnsafeWrapper] Vector<uint8_t> {
+    [NeedsReview] StructureParam IPC::WrappedMessage.m_data
     [Legacy] MessageParamReply WebPage.BindRemoteAccessibilityFrames token
     [Legacy] MessageParam NetworkConnectionToWebProcess.NavigatorSubscribeToPushService applicationServerKey
     [Legacy] MessageParam PushClientConnection.SubscribeToPushService vapidPublicKey
@@ -346,6 +347,7 @@
 }
 
 [UnsafeWrapper] Vector<MachSendRight> {
+    [NeedsReview] StructureParam IPC::WrappedMessage.m_attachments
     [Legacy] StructureParam WebCore::DynamicContentScalingDisplayList.takeSurfaces()
 
     [NotSentFromWebContent] MessageParamReply RemoteCompositorIntegration.RecreateRenderBuffers renderBuffers

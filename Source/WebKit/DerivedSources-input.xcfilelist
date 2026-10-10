@@ -185,6 +185,7 @@ $(PROJECT_DIR)/Platform/IPC/SharedBufferReference.serialization.in
 $(PROJECT_DIR)/Platform/IPC/SharedFileHandle.serialization.in
 $(PROJECT_DIR)/Platform/IPC/StreamServerConnection.serialization.in
 $(PROJECT_DIR)/Platform/IPC/TransferString.serialization.in
+$(PROJECT_DIR)/Platform/IPC/WrappedMessage.serialization.in
 $(PROJECT_DIR)/Platform/LogMessages.in
 $(PROJECT_DIR)/Platform/SharedMemory.serialization.in
 $(PROJECT_DIR)/Platform/cocoa/MediaPlaybackTargetContextSerialized.serialization.in

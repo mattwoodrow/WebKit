@@ -533,6 +533,7 @@ file(GLOB _ipc_core_sources
     "${WEBKIT_DIR}/Platform/IPC/StreamConnectionWorkQueue.cpp"
     "${WEBKIT_DIR}/Platform/IPC/StreamServerConnection.cpp"
     "${WEBKIT_DIR}/Platform/IPC/TransferString.cpp"
+    "${WEBKIT_DIR}/Platform/IPC/WrappedMessage.cpp"
     "${WEBKIT_DIR}/Platform/IPC/cocoa/ConnectionCocoa.mm"
     "${WEBKIT_DIR}/Platform/IPC/cocoa/MachMessage.cpp"
     "${WEBKIT_DIR}/Platform/IPC/cocoa/SharedFileHandleCocoa.cpp"

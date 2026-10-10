@@ -37,6 +37,7 @@
 #import "CoreIPCPlistDictionary.h"
 #import "Encoder.h"
 #import "MessageSenderInlines.h"
+#import "WrappedMessage.h"
 #import "Helpers/Test.h"
 #import <CoreVideo/CoreVideo.h>
 #import <Foundation/NSValue.h>
@@ -2836,3 +2837,41 @@ TEST(IPCSerialization, PKPaymentMethod)
 }
 #endif // USE(PASSKIT) && HAVE(WK_SECURE_CODING_PKPAYMENTMETHOD)
 
+
+TEST(IPCSerialization, WrappedMessage)
+{
+    auto innerSurface = WebCore::IOSurface::create(nullptr, { 5, 5 }, WebCore::ColorSpace::SRGB());
+    auto outerSurface = WebCore::IOSurface::create(nullptr, { 6, 6 }, WebCore::ColorSpace::SRGB());
+    ASSERT_TRUE(innerSurface && outerSurface);
+
+    auto inner = makeUniqueRef<IPC::Encoder>(IPC::MessageName::IPCTester_AsyncPing, 42);
+    inner.get() << 1234u;
+    inner.get() << innerSurface->createSendRight();
+
+    auto outer = makeUniqueRef<IPC::Encoder>(IPC::MessageName::IPCTester_AsyncPing, 0);
+    outer.get() << outerSurface->createSendRight();
+    outer.get() << IPC::WrappedMessage { WTF::move(inner) };
+    outer.get() << 5678u;
+
+    // Like IPC::Connection, hand the attachments to the decoder in reverse order.
+    auto attachments = outer->releaseAttachments();
+    attachments.reverse();
+    auto outerDecoder = IPC::Decoder::create(outer->span(), WTF::move(attachments));
+    ASSERT_TRUE(outerDecoder);
+    auto outerSendRight = outerDecoder->decode<MachSendRight>();
+    auto wrapped = outerDecoder->decode<IPC::WrappedMessage>();
+    auto trailing = outerDecoder->decode<unsigned>();
+    ASSERT_TRUE(outerSendRight && wrapped && trailing);
+    EXPECT_EQ(*trailing, 5678u);
+    EXPECT_EQ(WebCore::IOSurface::createFromSendRight(WTF::move(*outerSendRight))->size(), WebCore::IntSize(6, 6));
+
+    auto innerDecoder = WTF::move(*wrapped).createDecoder();
+    ASSERT_TRUE(innerDecoder);
+    EXPECT_EQ(innerDecoder->messageName(), IPC::MessageName::IPCTester_AsyncPing);
+    EXPECT_EQ(innerDecoder->destinationID(), 42u);
+    auto value = innerDecoder->decode<unsigned>();
+    auto innerSendRight = innerDecoder->decode<MachSendRight>();
+    ASSERT_TRUE(value && innerSendRight);
+    EXPECT_EQ(*value, 1234u);
+    EXPECT_EQ(WebCore::IOSurface::createFromSendRight(WTF::move(*innerSendRight))->size(), WebCore::IntSize(5, 5));
+}

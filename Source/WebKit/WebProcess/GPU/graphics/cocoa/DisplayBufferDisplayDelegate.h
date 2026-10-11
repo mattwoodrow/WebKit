@@ -27,6 +27,7 @@
 
 #if ENABLE(GPU_PROCESS) && PLATFORM(COCOA)
 
+#include "GPUProcessDelegatedContentsFence.h"
 #include "IPCSemaphore.h"
 #include <WebCore/GraphicsLayerContentsDisplayDelegate.h>
 #include <WebCore/GraphicsLayerEnums.h>
@@ -37,7 +38,7 @@
 
 namespace WebKit {
 
-class DisplayBufferFence final : public WebCore::PlatformCALayerDelegatedContentsFence {
+class DisplayBufferFence final : public GPUProcessDelegatedContentsFence {
 public:
     static Ref<DisplayBufferFence> create(IPC::Semaphore&& finishedFenceSemaphore)
     {
@@ -51,6 +52,15 @@ public:
             return true;
         m_signaled = m_semaphore.waitFor(timeout);
         return m_signaled;
+    }
+
+    bool addToGPUProcessFlushes(ThreadSafeImageBufferSetFlusher::GPUProcessFlushes& flushes) final
+    {
+        Locker locker { m_lock };
+        // The GPU process consumes the signal, so it waits only once.
+        if (!m_signaled && !std::exchange(m_isWaitedForByGPUProcess, true))
+            flushes.fences.append(IPC::Semaphore { m_semaphore.createSendRight() });
+        return true;
     }
 
     void forceSignal()
@@ -70,6 +80,7 @@ private:
 
     Lock m_lock;
     bool m_signaled WTF_GUARDED_BY_LOCK(m_lock) { false };
+    bool m_isWaitedForByGPUProcess WTF_GUARDED_BY_LOCK(m_lock) { false };
     IPC::Semaphore m_semaphore;
 };
 

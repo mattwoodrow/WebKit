@@ -29,6 +29,7 @@
 #import "ArgumentCoders.h"
 #import "DynamicContentScalingImageBufferBackend.h"
 #import "GPUProcess.h"
+#import "GPUProcessDelegatedContentsFence.h"
 #import "ImageBufferBackendHandleSharing.h"
 #import "Logging.h"
 #import "PlatformCALayerRemote.h"
@@ -88,6 +89,14 @@ public:
         return m_fence->waitFor(delegatedContentsFinishedTimeout);
     }
 
+#if ENABLE(GPU_PROCESS)
+    bool addToGPUProcessFlushes(GPUProcessFlushes& flushes) final
+    {
+        RefPtr fence = dynamicDowncast<GPUProcessDelegatedContentsFence>(m_fence.get());
+        return fence && fence->addToGPUProcessFlushes(flushes);
+    }
+#endif
+
 private:
     DelegatedContentsFenceFlusher(Ref<PlatformCALayerDelegatedContentsFence> fence)
         : m_fence(WTF::move(fence))
@@ -113,7 +122,11 @@ public:
         return false;
     }
 
-    std::optional<ImageBufferSetIdentifier> bufferSetFlushedByGPUProcess() const final { return m_identifier; }
+    bool addToGPUProcessFlushes(GPUProcessFlushes& flushes) final
+    {
+        flushes.bufferSets.append(m_identifier);
+        return true;
+    }
 
 private:
     ImageBufferSetIdentifier m_identifier;

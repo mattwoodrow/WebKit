@@ -463,34 +463,16 @@ void RemoteLayerTreeDrawingArea::updateRendering()
 
     auto pageID = webPage->identifier();
     if (forwardsMessagesThroughGPUProcess()) {
-        Vector<ImageBufferSetIdentifier> bufferSetsFlushedByGPUProcess;
-        flushers.removeAllMatching([&](auto& flusher) {
-            auto bufferSet = flusher->bufferSetFlushedByGPUProcess();
-            if (bufferSet)
-                bufferSetsFlushedByGPUProcess.append(*bufferSet);
-            return !!bufferSet;
-        });
-        RefPtr layerBuffersConnection = protect(m_remoteLayerTreeContext->ensureRemoteRenderingBackendProxy())->flushLayerBuffersForCommit(WTF::move(bufferSetsFlushedByGPUProcess));
-
-        if (flushers.isEmpty() && !m_commitsWaitingForWebProcessFlushers)
-            forwardCommitThroughGPUProcess(WTF::move(commitEncoder), layerBuffersConnection.get(), { });
-        else {
-            ++m_commitsWaitingForWebProcessFlushers;
-            m_commitQueue->dispatch([commitEncoder = WTF::move(commitEncoder), flushers = WTF::move(flushers), layerBuffersConnection = WTF::move(layerBuffersConnection), pageID] mutable {
-                HashMap<ImageBufferSetIdentifier, std::unique_ptr<BufferSetBackendHandle>> handles;
-                // FIXME: Currently we send the transaction even if the flush timed out.
-                BackingStoreFlusher::flushAndCollectHandles(flushers, handles);
-
-                RunLoop::mainSingleton().dispatch([commitEncoder = WTF::move(commitEncoder), handles = WTF::move(handles), layerBuffersConnection = WTF::move(layerBuffersConnection), pageID] mutable {
-                    RefPtr webPage = WebProcess::singleton().webPage(pageID);
-                    RefPtr drawingArea = webPage ? dynamicDowncast<RemoteLayerTreeDrawingArea>(webPage->drawingArea()) : nullptr;
-                    if (!drawingArea)
-                        return;
-                    --drawingArea->m_commitsWaitingForWebProcessFlushers;
-                    drawingArea->forwardCommitThroughGPUProcess(WTF::move(commitEncoder), layerBuffersConnection.get(), WTF::move(handles));
-                });
-            });
+        Ref renderingBackend = m_remoteLayerTreeContext->ensureRemoteRenderingBackendProxy();
+        ThreadSafeImageBufferSetFlusher::GPUProcessFlushes gpuProcessFlushes { renderingBackend->renderingBackendIdentifier(), { }, { } };
+        HashMap<ImageBufferSetIdentifier, std::unique_ptr<BufferSetBackendHandle>> handles;
+        for (auto& flusher : flushers) {
+            // Only backing stores that render in this process, and delegated contents that
+            // aren't finished by the GPU process, are flushed here.
+            if (!flusher->addToGPUProcessFlushes(gpuProcessFlushes))
+                flusher->flushAndCollectHandles(handles);
         }
+        forwardCommitThroughGPUProcess(WTF::move(commitEncoder), WTF::move(gpuProcessFlushes), WTF::move(handles));
 
         didCompleteRenderingUpdateDisplay();
 
@@ -583,7 +565,7 @@ void RemoteLayerTreeDrawingArea::forwardThroughGPUProcess(UniqueRef<IPC::Encoder
     });
 }
 
-void RemoteLayerTreeDrawingArea::forwardCommitThroughGPUProcess(UniqueRef<IPC::Encoder>&& encoder, IPC::StreamClientConnection* layerBuffersConnection, HashMap<ImageBufferSetIdentifier, std::unique_ptr<BufferSetBackendHandle>>&& handles)
+void RemoteLayerTreeDrawingArea::forwardCommitThroughGPUProcess(UniqueRef<IPC::Encoder>&& encoder, ThreadSafeImageBufferSetFlusher::GPUProcessFlushes&& gpuProcessFlushes, HashMap<ImageBufferSetIdentifier, std::unique_ptr<BufferSetBackendHandle>>&& handles)
 {
     resendMessagesLostWithGPUProcess();
 
@@ -591,7 +573,7 @@ void RemoteLayerTreeDrawingArea::forwardCommitThroughGPUProcess(UniqueRef<IPC::E
     IPC::WrappedMessage message { WTF::move(encoder) };
     m_messagesForwardedThroughGPUProcess.append({ identifier, true, message.copy() });
 
-    protect(m_remoteLayerTreeContext->ensureRemoteRenderingBackendProxy())->forwardLayerTreeCommit(WTF::move(message), layerBuffersConnection, WTF::move(handles), [weakThis = WeakPtr { *this }, identifier](bool forwarded) {
+    protect(m_remoteLayerTreeContext->ensureRemoteRenderingBackendProxy())->forwardLayerTreeCommit(WTF::move(message), WTF::move(gpuProcessFlushes.bufferSets), WTF::move(gpuProcessFlushes.fences), WTF::move(handles), [weakThis = WeakPtr { *this }, identifier](bool forwarded) {
         RefPtr protectedThis = weakThis.get();
         if (!protectedThis)
             return;
@@ -627,7 +609,7 @@ void RemoteLayerTreeDrawingArea::resendMessagesLostWithGPUProcess()
         return;
 
     // The GPU process may have forwarded some of these before exiting, and the UI process ignores
-    // those. The layer buffers flushed by that GPU process are gone, so commits go without them.
+    // those. The layer buffers of that GPU process are gone, so commits go without them.
     Ref renderingBackend = m_remoteLayerTreeContext->ensureRemoteRenderingBackendProxy();
     for (auto& message : m_messagesForwardedThroughGPUProcess) {
         auto completionHandler = [weakThis = WeakPtr { *this }, identifier = message.identifier](bool forwarded) {
@@ -635,7 +617,7 @@ void RemoteLayerTreeDrawingArea::resendMessagesLostWithGPUProcess()
                 protectedThis->didForwardThroughGPUProcess(identifier, forwarded);
         };
         if (message.isCommit)
-            renderingBackend->forwardLayerTreeCommit(message.message.copy(), nullptr, { }, WTF::move(completionHandler));
+            renderingBackend->forwardLayerTreeCommit(message.message.copy(), { }, { }, { }, WTF::move(completionHandler));
         else
             renderingBackend->forwardDrawingAreaMessage(message.message.copy(), WTF::move(completionHandler));
     }

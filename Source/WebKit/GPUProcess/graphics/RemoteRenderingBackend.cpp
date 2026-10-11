@@ -64,6 +64,7 @@
 #include <WebCore/HTMLCanvasElement.h>
 #include <WebCore/ImageBufferDisplayListBackend.h>
 #include <WebCore/NullImageBufferBackend.h>
+#include <WebCore/PlatformCALayerDelegatedContents.h>
 #include <WebCore/RenderingResourceIdentifier.h>
 #include <wtf/CheckedArithmetic.h>
 #include <wtf/RunLoop.h>
@@ -708,43 +709,36 @@ void RemoteRenderingBackend::forwardDrawingAreaMessage(IPC::WrappedMessage&& mes
     completionHandler(true);
 }
 
-// Everything drawn into the buffer sets for a commit precedes this in the stream, so their front
-// buffers are complete. The web process forwards the commit once it has resolved its own fences.
-void RemoteRenderingBackend::flushLayerBuffersForCommit(Vector<ImageBufferSetIdentifier>&& bufferSetIdentifiers)
-{
-    assertIsCurrent(workQueue());
-
-    FlushedLayerBuffers flushedBuffers;
-    for (auto bufferSetIdentifier : bufferSetIdentifiers) {
-        RefPtr bufferSet = m_remoteImageBufferSets.get(bufferSetIdentifier);
-        MESSAGE_CHECK(bufferSet, "BufferSet is being flushed before being created");
-
-        auto handle = bufferSet->flushFrontBufferForDisplay();
-        if (!handle.frontBufferInfo)
-            flushedBuffers.bufferSetsWithoutFrontBuffer.append(bufferSetIdentifier);
-        flushedBuffers.handles.set(bufferSetIdentifier, makeUnique<BufferSetBackendHandle>(WTF::move(handle)));
-    }
-    m_flushedLayerBuffers.append(WTF::move(flushedBuffers));
-}
-
-void RemoteRenderingBackend::forwardLayerTreeCommit(IPC::WrappedMessage&& commit, bool hasFlushedLayerBuffers, HashMap<ImageBufferSetIdentifier, std::unique_ptr<BufferSetBackendHandle>>&& webProcessHandles, CompletionHandler<void(Vector<ImageBufferSetIdentifier>&&, bool)>&& completionHandler)
+// Everything drawn into the buffer sets for a commit precedes it in the stream, so their front
+// buffers are complete. Waiting for the fences of the delegated contents blocks the stream like
+// flushing the buffers does.
+void RemoteRenderingBackend::forwardLayerTreeCommit(IPC::WrappedMessage&& commit, Vector<ImageBufferSetIdentifier>&& bufferSetIdentifiers, Vector<IPC::Semaphore>&& fences, HashMap<ImageBufferSetIdentifier, std::unique_ptr<BufferSetBackendHandle>>&& handles, CompletionHandler<void(Vector<ImageBufferSetIdentifier>&&, bool)>&& completionHandler)
 {
     assertIsCurrent(workQueue());
 
     MESSAGE_CHECK_COMPLETION_BASE(commit.messageName() == IPC::MessageName::RemoteLayerTreeDrawingAreaProxy_CommitLayerTree, m_streamConnection, completionHandler({ }, false));
-    MESSAGE_CHECK_COMPLETION_BASE(!hasFlushedLayerBuffers || !m_flushedLayerBuffers.isEmpty(), m_streamConnection, completionHandler({ }, false));
 
-    auto flushedBuffers = hasFlushedLayerBuffers ? m_flushedLayerBuffers.takeFirst() : FlushedLayerBuffers { };
-    for (auto& [bufferSetIdentifier, handle] : webProcessHandles)
-        flushedBuffers.handles.add(bufferSetIdentifier, WTF::move(handle));
+    Vector<ImageBufferSetIdentifier> bufferSetsWithoutFrontBuffer;
+    for (auto bufferSetIdentifier : bufferSetIdentifiers) {
+        RefPtr bufferSet = m_remoteImageBufferSets.get(bufferSetIdentifier);
+        MESSAGE_CHECK_COMPLETION_BASE(bufferSet, m_streamConnection, completionHandler({ }, false));
+
+        auto handle = bufferSet->flushFrontBufferForDisplay();
+        if (!handle.frontBufferInfo)
+            bufferSetsWithoutFrontBuffer.append(bufferSetIdentifier);
+        handles.set(bufferSetIdentifier, makeUnique<BufferSetBackendHandle>(WTF::move(handle)));
+    }
+
+    for (auto& fence : fences)
+        fence.waitFor(delegatedContentsFinishedTimeout);
 
     auto drawingAreaIdentifier = commit.destinationID();
     auto encoder = WTF::move(commit).createEncoder();
     MESSAGE_CHECK_COMPLETION_BASE(encoder, m_streamConnection, completionHandler({ }, false));
-    *encoder << WTF::move(flushedBuffers.handles);
+    *encoder << WTF::move(handles);
 
     sendForwardedDrawingAreaMessage(IPC::WrappedMessage { makeUniqueRefFromNonNullUniquePtr(WTF::move(encoder)) }, drawingAreaIdentifier);
-    completionHandler(WTF::move(flushedBuffers.bufferSetsWithoutFrontBuffer), true);
+    completionHandler(WTF::move(bufferSetsWithoutFrontBuffer), true);
 }
 #endif
 

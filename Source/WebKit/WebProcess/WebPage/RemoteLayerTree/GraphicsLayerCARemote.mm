@@ -27,12 +27,15 @@
 #include "GraphicsLayerCARemote.h"
 
 #include "DisplayOnlyImageProxy.h"
+#include "GPUProcessDelegatedContentsFence.h"
 #include "ImageBufferBackendHandleSharing.h"
 #include "PlatformCAAnimationRemote.h"
 #include "PlatformCALayerRemote.h"
 #include "PlatformCALayerRemoteHost.h"
 #include "RemoteLayerTreeContext.h"
+#include "RemoteImageBufferProxy.h"
 #include "RemoteLayerTreeDrawingAreaProxyMessages.h"
+#include "RemoteRenderingBackendProxy.h"
 #include "WebPage.h"
 #include "WebProcess.h"
 #include <WebCore/GraphicsLayerContentsDisplayDelegate.h>
@@ -251,11 +254,11 @@ bool GraphicsLayerCARemote::shouldDirectlyCompositeImageBuffer(ImageBuffer* imag
     return is<ImageBufferBackendHandleSharing>(image->toBackendSharing());
 }
 
-class ImageBufferFlusherFence final : public WebCore::PlatformCALayerDelegatedContentsFence {
+class ImageBufferFlusherFence final : public GPUProcessDelegatedContentsFence {
 public:
-    static Ref<ImageBufferFlusherFence> create(std::unique_ptr<ThreadSafeImageBufferFlusher>&& flusher)
+    static Ref<ImageBufferFlusherFence> create(std::unique_ptr<ThreadSafeImageBufferFlusher>&& flusher, std::optional<RemoteRenderingBackendIdentifier> renderingBackend)
     {
-        return adoptRef(*new ImageBufferFlusherFence(WTF::move(flusher)));
+        return adoptRef(*new ImageBufferFlusherFence(WTF::move(flusher), renderingBackend));
     }
 
     bool waitFor(Seconds) final
@@ -264,13 +267,21 @@ public:
         return true;
     }
 
+    bool addToGPUProcessFlushes(ThreadSafeImageBufferSetFlusher::GPUProcessFlushes& flushes) final
+    {
+        // The flush of a buffer from the same rendering backend precedes the commit in its stream.
+        return m_renderingBackend == flushes.renderingBackend;
+    }
+
 private:
-    ImageBufferFlusherFence(std::unique_ptr<ThreadSafeImageBufferFlusher>&& flusher)
+    ImageBufferFlusherFence(std::unique_ptr<ThreadSafeImageBufferFlusher>&& flusher, std::optional<RemoteRenderingBackendIdentifier> renderingBackend)
         : m_flusher(WTF::move(flusher))
+        , m_renderingBackend(renderingBackend)
     {
     }
 
     const std::unique_ptr<ThreadSafeImageBufferFlusher> m_flusher;
+    const std::optional<RemoteRenderingBackendIdentifier> m_renderingBackend;
 };
 
 void GraphicsLayerCARemote::setLayerContentsToImageBuffer(PlatformCALayer& layer, ImageBuffer* image)
@@ -281,8 +292,14 @@ void GraphicsLayerCARemote::setLayerContentsToImageBuffer(PlatformCALayer& layer
     image->flushDrawingContextAsync();
 
     RefPtr<PlatformCALayerDelegatedContentsFence> fence;
-    if (auto flusher = image->createFlusher())
-        fence = ImageBufferFlusherFence::create(WTF::move(flusher));
+    if (auto flusher = image->createFlusher()) {
+        std::optional<RemoteRenderingBackendIdentifier> renderingBackend;
+        if (RefPtr remoteImage = dynamicDowncast<RemoteImageBufferProxy>(*image)) {
+            if (RefPtr backend = remoteImage->renderingBackend())
+                renderingBackend = backend->renderingBackendIdentifier();
+        }
+        fence = ImageBufferFlusherFence::create(WTF::move(flusher), renderingBackend);
+    }
 
     auto* sharing = dynamicDowncast<ImageBufferBackendHandleSharing>(image->toBackendSharing());
     if (!sharing)

@@ -112,7 +112,11 @@ public:
         return false;
     }
 
-    std::optional<ImageBufferSetIdentifier> bufferSetFlushedByGPUProcess() const final { return m_identifier; }
+    bool addToGPUProcessFlushes(GPUProcessFlushes& flushes) final
+    {
+        flushes.bufferSets.append(m_identifier);
+        return true;
+    }
 
 private:
     ImageBufferSetIdentifier m_identifier;

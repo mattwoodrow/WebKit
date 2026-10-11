@@ -657,17 +657,6 @@ void RemoteRenderingBackendProxy::prepareImageBufferSetForDisplay(LayerPrepareBu
     m_bufferSetsToPrepare.append(WTF::move(bufferSetToPrepare));
 }
 
-RefPtr<IPC::StreamClientConnection> RemoteRenderingBackendProxy::flushLayerBuffersForCommit(Vector<ImageBufferSetIdentifier>&& bufferSets)
-{
-    if (bufferSets.isEmpty())
-        return nullptr;
-    RefPtr connection = this->connection();
-    if (!connection) [[unlikely]]
-        return nullptr;
-    connection->send(Messages::RemoteRenderingBackend::FlushLayerBuffersForCommit(WTF::move(bufferSets)), renderingBackendIdentifier());
-    return connection;
-}
-
 void RemoteRenderingBackendProxy::forwardDrawingAreaMessage(IPC::WrappedMessage&& message, CompletionHandler<void(bool)>&& completionHandler)
 {
     RefPtr connection = this->connection();
@@ -678,16 +667,14 @@ void RemoteRenderingBackendProxy::forwardDrawingAreaMessage(IPC::WrappedMessage&
     connection->sendWithAsyncReply(Messages::RemoteRenderingBackend::ForwardDrawingAreaMessage(WTF::move(message)), WTF::move(completionHandler), renderingBackendIdentifier());
 }
 
-void RemoteRenderingBackendProxy::forwardLayerTreeCommit(IPC::WrappedMessage&& commit, IPC::StreamClientConnection* layerBuffersConnection, HashMap<ImageBufferSetIdentifier, std::unique_ptr<BufferSetBackendHandle>>&& webProcessHandles, CompletionHandler<void(bool)>&& completionHandler)
+void RemoteRenderingBackendProxy::forwardLayerTreeCommit(IPC::WrappedMessage&& commit, Vector<ImageBufferSetIdentifier>&& bufferSets, Vector<IPC::Semaphore>&& fences, HashMap<ImageBufferSetIdentifier, std::unique_ptr<BufferSetBackendHandle>>&& webProcessHandles, CompletionHandler<void(bool)>&& completionHandler)
 {
     RefPtr connection = this->connection();
     if (!connection) [[unlikely]] {
         completionHandler(false);
         return;
     }
-    // If the GPU process exited since flushing the layer buffers, the commit goes without them.
-    bool hasFlushedLayerBuffers = layerBuffersConnection == connection.get();
-    connection->sendWithAsyncReply(Messages::RemoteRenderingBackend::ForwardLayerTreeCommit(WTF::move(commit), hasFlushedLayerBuffers, WTF::move(webProcessHandles)), [protectedThis = Ref { *this }, completionHandler = WTF::move(completionHandler)](Vector<ImageBufferSetIdentifier>&& bufferSetsWithoutFrontBuffer, bool forwarded) mutable {
+    connection->sendWithAsyncReply(Messages::RemoteRenderingBackend::ForwardLayerTreeCommit(WTF::move(commit), WTF::move(bufferSets), WTF::move(fences), WTF::move(webProcessHandles)), [protectedThis = Ref { *this }, completionHandler = WTF::move(completionHandler)](Vector<ImageBufferSetIdentifier>&& bufferSetsWithoutFrontBuffer, bool forwarded) mutable {
         for (auto identifier : bufferSetsWithoutFrontBuffer) {
             if (RefPtr bufferSet = protectedThis->m_imageBufferSets.get(identifier).get())
                 bufferSet->setRemoteFrontBufferIsMissing();

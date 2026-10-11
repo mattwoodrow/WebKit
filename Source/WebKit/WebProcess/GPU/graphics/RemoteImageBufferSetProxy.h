@@ -26,11 +26,13 @@
 #pragma once
 
 #include "BufferIdentifierSet.h"
+#include "IPCSemaphore.h"
 #include "ImageBufferSetIdentifier.h"
 #include "MarkSurfacesAsVolatileRequestIdentifier.h"
 #include "PrepareBackingStoreBuffersData.h"
 #include "RemoteGraphicsContextProxy.h"
 #include "RemoteImageBufferSetConfiguration.h"
+#include "RemoteRenderingBackendIdentifier.h"
 #include "RenderingUpdateID.h"
 #include "WorkQueueMessageReceiver.h"
 #include <wtf/AbstractCanMakeCheckedPtr.h>
@@ -68,8 +70,14 @@ public:
     // Returns true if flush succeeded, false if it failed.
     virtual bool flushAndCollectHandles(HashMap<ImageBufferSetIdentifier, std::unique_ptr<BufferSetBackendHandle>>&) = 0;
 
-    // The buffer set that the GPU process flushes when forwarding the commit, instead of this flusher.
-    virtual std::optional<ImageBufferSetIdentifier> bufferSetFlushedByGPUProcess() const { return std::nullopt; }
+    struct GPUProcessFlushes {
+        RemoteRenderingBackendIdentifier renderingBackend;
+        Vector<ImageBufferSetIdentifier> bufferSets;
+        Vector<IPC::Semaphore> fences;
+    };
+    // Hands this flush over to the GPU process, which does it before forwarding the commit.
+    // Returns false if this process has to flush instead.
+    virtual bool addToGPUProcessFlushes(GPUProcessFlushes&) { return false; }
 };
 
 class ImageBufferSetClient : public AbstractCanMakeCheckedPtr {

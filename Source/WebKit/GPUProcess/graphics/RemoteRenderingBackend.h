@@ -60,7 +60,6 @@
 #include <WebCore/PixelFormat.h>
 #include <WebCore/ProcessIdentity.h>
 #include <WebCore/RenderingResourceIdentifier.h>
-#include <wtf/Deque.h>
 #include <wtf/HashMap.h>
 #include <wtf/TZoneMalloc.h>
 #include <wtf/WeakPtr.h>
@@ -89,6 +88,7 @@ struct FaceDetectorOptions;
 }
 
 namespace IPC {
+class Semaphore;
 class WrappedMessage;
 }
 
@@ -196,9 +196,8 @@ private:
     void prepareImageBufferSetsForDisplay(Vector<ImageBufferSetPrepareBufferForDisplayInputData> swapBuffersInput);
     void prepareImageBufferSetsForDisplaySync(Vector<ImageBufferSetPrepareBufferForDisplayInputData> swapBuffersInput, CompletionHandler<void(Vector<SwapBuffersDisplayRequirement>&&)>&&);
 
-    void flushLayerBuffersForCommit(Vector<ImageBufferSetIdentifier>&&);
     void forwardDrawingAreaMessage(IPC::WrappedMessage&&, CompletionHandler<void(bool)>&&);
-    void forwardLayerTreeCommit(IPC::WrappedMessage&&, bool hasFlushedLayerBuffers, HashMap<ImageBufferSetIdentifier, std::unique_ptr<BufferSetBackendHandle>>&&, CompletionHandler<void(Vector<ImageBufferSetIdentifier>&&, bool)>&&);
+    void forwardLayerTreeCommit(IPC::WrappedMessage&&, Vector<ImageBufferSetIdentifier>&&, Vector<IPC::Semaphore>&& fences, HashMap<ImageBufferSetIdentifier, std::unique_ptr<BufferSetBackendHandle>>&&, CompletionHandler<void(Vector<ImageBufferSetIdentifier>&&, bool)>&&);
     void sendForwardedDrawingAreaMessage(IPC::WrappedMessage&&, uint64_t drawingAreaIdentifier);
 #endif
 
@@ -236,14 +235,6 @@ private:
     const Ref<ShapeDetection::ObjectHeap> m_shapeDetectionObjectHeap;
     HashMap<RemoteDisplayListRecorderIdentifier, IPC::ScopedActiveMessageReceiveQueue<RemoteDisplayListRecorder>> m_remoteDisplayListRecorders WTF_GUARDED_BY_CAPABILITY(workQueue());
     HashMap<RemoteSnapshotRecorderIdentifier, IPC::ScopedActiveMessageReceiveQueue<RemoteSnapshotRecorder>> m_remoteSnapshotRecorders WTF_GUARDED_BY_CAPABILITY(workQueue());
-#if PLATFORM(COCOA)
-    struct FlushedLayerBuffers {
-        HashMap<ImageBufferSetIdentifier, std::unique_ptr<BufferSetBackendHandle>> handles;
-        Vector<ImageBufferSetIdentifier> bufferSetsWithoutFrontBuffer;
-    };
-    // For the commits that the web process hasn't forwarded yet, in order.
-    Deque<FlushedLayerBuffers> m_flushedLayerBuffers WTF_GUARDED_BY_CAPABILITY(workQueue());
-#endif
 };
 
 bool isSmallLayerBacking(const WebCore::ImageBufferParameters&);

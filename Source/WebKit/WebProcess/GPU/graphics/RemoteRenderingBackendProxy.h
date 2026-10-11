@@ -179,11 +179,9 @@ public:
 
     void prepareImageBufferSetForDisplay(LayerPrepareBuffersData&&);
 
-    // Returns the connection the buffers were flushed on, which has to be the one that forwards the commit.
-    RefPtr<IPC::StreamClientConnection> flushLayerBuffersForCommit(Vector<ImageBufferSetIdentifier>&&);
     // The completion handlers are passed false if the GPU process exited before forwarding the message.
     void forwardDrawingAreaMessage(IPC::WrappedMessage&&, CompletionHandler<void(bool forwarded)>&&);
-    void forwardLayerTreeCommit(IPC::WrappedMessage&&, IPC::StreamClientConnection* layerBuffersConnection, HashMap<ImageBufferSetIdentifier, std::unique_ptr<BufferSetBackendHandle>>&&, CompletionHandler<void(bool forwarded)>&&);
+    void forwardLayerTreeCommit(IPC::WrappedMessage&&, Vector<ImageBufferSetIdentifier>&&, Vector<IPC::Semaphore>&& fences, HashMap<ImageBufferSetIdentifier, std::unique_ptr<BufferSetBackendHandle>>&&, CompletionHandler<void(bool forwarded)>&&);
 #endif
 
     void finalizeRenderingUpdate();

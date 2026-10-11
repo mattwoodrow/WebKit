@@ -29,6 +29,7 @@
 #import "ArgumentCoders.h"
 #import "DynamicContentScalingImageBufferBackend.h"
 #import "GPUProcess.h"
+#import "GPUProcessDelegatedContentsFence.h"
 #import "ImageBufferBackendHandleSharing.h"
 #import "ImageBufferSet.h"
 #import "Logging.h"
@@ -88,6 +89,14 @@ public:
     {
         return m_fence->waitFor(delegatedContentsFinishedTimeout);
     }
+
+#if ENABLE(GPU_PROCESS)
+    bool addToGPUProcessFlushes(GPUProcessFlushes& flushes) final
+    {
+        RefPtr fence = dynamicDowncast<GPUProcessDelegatedContentsFence>(m_fence.get());
+        return fence && fence->addToGPUProcessFlushes(flushes);
+    }
+#endif
 
 private:
     DelegatedContentsFenceFlusher(Ref<PlatformCALayerDelegatedContentsFence> fence)

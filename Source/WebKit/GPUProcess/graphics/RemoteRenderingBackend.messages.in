@@ -58,9 +58,8 @@ messages -> RemoteRenderingBackend Stream {
     PrepareImageBufferSetsForDisplay(Vector<WebKit::ImageBufferSetPrepareBufferForDisplayInputData> swapBuffersInput)
     PrepareImageBufferSetsForDisplaySync(Vector<WebKit::ImageBufferSetPrepareBufferForDisplayInputData> swapBuffersInput)  -> (Vector<WebKit::SwapBuffersDisplayRequirement> displayRequirements) Synchronous
 
-    FlushLayerBuffersForCommit(Vector<WebKit::ImageBufferSetIdentifier> bufferSets)
     ForwardDrawingAreaMessage(IPC::WrappedMessage message) -> (bool forwarded) NotStreamEncodable
-    ForwardLayerTreeCommit(IPC::WrappedMessage commit, bool hasFlushedLayerBuffers, HashMap<WebKit::ImageBufferSetIdentifier, std::unique_ptr<WebKit::BufferSetBackendHandle>> webProcessHandles) -> (Vector<WebKit::ImageBufferSetIdentifier> bufferSetsWithoutFrontBuffer, bool forwarded) NotStreamEncodable
+    ForwardLayerTreeCommit(IPC::WrappedMessage commit, Vector<WebKit::ImageBufferSetIdentifier> bufferSets, Vector<IPC::Semaphore> fences, HashMap<WebKit::ImageBufferSetIdentifier, std::unique_ptr<WebKit::BufferSetBackendHandle>> webProcessHandles) -> (Vector<WebKit::ImageBufferSetIdentifier> bufferSetsWithoutFrontBuffer, bool forwarded) NotStreamEncodable
 #endif
 
     MarkSurfacesVolatile(WebKit::MarkSurfacesAsVolatileRequestIdentifier requestIdentifier, Vector<std::pair<WebKit::ImageBufferSetIdentifier, OptionSet<WebKit::BufferInSetType>>> renderingResourceIdentifiers, bool forcePurge)

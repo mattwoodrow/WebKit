@@ -41,6 +41,7 @@ public:
     PlatformCALayerDelegatedContentsFence();
     virtual ~PlatformCALayerDelegatedContentsFence();
     virtual bool waitFor(Seconds) = 0;
+    virtual bool isGPUProcessDelegatedContentsFence() const { return false; }
 };
 
 struct PlatformCALayerDelegatedContents {

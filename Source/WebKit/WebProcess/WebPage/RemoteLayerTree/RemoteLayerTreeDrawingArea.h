@@ -28,6 +28,7 @@
 #include "CallbackID.h"
 #include "DrawingArea.h"
 #include "GraphicsLayerCARemote.h"
+#include "RemoteImageBufferSetProxy.h"
 #include "RemoteLayerTreeTransaction.h"
 #include "WrappedMessage.h"
 #include <WebCore/AnimationFrameRate.h>
@@ -38,10 +39,6 @@
 #include <wtf/HashMap.h>
 #include <wtf/TZoneMalloc.h>
 #include <wtf/WeakPtr.h>
-
-namespace IPC {
-class StreamClientConnection;
-}
 
 namespace WebCore {
 class PlatformCALayer;
@@ -205,7 +202,7 @@ private:
     bool forwardsMessagesThroughGPUProcess() const;
     template<typename Message> void sendOrForwardThroughGPUProcess(Message&&);
     void forwardThroughGPUProcess(UniqueRef<IPC::Encoder>&&);
-    void forwardCommitThroughGPUProcess(UniqueRef<IPC::Encoder>&&, IPC::StreamClientConnection* layerBuffersConnection, HashMap<ImageBufferSetIdentifier, std::unique_ptr<BufferSetBackendHandle>>&&);
+    void forwardCommitThroughGPUProcess(UniqueRef<IPC::Encoder>&&, ThreadSafeImageBufferSetFlusher::GPUProcessFlushes&&, HashMap<ImageBufferSetIdentifier, std::unique_ptr<BufferSetBackendHandle>>&&);
     void didForwardThroughGPUProcess(uint64_t messageIdentifier, bool forwarded);
     void resendMessagesLostWithGPUProcess();
 
@@ -218,8 +215,6 @@ private:
     Vector<MessageForwardedThroughGPUProcess> m_messagesForwardedThroughGPUProcess;
     uint64_t m_nextForwardedMessageIdentifier { 0 };
     bool m_needsToResendMessagesLostWithGPUProcess { false };
-    // Commits wait on the commit queue for the flushers in this process, and later commits wait behind them.
-    unsigned m_commitsWaitingForWebProcessFlushers { 0 };
 
     TransactionID m_currentTransactionID { TransactionID::generateMonotonic() };
     Vector<IPC::AsyncReplyID> m_pendingCallbackIDs;

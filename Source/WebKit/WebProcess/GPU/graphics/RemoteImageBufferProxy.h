@@ -93,6 +93,7 @@ public:
     void didFailToCreateBackend();
 
     RemoteGraphicsContextIdentifier contextIdentifier() const { return m_context.identifier(); }
+    RemoteRenderingBackendProxy* renderingBackend() const { return m_renderingBackend.get(); }
 
     // Sends single-line strokes that have been buffered on the proxy's graphics
     // context into the IPC stream. Call before any cross-buffer read of this
@@ -193,6 +194,10 @@ private:
 };
 
 } // namespace WebKit
+
+SPECIALIZE_TYPE_TRAITS_BEGIN(WebKit::RemoteImageBufferProxy)
+    static bool isType(const WebCore::ImageBuffer& buffer) { return buffer.isRemoteImageBufferProxy(); }
+SPECIALIZE_TYPE_TRAITS_END()
 
 SPECIALIZE_TYPE_TRAITS_BEGIN(WebKit::RemoteSerializedImageBufferProxy)
     static bool isType(const WebCore::SerializedImageBuffer& buffer) { return buffer.isRemoteSerializedImageBufferProxy(); }

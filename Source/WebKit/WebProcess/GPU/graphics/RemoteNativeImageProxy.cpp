@@ -96,6 +96,8 @@ void RemoteNativeImageProxy::attachResourceCache(WeakRef<RemoteResourceCacheProx
 
 PlatformImagePtr RemoteNativeImageProxy::platformImage() const
 {
+    if (isTainted())
+        return nullptr;
     {
         Locker locker { m_lock };
         if (m_platformImage)

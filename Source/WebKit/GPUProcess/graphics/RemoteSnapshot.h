@@ -84,9 +84,9 @@ public:
     std::optional<RefPtr<WebCore::SharedBuffer>> drawToPDF(const WebCore::FloatSize&, WebCore::FrameIdentifier rootFrameIdentifier);
     std::optional<WebCore::ShareableBitmap::Handle> drawToBitmap(const WebCore::FloatSize&, WebCore::FrameIdentifier rootFrameIdentifier);
 #if HAVE(IOSURFACE)
-    // Rasterizes into a shareable surface, so that a rendering assembled from several sites can be
+    // Rasterizes into a tainted image, so that a rendering assembled from several sites can be
     // displayed without any of them seeing the pixels.
-    std::optional<ImageBufferBackendHandle> drawToIOSurface(const WebCore::FloatSize&, float scale, const WebCore::ColorSpace&, WebCore::FrameIdentifier rootFrameIdentifier, const WebCore::ProcessIdentity& resourceOwner, bool useIOSurfaceWebKitBehavior);
+    RefPtr<WebCore::NativeImage> drawToNativeImage(const WebCore::FloatSize&, float scale, const WebCore::ColorSpace&, WebCore::FrameIdentifier rootFrameIdentifier, const WebCore::ProcessIdentity& resourceOwner, bool useIOSurfaceWebKitBehavior);
 #endif
     [[nodiscard]] bool applyFrame(WebCore::FrameIdentifier, WebCore::GraphicsContext&) const;
 

@@ -167,7 +167,8 @@ public:
     void setContents(CFTypeRef) override;
     void setDelegatedContents(const WebCore::PlatformCALayerDelegatedContents&) override;
     void setRemoteDelegatedContents(const PlatformCALayerRemoteDelegatedContents&);
-    void setDisplayOnlyImage(RemoteSnapshotIdentifier);
+    // Displays an image cached in the GPU process, which may be tainted.
+    void setContentsImage(WebCore::RenderingResourceIdentifier);
     void setContentsRect(const WebCore::FloatRect&) override;
 
     void setMinificationFilter(WebCore::PlatformCALayer::FilterType) override;

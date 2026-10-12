@@ -41,12 +41,18 @@ public:
 
     void drawImageBuffer(WebCore::RenderingResourceIdentifier imageBufferIdentifier, const WebCore::FloatRect& destinationRect, const WebCore::FloatRect& srcRect, WebCore::RasterDrawingOptions) final;
 
+    // The web process can read the buffer without asking, so it can't hold tainted pixels.
+    void setBufferIsSharedWithWebProcess() { m_bufferIsSharedWithWebProcess = true; }
+
 private:
     RemoteImageBufferGraphicsContext(WebCore::ImageBuffer&, RemoteGraphicsContextIdentifier, RemoteRenderingBackend&);
     void startListeningForIPC();
 
+    bool taintDestination() final;
+
     const Ref<WebCore::ImageBuffer> m_imageBuffer;
     const RemoteGraphicsContextIdentifier m_identifier;
+    bool m_bufferIsSharedWithWebProcess { false };
 };
 
 } // namespace WebKit

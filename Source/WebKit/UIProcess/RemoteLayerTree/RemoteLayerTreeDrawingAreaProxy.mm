@@ -134,10 +134,6 @@ void RemoteLayerTreeDrawingAreaProxy::removeRemotePageDrawingAreaProxy(RemotePag
     ASSERT(m_remotePageProcessState.contains(proxy.process().coreProcessIdentifier()));
     m_remotePageProcessState.remove(proxy.process().coreProcessIdentifier());
 
-    // The process may outlive its part in this page.
-    if (m_remoteLayerTreeHost)
-        m_remoteLayerTreeHost->removeDisplayOnlyImagesForProcess(proxy.process().coreProcessIdentifier());
-
     if (proxy.process().hasConnection())
         flushOutstandingPresentationUpdateCallbacks(protect(proxy.process().connection()));
 }
@@ -186,8 +182,6 @@ void RemoteLayerTreeDrawingAreaProxy::remotePageProcessDidTerminate(WebCore::Pro
 {
     if (!m_remoteLayerTreeHost)
         return;
-
-    m_remoteLayerTreeHost->removeDisplayOnlyImagesForProcess(processIdentifier);
 
     if (RefPtr scrollingCoordinator = page() ? page()->scrollingCoordinatorProxy() : nullptr) {
         scrollingCoordinator->willCommitLayerAndScrollingTrees();
@@ -381,7 +375,7 @@ void RemoteLayerTreeDrawingAreaProxy::notifyFlushingLayerTree(IPC::Connection& c
     }
 }
 
-void RemoteLayerTreeDrawingAreaProxy::commitLayerTree(IPC::Connection& connection, const RemoteLayerTreeCommitBundle& bundle, HashMap<ImageBufferSetIdentifier, std::unique_ptr<BufferSetBackendHandle>>&& handlesMap)
+void RemoteLayerTreeDrawingAreaProxy::commitLayerTree(IPC::Connection& connection, const RemoteLayerTreeCommitBundle& bundle, HashMap<ImageBufferSetIdentifier, std::unique_ptr<BufferSetBackendHandle>>&& handlesMap, Vector<std::pair<WebCore::RenderingResourceIdentifier, ImageBufferBackendHandle>>&& contentsImageHandles)
 {
     {
         ProcessState& state = processStateForConnection(connection);
@@ -424,6 +418,12 @@ void RemoteLayerTreeDrawingAreaProxy::commitLayerTree(IPC::Connection& connectio
                     sendRights.append(*sendRight);
             }
         }
+    }
+
+    RemoteLayerTreeHost::ContentsImages contentsImages;
+    for (auto&& [imageIdentifier, handle] : WTF::move(contentsImageHandles)) {
+        if (auto contents = RemoteLayerBackingStoreProperties::layerContentsBufferFromBackendHandle(WTF::move(handle), true); contents.buffer)
+            contentsImages.set(imageIdentifier, WTF::move(contents.buffer));
     }
 
     PendingCommit completedCommit = [&]() {
@@ -472,7 +472,7 @@ void RemoteLayerTreeDrawingAreaProxy::commitLayerTree(IPC::Connection& connectio
     WeakPtr weakThis { *this };
 
     for (auto& transaction : borrowedTransactions) {
-        commitLayerTreeTransaction(connection, CheckedRef { transaction.first }.get(), transaction.second,  transaction.first.remoteContextHostedIdentifier() ? std::nullopt : bundle.mainFrameData, bundle.pageData, bundle.transactionID);
+        commitLayerTreeTransaction(connection, CheckedRef { transaction.first }.get(), transaction.second,  transaction.first.remoteContextHostedIdentifier() ? std::nullopt : bundle.mainFrameData, bundle.pageData, bundle.transactionID, contentsImages);
         if (!weakThis)
             return;
     }
@@ -535,7 +535,7 @@ WebCore::TrackingType RemoteLayerTreeDrawingAreaProxy::eventTrackingTypeForPoint
 }
 #endif
 
-void RemoteLayerTreeDrawingAreaProxy::commitLayerTreeTransaction(IPC::Connection& connection, const RemoteLayerTreeTransaction& layerTreeTransaction, const RemoteScrollingCoordinatorTransaction& scrollingTreeTransaction, const std::optional<MainFrameData>& mainFrameData, const PageData& pageData, const TransactionID& transactionID)
+void RemoteLayerTreeDrawingAreaProxy::commitLayerTreeTransaction(IPC::Connection& connection, const RemoteLayerTreeTransaction& layerTreeTransaction, const RemoteScrollingCoordinatorTransaction& scrollingTreeTransaction, const std::optional<MainFrameData>& mainFrameData, const PageData& pageData, const TransactionID& transactionID, const RemoteLayerTreeHost::ContentsImages& contentsImages)
 {
     TraceScope tracingScope(CommitLayerTreeStart, CommitLayerTreeEnd);
 
@@ -553,7 +553,7 @@ void RemoteLayerTreeDrawingAreaProxy::commitLayerTreeTransaction(IPC::Connection
             if (layerTreeTransaction.hasAnyLayerChanges())
                 ++m_countOfTransactionsWithNonEmptyLayerChanges;
 
-            if (m_remoteLayerTreeHost->updateLayerTree(connection, layerTreeTransaction, mainFrameData)) {
+            if (m_remoteLayerTreeHost->updateLayerTree(connection, layerTreeTransaction, mainFrameData, contentsImages)) {
                 if (!m_replyForUnhidingContent) {
                     if (m_hasDetachedRootLayer)
                         RELEASE_LOG(RemoteLayerTree, "RemoteLayerTreeDrawingAreaProxy(%" PRIu64 ") Unhiding layer tree", identifier().toUInt64());
@@ -601,7 +601,7 @@ void RemoteLayerTreeDrawingAreaProxy::commitLayerTreeTransaction(IPC::Connection
         if (m_debugIndicatorLayerTreeHost && mainFrameData) {
             float scale = indicatorScale(layerTreeTransaction.contentsSize());
             scrollingCoordinatorProxy->willCommitLayerAndScrollingTrees();
-            bool rootLayerChanged = m_debugIndicatorLayerTreeHost->updateLayerTree(connection, layerTreeTransaction, mainFrameData, scale);
+            bool rootLayerChanged = m_debugIndicatorLayerTreeHost->updateLayerTree(connection, layerTreeTransaction, mainFrameData, contentsImages, scale);
             scrollingCoordinatorProxy->didCommitLayerAndScrollingTrees();
             IntPoint scrollPosition;
 #if PLATFORM(MAC)
@@ -624,22 +624,6 @@ void RemoteLayerTreeDrawingAreaProxy::asyncSetLayerContents(IPC::Connection& con
 void RemoteLayerTreeDrawingAreaProxy::setLayerContentsFromAnotherProcess(WebCore::PlatformLayerIdentifier layerID, RemoteLayerBackingStoreProperties&& properties)
 {
     m_remoteLayerTreeHost->asyncSetLayerContents(layerID, WTF::move(properties));
-}
-
-bool RemoteLayerTreeDrawingAreaProxy::startDisplayOnlyImage(RemoteSnapshotIdentifier image)
-{
-    return m_remoteLayerTreeHost && m_remoteLayerTreeHost->startDisplayOnlyImage(image);
-}
-
-bool RemoteLayerTreeDrawingAreaProxy::completeDisplayOnlyImage(RemoteSnapshotIdentifier image, ImageBufferBackendHandle&& handle)
-{
-    return m_remoteLayerTreeHost && m_remoteLayerTreeHost->completeDisplayOnlyImage(image, WTF::move(handle));
-}
-
-void RemoteLayerTreeDrawingAreaProxy::releaseDisplayOnlyImage(RemoteSnapshotIdentifier image)
-{
-    if (m_remoteLayerTreeHost)
-        m_remoteLayerTreeHost->releaseDisplayOnlyImage(image);
 }
 
 #if ENABLE(GAZE_GLOW_FOR_INTERACTION_REGIONS)

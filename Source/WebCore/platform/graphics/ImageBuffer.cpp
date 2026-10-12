@@ -267,9 +267,17 @@ static RefPtr<ImageBuffer> copyImageBuffer(Ref<ImageBuffer> source, PreserveReso
     return copyBuffer;
 }
 
+template<typename T>
+static RefPtr<T> propagateTaint(const ImageBuffer& source, RefPtr<T>&& copy)
+{
+    if (copy && source.isTainted())
+        copy->setIsTainted();
+    return WTF::move(copy);
+}
+
 RefPtr<ImageBuffer> ImageBuffer::clone() const
 {
-    return copyImageBuffer(const_cast<ImageBuffer&>(*this), PreserveResolution::Yes);
+    return propagateTaint(*this, copyImageBuffer(const_cast<ImageBuffer&>(*this), PreserveResolution::Yes));
 }
 
 GraphicsContext& ImageBuffer::context() const
@@ -331,14 +339,14 @@ std::optional<RenderingMode> ImageBuffer::getEffectiveRenderingModeForTesting() 
 RefPtr<NativeImage> ImageBuffer::copyNativeImage() const
 {
     if (auto* backend = m_backend.get())
-        return backend->copyNativeImage();
+        return propagateTaint(*this, backend->copyNativeImage());
     return nullptr;
 }
 
 RefPtr<NativeImage> ImageBuffer::createNativeImageReference() const
 {
     if (auto* backend = m_backend.get())
-        return backend->createNativeImageReference();
+        return propagateTaint(*this, backend->createNativeImageReference());
     return nullptr;
 }
 
@@ -350,7 +358,7 @@ bool ImageBuffer::isRemoteImageBufferProxy() const
 RefPtr<NativeImage> ImageBuffer::sinkIntoNativeImage()
 {
     if (auto* backend = m_backend.get())
-        return backend->sinkIntoNativeImage();
+        return propagateTaint(*this, backend->sinkIntoNativeImage());
     return nullptr;
 }
 

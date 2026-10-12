@@ -198,7 +198,7 @@ private:
     bool forwardsMessagesThroughGPUProcess() const;
     template<typename Message> void sendOrForwardThroughGPUProcess(Message&&);
     void forwardThroughGPUProcess(UniqueRef<IPC::Encoder>&&);
-    void forwardCommitThroughGPUProcess(UniqueRef<IPC::Encoder>&&, ThreadSafeImageBufferSetFlusher::GPUProcessFlushes&&, HashMap<ImageBufferSetIdentifier, std::unique_ptr<BufferSetBackendHandle>>&&);
+    void forwardCommitThroughGPUProcess(UniqueRef<IPC::Encoder>&&, ThreadSafeImageBufferSetFlusher::GPUProcessFlushes&&, HashMap<ImageBufferSetIdentifier, std::unique_ptr<BufferSetBackendHandle>>&&, Vector<WebCore::RenderingResourceIdentifier>&& contentsImages);
     void didForwardThroughGPUProcess(uint64_t messageIdentifier, bool forwarded);
     void resendMessagesLostWithGPUProcess();
 

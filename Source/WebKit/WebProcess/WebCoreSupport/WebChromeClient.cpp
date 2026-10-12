@@ -35,7 +35,6 @@
 #include "APIObject.h"
 #include "APISecurityOrigin.h"
 #include "APIString.h"
-#include "DisplayOnlyImageProxy.h"
 #include "DrawingArea.h"
 #include "FindController.h"
 #include "FrameInfoData.h"
@@ -55,6 +54,7 @@
 #include "RemoteImageBufferProxy.h"
 #include "RemotePlaceholderRenderingContextSource.h"
 #include "RemoteRenderingBackendProxy.h"
+#include "RemoteSnapshotIdentifier.h"
 #include "RemoteTextDetectorProxy.h"
 #include "SharedBufferReference.h"
 #include "UserData.h"
@@ -1294,7 +1294,17 @@ RefPtr<NativePromise<Ref<WebCore::NativeImage>, void>> WebChromeClient::createDi
     // Only layers composited in the UI process can display the result.
     if (!page || !page->corePage()->settings().remoteSnapshottingEnabled() || !isUsingUISideCompositing())
         return nullptr;
-    return DisplayOnlyImageProxy::create(*page, rootFrameIdentifier, size, scale, colorSpace, paint);
+    if (size.isEmpty())
+        return nullptr;
+
+    auto identifier = generateRemoteSnapshotIdentifier();
+    // A root that fails to record fails the snapshot in the GPU process, so that the image fails below.
+    auto rootRecorded = MainRunLoopSuccessCallbackAggregator::create(WebPage::failRemoteSnapshotIfRootFails(identifier, [](bool) { }));
+    if (!page->recordRemoteSnapshot(identifier, rootFrameIdentifier, WebPage::RemoteSnapshotRole::Root, WebCore::RenderingMode::DisplayList, WebCore::FloatRect { { }, size }, size, WTF::move(rootRecorded), paint))
+        return nullptr;
+
+    // Not waiting for the root: the GPU process waits for it, and for the frames hosted elsewhere.
+    return protect(page->ensureRemoteRenderingBackendProxy())->createNativeImageFromRemoteSnapshot(identifier, rootFrameIdentifier, expandedIntSize(size.scaled(scale)), scale, colorSpace);
 }
 #endif
 #endif

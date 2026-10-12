@@ -57,6 +57,9 @@ public:
     ~RemoteImageBuffer();
     void stopListeningForIPC();
     Ref<WebCore::ImageBuffer> imageBuffer() const { return m_imageBuffer; }
+
+    // Once the web process can read the backing store, nothing tainted is drawn into it.
+    void setBackingStoreIsSharedWithWebProcess();
     static Ref<WebCore::ImageBuffer> sinkIntoImageBuffer(Ref<RemoteImageBuffer>&&);
 private:
     RemoteImageBuffer(Ref<WebCore::ImageBuffer>&&, WebCore::RenderingResourceIdentifier, RemoteGraphicsContextIdentifier, RemoteRenderingBackend&);

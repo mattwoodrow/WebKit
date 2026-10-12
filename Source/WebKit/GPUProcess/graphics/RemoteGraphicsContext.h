@@ -172,7 +172,14 @@ protected:
 
     Ref<WebCore::ControlFactory> controlFactory();
 
+    bool filterSourcesAreTainted(std::optional<WebCore::RenderingResourceIdentifier> sourceImageIdentifier, const WebCore::Filter&) const;
     void drawFilteredImageBufferInternal(std::optional<WebCore::RenderingResourceIdentifier> sourceImageIdentifier, const WebCore::FloatRect& sourceImageRect, WebCore::Filter&, WebCore::FilterResults&);
+
+    // Drawing tainted pixels taints the destination. Returns false if the destination can't hold
+    // them, in which case the drawing is skipped.
+    bool willDrawSource(bool sourceIsTainted) { return !sourceIsTainted || taintDestination(); }
+    // Display lists are checked for tainted sources when they are replayed.
+    virtual bool taintDestination() { return true; }
 
     RemoteResourceCache& LEGACY_NODELETE resourceCache() const;
     WebCore::GraphicsContext& context() LIFETIME_BOUND { return m_context; }

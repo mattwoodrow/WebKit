@@ -197,7 +197,11 @@ private:
     void prepareImageBufferSetsForDisplaySync(Vector<ImageBufferSetPrepareBufferForDisplayInputData> swapBuffersInput, CompletionHandler<void(Vector<SwapBuffersDisplayRequirement>&&)>&&);
 
     void forwardDrawingAreaMessage(IPC::WrappedMessage&&, CompletionHandler<void(bool)>&&);
-    void forwardLayerTreeCommit(IPC::WrappedMessage&&, Vector<ImageBufferSetIdentifier>&&, Vector<IPC::Semaphore>&& fences, HashMap<ImageBufferSetIdentifier, std::unique_ptr<BufferSetBackendHandle>>&&, CompletionHandler<void(Vector<ImageBufferSetIdentifier>&&, bool)>&&);
+    void forwardLayerTreeCommit(IPC::WrappedMessage&&, Vector<ImageBufferSetIdentifier>&&, Vector<IPC::Semaphore>&& fences, HashMap<ImageBufferSetIdentifier, std::unique_ptr<BufferSetBackendHandle>>&&, Vector<WebCore::RenderingResourceIdentifier>&& contentsImages, CompletionHandler<void(Vector<ImageBufferSetIdentifier>&&, bool)>&&);
+    std::optional<ImageBufferBackendHandle> layerContentsHandle(WebCore::NativeImage&);
+#if HAVE(IOSURFACE)
+    void cacheNativeImageFromRemoteSnapshot(RemoteSnapshotIdentifier, WebCore::FrameIdentifier rootFrameIdentifier, float scale, const WebCore::ColorSpace&, WebCore::RenderingResourceIdentifier, CompletionHandler<void(bool)>&&);
+#endif
     void sendForwardedDrawingAreaMessage(IPC::WrappedMessage&&, uint64_t drawingAreaIdentifier);
 #endif
 

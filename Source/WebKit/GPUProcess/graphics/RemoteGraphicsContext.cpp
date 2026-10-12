@@ -38,8 +38,10 @@
 #include "SharedPreferencesForWebProcess.h"
 #include "SharedVideoFrame.h"
 #include <WebCore/BitmapImage.h>
+#include <WebCore/DisplayListItems.h>
 #include <WebCore/FEImage.h>
 #include <WebCore/FilterResults.h>
+#include <WebCore/Pattern.h>
 #include <WebCore/SVGFilterRenderer.h>
 #include <wtf/URL.h>
 
@@ -71,6 +73,57 @@ Ref<ControlFactory> RemoteGraphicsContext::controlFactory()
     if (!m_controlFactory)
         lazyInitialize(m_controlFactory, ControlFactory::create());
     return *m_controlFactory;
+}
+
+static bool isTainted(const SourceImage& image)
+{
+    if (RefPtr nativeImage = image.nativeImageIfExists())
+        return nativeImage->isTainted();
+    if (RefPtr imageBuffer = image.imageBufferIfExists())
+        return imageBuffer->isTainted();
+    return false;
+}
+
+static bool isTainted(const WebCore::Pattern* pattern)
+{
+    return pattern && isTainted(pattern->tileImage());
+}
+
+static bool isTainted(const Filter& filter)
+{
+    for (auto& effect : filter.effectsOfType(FilterEffect::Type::FEImage)) {
+        if (isTainted(downcast<FEImage>(effect.get()).sourceImage()))
+            return true;
+    }
+    return false;
+}
+
+// Display lists hold the images and buffers they draw, which may have been tainted since recording.
+static bool isTainted(const DisplayList::DisplayList& displayList)
+{
+    return std::ranges::any_of(displayList.items(), [](auto& item) {
+        return WTF::switchOn(item,
+            [](const DisplayList::ClipToImageBuffer& item) { return item.imageBuffer().isTainted(); },
+            [](const DisplayList::DrawImageBuffer& item) { return item.imageBuffer().isTainted(); },
+            [](const DisplayList::DrawPatternImageBuffer& item) { return item.imageBuffer().isTainted(); },
+            [](const DisplayList::DrawNativeImage& item) { return item.nativeImage().isTainted(); },
+            [](const DisplayList::DrawPatternNativeImage& item) { return item.nativeImage().isTainted(); },
+            [](const DisplayList::DrawFilteredImageBuffer& item) {
+                return (item.sourceImage() && item.sourceImage()->isTainted()) || isTainted(item.filter());
+            },
+            [](const DisplayList::DrawDisplayList& item) { return isTainted(item.displayList()); },
+#if USE(SYSTEM_PREVIEW)
+            [](const DisplayList::DrawSystemImage& item) {
+                RefPtr badge = dynamicDowncast<ARKitBadgeSystemImage>(item.systemImage());
+                RefPtr image = badge ? badge->nativeImage() : nullptr;
+                return image && image->isTainted();
+            },
+#endif
+            [](const DisplayList::SetState& item) {
+                return isTainted(item.state().fillBrush().pattern()) || isTainted(item.state().strokeBrush().pattern());
+            },
+            [](const auto&) { return false; });
+    });
 }
 
 RemoteResourceCache& RemoteGraphicsContext::resourceCache() const
@@ -155,6 +208,8 @@ void RemoteGraphicsContext::setFillPatternNativeImage(RenderingResourceIdentifie
 {
     RefPtr tileImage = resourceCache().cachedNativeImage(identifier);
     MESSAGE_CHECK(tileImage);
+    if (!willDrawSource(tileImage->isTainted()))
+        return;
     context().setFillPattern(WebCore::Pattern::create({ tileImage.releaseNonNull() }, parameters));
 }
 
@@ -162,6 +217,8 @@ void RemoteGraphicsContext::setFillPatternImageBuffer(RenderingResourceIdentifie
 {
     RefPtr tileImageBuffer = this->imageBuffer(identifier);
     MESSAGE_CHECK(tileImageBuffer);
+    if (!willDrawSource(tileImageBuffer->isTainted()))
+        return;
     context().setFillPattern(WebCore::Pattern::create({ tileImageBuffer.releaseNonNull() }, parameters));
 }
 
@@ -196,6 +253,8 @@ void RemoteGraphicsContext::setStrokePatternNativeImage(RenderingResourceIdentif
 {
     RefPtr tileImage = resourceCache().cachedNativeImage(identifier);
     MESSAGE_CHECK(tileImage);
+    if (!willDrawSource(tileImage->isTainted()))
+        return;
     context().setStrokePattern(WebCore::Pattern::create({ tileImage.releaseNonNull() }, parameters));
 }
 
@@ -203,6 +262,8 @@ void RemoteGraphicsContext::setStrokePatternImageBuffer(RenderingResourceIdentif
 {
     RefPtr tileImageBuffer = imageBuffer(identifier);
     MESSAGE_CHECK(tileImageBuffer);
+    if (!willDrawSource(tileImageBuffer->isTainted()))
+        return;
     context().setStrokePattern(WebCore::Pattern::create({ tileImageBuffer.releaseNonNull() }, parameters));
 }
 
@@ -324,6 +385,8 @@ void RemoteGraphicsContext::clipToImageBuffer(RenderingResourceIdentifier imageB
         // Switch to MESSAGE_CHECK(clipImage) when root cause is clear.
         return;
     }
+    if (!willDrawSource(clipImage->isTainted()))
+        return;
     context().clipToImageBuffer(*clipImage, destinationRect);
 }
 
@@ -382,20 +445,39 @@ void RemoteGraphicsContext::drawFilteredImageBufferInternal(std::optional<Render
         feImage->setImageSource(WTF::move(*effectImage));
     }
 
+    if (!willDrawSource((sourceImageBuffer && sourceImageBuffer->isTainted()) || isTainted(filter)))
+        return;
     context().drawFilteredImageBuffer(sourceImageBuffer.get(), sourceImageRect, filter, results);
+}
+
+bool RemoteGraphicsContext::filterSourcesAreTainted(std::optional<RenderingResourceIdentifier> sourceImageIdentifier, const Filter& filter) const
+{
+    if (sourceImageIdentifier) {
+        if (RefPtr sourceImageBuffer = imageBuffer(*sourceImageIdentifier); sourceImageBuffer && sourceImageBuffer->isTainted())
+            return true;
+    }
+    for (auto& effect : filter.effectsOfType(FilterEffect::Type::FEImage)) {
+        if (auto effectImage = sourceImage(downcast<FEImage>(effect.get()).sourceImage().imageIdentifier()); effectImage && isTainted(*effectImage))
+            return true;
+    }
+    return false;
 }
 
 void RemoteGraphicsContext::drawFilteredImageBuffer(std::optional<RenderingResourceIdentifier> sourceImageIdentifier, const FloatRect& sourceImageRect, Ref<Filter>&& filter)
 {
     RefPtr svgFilter = dynamicDowncast<SVGFilterRenderer>(filter);
 
-    if (!svgFilter || !svgFilter->hasValidRenderingResourceIdentifier()) {
+    auto drawWithTemporaryResults = [&](Filter& filter) {
 #if HAVE(IOSURFACE)
         FilterResults results(makeUnique<ImageBufferShareableAllocator>(m_sharedResourceCache->resourceOwner(), &m_sharedResourceCache->ioSurfacePool(), useIOSurfaceWebKitBehavior()));
 #else
         FilterResults results(makeUnique<ImageBufferShareableAllocator>(m_sharedResourceCache->resourceOwner()));
 #endif
         drawFilteredImageBufferInternal(sourceImageIdentifier, sourceImageRect, filter, results);
+    };
+
+    if (!svgFilter || !svgFilter->hasValidRenderingResourceIdentifier()) {
+        drawWithTemporaryResults(filter);
         return;
     }
 
@@ -404,6 +486,12 @@ void RemoteGraphicsContext::drawFilteredImageBuffer(std::optional<RenderingResou
     MESSAGE_CHECK(cachedSVGFilter);
 
     cachedSVGFilter->mergeEffects(svgFilter->effects());
+
+    // Later draws reuse the results cached on the filter, and may draw into other destinations.
+    if (filterSourcesAreTainted(sourceImageIdentifier, *cachedSVGFilter)) {
+        drawWithTemporaryResults(*cachedSVGFilter);
+        return;
+    }
 
     auto& results = cachedSVGFilter->ensureResults([&]() {
 #if HAVE(IOSURFACE)
@@ -430,6 +518,8 @@ void RemoteGraphicsContext::drawImageBuffer(RenderingResourceIdentifier imageBuf
 {
     RefPtr sourceImage = imageBuffer(imageBufferIdentifier);
     MESSAGE_CHECK(sourceImage);
+    if (!willDrawSource(sourceImage->isTainted()))
+        return;
     context().drawImageBuffer(*sourceImage, destinationRect, srcRect, options);
 }
 
@@ -438,6 +528,8 @@ void RemoteGraphicsContext::drawDisplayList(RemoteDisplayListIdentifier identifi
 {
     RefPtr displayList = resourceCache().cachedDisplayList(identifier);
     MESSAGE_CHECK(displayList);
+    if (!willDrawSource(isTainted(*displayList)))
+        return;
     context().drawDisplayList(*displayList, controlFactory());
 }
 
@@ -445,6 +537,8 @@ void RemoteGraphicsContext::drawNativeImage(RenderingResourceIdentifier imageIde
 {
     RefPtr image = resourceCache().cachedNativeImage(imageIdentifier);
     MESSAGE_CHECK(image);
+    if (!willDrawSource(image->isTainted()))
+        return;
     context().drawNativeImage(*image, destRect, srcRect, options);
 }
 
@@ -456,6 +550,8 @@ void RemoteGraphicsContext::drawBadgeSystemImage(std::optional<RenderingResource
     if (imageIdentifier) {
         nativeImage = resourceCache().cachedNativeImage(*imageIdentifier);
         MESSAGE_CHECK(nativeImage);
+        if (!willDrawSource(nativeImage->isTainted()))
+            return;
     }
 
     Ref badge = ARKitBadgeSystemImage::create(WTF::move(nativeImage));
@@ -472,6 +568,8 @@ void RemoteGraphicsContext::drawPatternNativeImage(RenderingResourceIdentifier i
 {
     RefPtr image = resourceCache().cachedNativeImage(imageIdentifier);
     MESSAGE_CHECK(image);
+    if (!willDrawSource(image->isTainted()))
+        return;
     context().drawPattern(*image, destRect, tileRect, transform, phase, spacing, options);
 }
 
@@ -479,6 +577,8 @@ void RemoteGraphicsContext::drawPatternImageBuffer(RenderingResourceIdentifier i
 {
     RefPtr image = imageBuffer(imageIdentifier);
     MESSAGE_CHECK(image);
+    if (!willDrawSource(image->isTainted()))
+        return;
     context().drawPattern(*image, destRect, tileRect, transform, phase, spacing, options);
 }
 

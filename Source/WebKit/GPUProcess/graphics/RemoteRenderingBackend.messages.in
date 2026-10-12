@@ -59,7 +59,10 @@ messages -> RemoteRenderingBackend Stream {
     PrepareImageBufferSetsForDisplaySync(Vector<WebKit::ImageBufferSetPrepareBufferForDisplayInputData> swapBuffersInput)  -> (Vector<WebKit::SwapBuffersDisplayRequirement> displayRequirements) Synchronous
 
     ForwardDrawingAreaMessage(IPC::WrappedMessage message) -> (bool forwarded) NotStreamEncodable
-    ForwardLayerTreeCommit(IPC::WrappedMessage commit, Vector<WebKit::ImageBufferSetIdentifier> bufferSets, Vector<IPC::Semaphore> fences, HashMap<WebKit::ImageBufferSetIdentifier, std::unique_ptr<WebKit::BufferSetBackendHandle>> webProcessHandles) -> (Vector<WebKit::ImageBufferSetIdentifier> bufferSetsWithoutFrontBuffer, bool forwarded) NotStreamEncodable
+    ForwardLayerTreeCommit(IPC::WrappedMessage commit, Vector<WebKit::ImageBufferSetIdentifier> bufferSets, Vector<IPC::Semaphore> fences, HashMap<WebKit::ImageBufferSetIdentifier, std::unique_ptr<WebKit::BufferSetBackendHandle>> webProcessHandles, Vector<WebCore::RenderingResourceIdentifier> contentsImages) -> (Vector<WebKit::ImageBufferSetIdentifier> bufferSetsWithoutFrontBuffer, bool forwarded) NotStreamEncodable
+#if HAVE(IOSURFACE)
+    CacheNativeImageFromRemoteSnapshot(WebKit::RemoteSnapshotIdentifier snapshotIdentifier, WebCore::FrameIdentifier rootFrameIdentifier, float scale, WebCore::ColorSpace colorSpace, WebCore::RenderingResourceIdentifier imageIdentifier) -> (bool success)
+#endif
 #endif
 
     MarkSurfacesVolatile(WebKit::MarkSurfacesAsVolatileRequestIdentifier requestIdentifier, Vector<std::pair<WebKit::ImageBufferSetIdentifier, OptionSet<WebKit::BufferInSetType>>> renderingResourceIdentifiers, bool forcePurge)

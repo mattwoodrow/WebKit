@@ -829,7 +829,7 @@ CFTypeRef PlatformCALayerRemote::contents() const
 
 void PlatformCALayerRemote::setContents(CFTypeRef value)
 {
-    m_properties.displayOnlyImage = { };
+    m_properties.contentsImage = { };
     if (CheckedPtr store = m_properties.backingStoreOrProperties.store.get(); store && !value)
         store->clearBackingStore();
 }
@@ -842,18 +842,18 @@ void PlatformCALayerRemote::setDelegatedContents(const PlatformCALayerDelegatedC
 void PlatformCALayerRemote::setRemoteDelegatedContents(const PlatformCALayerRemoteDelegatedContents& contents)
 {
     ASSERT(m_acceleratesDrawing);
-    m_properties.displayOnlyImage = { };
+    m_properties.contentsImage = { };
     ensureBackingStore();
     protect(m_properties.backingStoreOrProperties.store)->setDelegatedContents(contents);
 }
 
-void PlatformCALayerRemote::setDisplayOnlyImage(RemoteSnapshotIdentifier image)
+void PlatformCALayerRemote::setContentsImage(WebCore::RenderingResourceIdentifier image)
 {
-    if (m_properties.displayOnlyImage == image)
+    if (m_properties.contentsImage == image)
         return;
 
-    m_properties.displayOnlyImage = image;
-    m_properties.notePropertiesChanged(LayerChange::DisplayOnlyImageChanged);
+    m_properties.contentsImage = image;
+    m_properties.notePropertiesChanged(LayerChange::ContentsImageChanged);
 }
 
 void PlatformCALayerRemote::setContentsRect(const FloatRect& value)

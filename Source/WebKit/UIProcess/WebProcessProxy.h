@@ -795,13 +795,6 @@ private:
     void drawFrameToSnapshot(WebCore::FrameIdentifier, const WebCore::IntRect& rectRelativeToVisibleContent, RemoteSnapshotIdentifier, WebCore::RenderingMode);
 #endif
 
-#if HAVE(IOSURFACE)
-    // Handled here rather than by the page, so that they are answered even once it is gone.
-    void completeDisplayOnlyImage(WebCore::PageIdentifier, RemoteSnapshotIdentifier, WebCore::FrameIdentifier rootFrameIdentifier, float scale, const WebCore::ColorSpace&, CompletionHandler<void(bool)>&&);
-    void releaseDisplayOnlyImage(WebCore::PageIdentifier, RemoteSnapshotIdentifier);
-    RefPtr<WebPageProxy> pageHostedAs(WebCore::PageIdentifier);
-#endif
-
 #if ENABLE(MODEL_PROCESS)
     void createModelProcessConnection(IPC::Connection::Handle&&);
 #endif

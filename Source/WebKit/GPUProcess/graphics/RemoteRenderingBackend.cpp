@@ -32,6 +32,7 @@
 #include "GPUConnectionToWebProcess.h"
 #include "GPUProcess.h"
 #include "GPUProcessProxyMessages.h"
+#include "ImageBufferBackendHandleSharing.h"
 #include "ImageBufferShareableBitmapBackend.h"
 #include "Logging.h"
 #include "PrepareBackingStoreBuffersData.h"
@@ -221,6 +222,8 @@ void RemoteRenderingBackend::moveToImageBuffer(RemoteSerializedImageBufferIdenti
     imageBuffer->transferToNewContext(creationContext);
     auto result = m_remoteImageBuffers.add(imageBufferIdentifier, RemoteImageBuffer::create(imageBuffer.releaseNonNull(), imageBufferIdentifier, contextIdentifier, *this));
     MESSAGE_CHECK(result.isNewEntry, "Duplicate ImageBuffer");
+    // Whether the web process could read the buffer where it was before is not kept.
+    protect(result.iterator->value.get())->setBackingStoreIsSharedWithWebProcess();
 }
 
 void RemoteRenderingBackend::moveSerializedBufferToTransferHeap(RemoteSerializedImageBufferIdentifier serializedIdentifier, CompletionHandler<void(std::optional<WebCore::ImageBufferTransferIdentifier>)>&& completionHandler)
@@ -274,6 +277,8 @@ void RemoteRenderingBackend::takeTransferredBuffer(const ImageBufferTransferHand
     imageBuffer->transferToNewContext(creationContext);
     auto result = m_remoteImageBuffers.add(imageBufferIdentifier, RemoteImageBuffer::create(imageBuffer.releaseNonNull(), imageBufferIdentifier, contextIdentifier, *this));
     MESSAGE_CHECK(result.isNewEntry, "Duplicate ImageBuffer");
+    // Whether the web process could read the buffer where it was before is not kept.
+    protect(result.iterator->value.get())->setBackingStoreIsSharedWithWebProcess();
 }
 
 void RemoteRenderingBackend::createSnapshot(RemoteSnapshotIdentifier snapshotIdentifier, FrameIdentifier rootFrameIdentifier, const FloatSize& size, CompletionHandler<void()>&& completionHandler)
@@ -413,6 +418,7 @@ void RemoteRenderingBackend::createImageBufferWithBackingStore(const FloatSize& 
 {
     assertIsCurrent(workQueue());
 
+    bool hasBackingStoreFromWebProcess = !!backingStore;
     RefPtr<ImageBuffer> imageBuffer = allocateImageBuffer(logicalSize, renderingMode, purpose, resolutionScale, colorSpace, pixelFormat, { }, WTF::move(backingStore));
     if (!imageBuffer) {
         RELEASE_LOG(RemoteLayerBuffers, "[renderingBackend=%" PRIu64 "] RemoteRenderingBackend::createImageBuffer - failed to allocate image buffer %" PRIu64, m_renderingBackendIdentifier.toUInt64(), identifier.toUInt64());
@@ -425,6 +431,8 @@ void RemoteRenderingBackend::createImageBufferWithBackingStore(const FloatSize& 
     }
     auto result = m_remoteImageBuffers.add(identifier, RemoteImageBuffer::create(imageBuffer.releaseNonNull(), identifier, contextIdentifier, *this));
     MESSAGE_CHECK(result.isNewEntry, "Duplicate ImageBuffers");
+    if (hasBackingStoreFromWebProcess)
+        protect(result.iterator->value.get())->setBackingStoreIsSharedWithWebProcess();
 }
 
 void RemoteRenderingBackend::releaseImageBuffer(RenderingResourceIdentifier identifier)
@@ -456,9 +464,13 @@ void RemoteRenderingBackend::destroyGetPixelBufferSharedMemory()
 void RemoteRenderingBackend::nativeImageBitmap(RenderingResourceIdentifier imageIdentifier, CompletionHandler<void(std::optional<ShareableBitmap::Handle>)>&& completionHandler)
 {
     std::optional<ShareableBitmap::Handle> result;
+    bool isTainted = false;
     [&] {
         RefPtr image = m_remoteResourceCache.cachedNativeImage(imageIdentifier);
         MESSAGE_CHECK(image, "NativeImage not cached.");
+        isTainted = image->isTainted();
+        if (isTainted)
+            return;
         RefPtr<ShareableBitmap> bitmap;
 #if USE(CG)
         bitmap = ShareableBitmap::createFromImagePixels(*image);
@@ -480,7 +492,7 @@ void RemoteRenderingBackend::nativeImageBitmap(RenderingResourceIdentifier image
         image->replacePlatformImage(WTF::move(platformImage));
         result = WTF::move(handle);
     }();
-    ASSERT(result);
+    ASSERT(result || isTainted);
     completionHandler(WTF::move(result));
 }
 
@@ -711,7 +723,7 @@ void RemoteRenderingBackend::forwardDrawingAreaMessage(IPC::WrappedMessage&& mes
 // Everything drawn into the buffer sets for a commit precedes it in the stream, so their front
 // buffers are complete. Waiting for the fences of the delegated contents blocks the stream like
 // flushing the buffers does.
-void RemoteRenderingBackend::forwardLayerTreeCommit(IPC::WrappedMessage&& commit, Vector<ImageBufferSetIdentifier>&& bufferSetIdentifiers, Vector<IPC::Semaphore>&& fences, HashMap<ImageBufferSetIdentifier, std::unique_ptr<BufferSetBackendHandle>>&& handles, CompletionHandler<void(Vector<ImageBufferSetIdentifier>&&, bool)>&& completionHandler)
+void RemoteRenderingBackend::forwardLayerTreeCommit(IPC::WrappedMessage&& commit, Vector<ImageBufferSetIdentifier>&& bufferSetIdentifiers, Vector<IPC::Semaphore>&& fences, HashMap<ImageBufferSetIdentifier, std::unique_ptr<BufferSetBackendHandle>>&& handles, Vector<RenderingResourceIdentifier>&& contentsImages, CompletionHandler<void(Vector<ImageBufferSetIdentifier>&&, bool)>&& completionHandler)
 {
     assertIsCurrent(workQueue());
 
@@ -728,6 +740,16 @@ void RemoteRenderingBackend::forwardLayerTreeCommit(IPC::WrappedMessage&& commit
         handles.set(bufferSetIdentifier, makeUnique<BufferSetBackendHandle>(WTF::move(handle)));
     }
 
+    // These may be tainted, which is fine since the handles only go to the UI process.
+    Vector<std::pair<RenderingResourceIdentifier, ImageBufferBackendHandle>> contentsImageHandles;
+    for (auto imageIdentifier : contentsImages) {
+        RefPtr image = m_remoteResourceCache.cachedNativeImage(imageIdentifier);
+        if (!image)
+            continue;
+        if (auto handle = layerContentsHandle(*image))
+            contentsImageHandles.append({ imageIdentifier, WTF::move(*handle) });
+    }
+
     for (auto& fence : fences)
         fence.waitFor(delegatedContentsFinishedTimeout);
 
@@ -735,10 +757,50 @@ void RemoteRenderingBackend::forwardLayerTreeCommit(IPC::WrappedMessage&& commit
     auto encoder = WTF::move(commit).createEncoder();
     MESSAGE_CHECK_COMPLETION_BASE(encoder, m_streamConnection, completionHandler({ }, false));
     *encoder << WTF::move(handles);
+    *encoder << WTF::move(contentsImageHandles);
 
     sendForwardedDrawingAreaMessage(IPC::WrappedMessage { makeUniqueRefFromNonNullUniquePtr(WTF::move(encoder)) }, drawingAreaIdentifier);
     completionHandler(WTF::move(bufferSetsWithoutFrontBuffer), true);
 }
+
+std::optional<ImageBufferBackendHandle> RemoteRenderingBackend::layerContentsHandle(NativeImage& image)
+{
+    assertIsCurrent(workQueue());
+    FloatSize size { image.size() };
+    RefPtr buffer = allocateImageBuffer(size, RenderingMode::Accelerated, RenderingPurpose::LayerBacking, 1, image.colorSpace(), { PixelFormat::BGRA8 }, { });
+    if (!buffer)
+        return std::nullopt;
+    buffer->context().drawNativeImage(image, FloatRect { { }, size }, FloatRect { { }, size }, { CompositeOperator::Copy });
+    buffer->flushDrawingContext();
+    auto* sharing = dynamicDowncast<ImageBufferBackendHandleSharing>(buffer->toBackendSharing());
+    if (!sharing)
+        return std::nullopt;
+    return sharing->createBackendHandle();
+}
+
+#if HAVE(IOSURFACE)
+// The pixels of a snapshot can come from frames in other processes, so the image is tainted.
+void RemoteRenderingBackend::cacheNativeImageFromRemoteSnapshot(RemoteSnapshotIdentifier snapshotIdentifier, FrameIdentifier rootFrameIdentifier, float scale, const ColorSpace& colorSpace, RenderingResourceIdentifier imageIdentifier, CompletionHandler<void(bool)>&& completionHandler)
+{
+    assertIsCurrent(workQueue());
+    MESSAGE_CHECK_COMPLETION_BASE(snapshotIdentifier.processIdentifier() == m_gpuConnectionToWebProcess->webProcessIdentifier(), m_streamConnection, completionHandler(false));
+
+    bool useIOSurfaceWebKitBehavior = false;
+#if USE(APPLE_INTERNAL_SDK)
+    useIOSurfaceWebKitBehavior = m_sharedPreferencesForWebProcess.useIOSurfaceWebKitBehavior;
+#endif
+
+    callOnMainRunLoop([protectedThis = Ref { *this }, snapshotIdentifier, rootFrameIdentifier, scale, colorSpace, imageIdentifier, useIOSurfaceWebKitBehavior, completionHandler = WTF::move(completionHandler)] mutable {
+        GPUProcess::singleton().takeSnapshotWhenComplete(snapshotIdentifier, rootFrameIdentifier, [protectedThis = WTF::move(protectedThis), rootFrameIdentifier, scale, colorSpace, imageIdentifier, useIOSurfaceWebKitBehavior, completionHandler = WTF::move(completionHandler)](RefPtr<RemoteSnapshot>&& snapshot) mutable {
+            RefPtr image = snapshot ? snapshot->drawToNativeImage(snapshot->size(), scale, colorSpace, rootFrameIdentifier, protectedThis->m_sharedResourceCache->resourceOwner(), useIOSurfaceWebKitBehavior) : nullptr;
+            protectedThis->dispatch([protectedThis, image = WTF::move(image), imageIdentifier, completionHandler = WTF::move(completionHandler)] mutable {
+                assertIsCurrent(protectedThis->workQueue());
+                completionHandler(image && protectedThis->m_remoteResourceCache.cacheNativeImage(imageIdentifier, image.releaseNonNull()));
+            });
+        });
+    });
+}
+#endif
 #endif
 
 void RemoteRenderingBackend::markSurfacesVolatile(MarkSurfacesAsVolatileRequestIdentifier requestIdentifier, const Vector<std::pair<ImageBufferSetIdentifier, OptionSet<BufferInSetType>>>& identifiers, bool forcePurge)

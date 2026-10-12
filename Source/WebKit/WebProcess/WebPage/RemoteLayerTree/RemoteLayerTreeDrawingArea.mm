@@ -433,6 +433,15 @@ void RemoteLayerTreeDrawingArea::updateRendering()
     auto commitEncoder = makeUniqueRef<IPC::Encoder>(Messages::RemoteLayerTreeDrawingAreaProxy::CommitLayerTree::name(), m_identifier.toUInt64());
     commitEncoder.get() << bundle;
 
+    Vector<WebCore::RenderingResourceIdentifier> contentsImages;
+    for (auto& transaction : bundle.transactions) {
+        for (auto& layer : transaction.first.changedLayers()) {
+            auto& properties = layer->properties();
+            if (properties.changedProperties.contains(LayerChange::ContentsImageChanged) && properties.contentsImage)
+                contentsImages.append(*properties.contentsImage);
+        }
+    }
+
     Vector<std::unique_ptr<ThreadSafeImageBufferSetFlusher>> flushers;
     for (auto& transaction : borrow(bundle.transactions))
         flushers.appendVector(backingStoreCollection->didFlushLayers(CheckedRef { transaction.first }));
@@ -457,7 +466,7 @@ void RemoteLayerTreeDrawingArea::updateRendering()
             if (!flusher->addToGPUProcessFlushes(gpuProcessFlushes))
                 flusher->flushAndCollectHandles(handles);
         }
-        forwardCommitThroughGPUProcess(WTF::move(commitEncoder), WTF::move(gpuProcessFlushes), WTF::move(handles));
+        forwardCommitThroughGPUProcess(WTF::move(commitEncoder), WTF::move(gpuProcessFlushes), WTF::move(handles), WTF::move(contentsImages));
 
         didCompleteRenderingUpdateDisplay();
 
@@ -544,7 +553,7 @@ void RemoteLayerTreeDrawingArea::forwardThroughGPUProcess(UniqueRef<IPC::Encoder
     });
 }
 
-void RemoteLayerTreeDrawingArea::forwardCommitThroughGPUProcess(UniqueRef<IPC::Encoder>&& encoder, ThreadSafeImageBufferSetFlusher::GPUProcessFlushes&& gpuProcessFlushes, HashMap<ImageBufferSetIdentifier, std::unique_ptr<BufferSetBackendHandle>>&& handles)
+void RemoteLayerTreeDrawingArea::forwardCommitThroughGPUProcess(UniqueRef<IPC::Encoder>&& encoder, ThreadSafeImageBufferSetFlusher::GPUProcessFlushes&& gpuProcessFlushes, HashMap<ImageBufferSetIdentifier, std::unique_ptr<BufferSetBackendHandle>>&& handles, Vector<WebCore::RenderingResourceIdentifier>&& contentsImages)
 {
     resendMessagesLostWithGPUProcess();
 
@@ -552,7 +561,7 @@ void RemoteLayerTreeDrawingArea::forwardCommitThroughGPUProcess(UniqueRef<IPC::E
     IPC::WrappedMessage message { WTF::move(encoder) };
     m_messagesForwardedThroughGPUProcess.append({ identifier, true, message.copy() });
 
-    protect(m_remoteLayerTreeContext->ensureRemoteRenderingBackendProxy())->forwardLayerTreeCommit(WTF::move(message), WTF::move(gpuProcessFlushes.bufferSets), WTF::move(gpuProcessFlushes.fences), WTF::move(handles), [weakThis = WeakPtr { *this }, identifier](bool forwarded) {
+    protect(m_remoteLayerTreeContext->ensureRemoteRenderingBackendProxy())->forwardLayerTreeCommit(WTF::move(message), WTF::move(gpuProcessFlushes.bufferSets), WTF::move(gpuProcessFlushes.fences), WTF::move(handles), WTF::move(contentsImages), [weakThis = WeakPtr { *this }, identifier](bool forwarded) {
         RefPtr protectedThis = weakThis.get();
         if (!protectedThis)
             return;
@@ -596,7 +605,7 @@ void RemoteLayerTreeDrawingArea::resendMessagesLostWithGPUProcess()
                 protectedThis->didForwardThroughGPUProcess(identifier, forwarded);
         };
         if (message.isCommit)
-            renderingBackend->forwardLayerTreeCommit(message.message.copy(), { }, { }, { }, WTF::move(completionHandler));
+            renderingBackend->forwardLayerTreeCommit(message.message.copy(), { }, { }, { }, { }, WTF::move(completionHandler));
         else
             renderingBackend->forwardDrawingAreaMessage(message.message.copy(), WTF::move(completionHandler));
     }
@@ -653,6 +662,8 @@ bool RemoteLayerTreeDrawingArea::BackingStoreFlusher::flush(UniqueRef<IPC::Encod
     bool flushSucceeded = flushAndCollectHandles(flushers, handles);
     // FIXME: Currently we send the transaction even if the flush timed out.
     commitEncoder.get() << WTF::move(handles);
+    // Only the GPU process has contents images to add.
+    commitEncoder.get() << Vector<std::pair<WebCore::RenderingResourceIdentifier, ImageBufferBackendHandle>> { };
 
     m_pendingFlushes--;
 

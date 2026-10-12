@@ -37,6 +37,7 @@
 #include <WebCore/ProcessIdentity.h>
 #include <WebCore/RenderingMode.h>
 #include <WebCore/RenderingResourceIdentifier.h>
+#include <atomic>
 #include <wtf/Function.h>
 #include <wtf/OptionSet.h>
 #include <wtf/RefCounted.h>
@@ -235,6 +236,10 @@ public:
 
     WEBCORE_EXPORT virtual ImageBufferBackendSharing* toBackendSharing();
 
+    // See NativeImage::isTainted().
+    bool isTainted() const { return m_isTainted; }
+    void setIsTainted() { m_isTainted = true; }
+
 protected:
     WEBCORE_EXPORT ImageBuffer(ImageBufferParameters, const WebCore::ImageBufferCreationContext&, std::unique_ptr<ImageBufferBackend>&&, RenderingResourceIdentifier = RenderingResourceIdentifier::generate());
 
@@ -249,6 +254,7 @@ protected:
     std::unique_ptr<ImageBufferBackend> m_backend;
     RenderingResourceIdentifier m_renderingResourceIdentifier;
     bool m_hasForcedPurgeForTesting { false };
+    std::atomic<bool> m_isTainted { false };
 };
 
 class SerializedImageBuffer {

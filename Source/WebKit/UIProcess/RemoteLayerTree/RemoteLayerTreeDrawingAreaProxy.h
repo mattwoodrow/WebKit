@@ -120,10 +120,6 @@ public:
     // checked may set them.
     void setLayerContentsFromAnotherProcess(WebCore::PlatformLayerIdentifier, RemoteLayerBackingStoreProperties&&);
 
-    bool startDisplayOnlyImage(RemoteSnapshotIdentifier);
-    bool completeDisplayOnlyImage(RemoteSnapshotIdentifier, ImageBufferBackendHandle&&);
-    void releaseDisplayOnlyImage(RemoteSnapshotIdentifier);
-
     virtual ~RemoteLayerTreeDrawingAreaProxy();
 
     static bool canBeForwardedThroughGPUProcess(IPC::MessageName);
@@ -247,8 +243,8 @@ private:
     void notifyPendingCommitLayerTree(IPC::Connection&, std::optional<TransactionID>, WebCore::PageIdentifier);
     void notifyFlushingLayerTree(IPC::Connection&, TransactionID, WebCore::PageIdentifier);
     bool isFromPreviousWebPage(const ProcessState&, WebCore::PageIdentifier, ASCIILiteral messageName) const;
-    void commitLayerTree(IPC::Connection&, const RemoteLayerTreeCommitBundle&, HashMap<ImageBufferSetIdentifier, std::unique_ptr<BufferSetBackendHandle>>&&);
-    void commitLayerTreeTransaction(IPC::Connection&, const RemoteLayerTreeTransaction&, const RemoteScrollingCoordinatorTransaction&, const std::optional<MainFrameData>&, const PageData&, const TransactionID&);
+    void commitLayerTree(IPC::Connection&, const RemoteLayerTreeCommitBundle&, HashMap<ImageBufferSetIdentifier, std::unique_ptr<BufferSetBackendHandle>>&&, Vector<std::pair<WebCore::RenderingResourceIdentifier, ImageBufferBackendHandle>>&& contentsImageHandles);
+    void commitLayerTreeTransaction(IPC::Connection&, const RemoteLayerTreeTransaction&, const RemoteScrollingCoordinatorTransaction&, const std::optional<MainFrameData>&, const PageData&, const TransactionID&, const RemoteLayerTreeHost::ContentsImages&);
     virtual void didCommitLayerTree(IPC::Connection&, const RemoteLayerTreeTransaction&, const RemoteScrollingCoordinatorTransaction&, const std::optional<MainFrameData>&, const TransactionID&) { }
 
     void asyncSetLayerContents(IPC::Connection&, WebCore::PlatformLayerIdentifier, RemoteLayerBackingStoreProperties&&);

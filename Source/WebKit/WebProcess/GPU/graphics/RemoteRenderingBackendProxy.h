@@ -42,9 +42,11 @@
 #include "RemoteResourceCacheProxy.h"
 #include "RemoteSerializedImageBufferIdentifier.h"
 #include "RenderingUpdateID.h"
+#include "RemoteSnapshotIdentifier.h"
 #include "StreamClientConnection.h"
 #include "ThreadSafeObjectHeap.h"
 #include "WorkQueueMessageReceiver.h"
+#include <WebCore/FrameIdentifier.h>
 #include <WebCore/ImageBufferResourceLimits.h>
 #include <WebCore/RenderingResourceIdentifier.h>
 #include <WebCore/SharedMemory.h>
@@ -53,6 +55,7 @@
 #include <wtf/Deque.h>
 #include <wtf/HashMap.h>
 #include <wtf/UniqueRef.h>
+#include <wtf/NativePromise.h>
 #include <wtf/WeakPtr.h>
 #include <wtf/WorkQueue.h>
 
@@ -178,9 +181,14 @@ public:
 
     void prepareImageBufferSetForDisplay(LayerPrepareBuffersData&&);
 
+#if HAVE(IOSURFACE)
+    // Resolves to a tainted image once every frame of the snapshot has been drawn.
+    Ref<NativePromise<Ref<WebCore::NativeImage>, void>> createNativeImageFromRemoteSnapshot(RemoteSnapshotIdentifier, WebCore::FrameIdentifier rootFrameIdentifier, const WebCore::IntSize&, float scale, const WebCore::ColorSpace&);
+#endif
+
     // The completion handlers are passed false if the GPU process exited before forwarding the message.
     void forwardDrawingAreaMessage(IPC::WrappedMessage&&, CompletionHandler<void(bool forwarded)>&&);
-    void forwardLayerTreeCommit(IPC::WrappedMessage&&, Vector<ImageBufferSetIdentifier>&&, Vector<IPC::Semaphore>&& fences, HashMap<ImageBufferSetIdentifier, std::unique_ptr<BufferSetBackendHandle>>&&, CompletionHandler<void(bool forwarded)>&&);
+    void forwardLayerTreeCommit(IPC::WrappedMessage&&, Vector<ImageBufferSetIdentifier>&&, Vector<IPC::Semaphore>&& fences, HashMap<ImageBufferSetIdentifier, std::unique_ptr<BufferSetBackendHandle>>&&, Vector<WebCore::RenderingResourceIdentifier>&& contentsImages, CompletionHandler<void(bool forwarded)>&&);
 #endif
 
     void finalizeRenderingUpdate();

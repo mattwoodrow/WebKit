@@ -520,9 +520,12 @@
     [Legacy] MessageParam RemoteRenderingBackend.CreateMappableImageBuffer backingStore
 }
 
+[UnsafeWrapper] Vector<std::pair<WebCore::RenderingResourceIdentifier, WebKit::ImageBufferBackendHandle>> {
+    [NeedsReview] MessageParam RemoteLayerTreeDrawingAreaProxy.CommitLayerTree contentsImageHandles
+}
+
 [UnsafeWrapper] std::optional<WebKit::ImageBufferBackendHandle> {
     [NeedsReview] MessageParam WebProcessProxy.CommitOffscreenCanvasPlaceholderFrame layerContentsHandle
-    [NeedsReview] MessageParamReply GPUProcess.SinkCompletedSnapshotToIOSurface handle
     [Legacy] MessageParamReply RemoteImageBuffer.GetBackendHandle handle
     [Legacy] MessageParamReply WebPage.TakeSnapshot image
     [Legacy] StructureParam WebKit::RemoteLayerBackingStoreProperties.m_bufferHandle

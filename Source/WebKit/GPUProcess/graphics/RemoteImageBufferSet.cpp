@@ -258,6 +258,10 @@ void RemoteImageBufferSet::prepareBufferForDisplay(const WebCore::Region& dirtyR
 
     m_previouslyPaintedRect = dirtyRegion.bounds();
     m_frontBufferIsCleared = false;
+
+    // The front buffer starts as a copy of the previous one.
+    if (RefPtr backBuffer = m_backBuffer; backBuffer && backBuffer->isTainted())
+        frontBuffer->setIsTainted();
 }
 
 bool RemoteImageBufferSet::makeBuffersVolatile(OptionSet<BufferInSetType> requestedBuffers, OptionSet<BufferInSetType>& volatileBuffers, bool forcePurge)
@@ -294,8 +298,8 @@ void RemoteImageBufferSet::dynamicContentScalingDisplayList(CompletionHandler<vo
 {
     MESSAGE_CHECK(!isPreparingForDisplay(), "DynamicContentScalingDisplayList requested while preparing for display");
     std::optional<WebCore::DynamicContentScalingDisplayList> displayList;
-    if (m_frontBuffer)
-        displayList = m_frontBuffer->dynamicContentScalingDisplayList();
+    if (RefPtr frontBuffer = m_frontBuffer; frontBuffer && !frontBuffer->isTainted())
+        displayList = frontBuffer->dynamicContentScalingDisplayList();
     completionHandler({ WTF::move(displayList) });
 }
 

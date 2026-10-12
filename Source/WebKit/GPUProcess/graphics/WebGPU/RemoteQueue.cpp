@@ -210,7 +210,8 @@ void RemoteQueue::copyExternalImageToTexture(
     // RemoteRenderingBackend which owns the ImageBuffer.
     if (source.imageBufferIdentifier) {
         RefPtr sourceImageBuffer = protect(m_gpu)->imageBuffer(*source.imageBufferIdentifier);
-        if (!sourceImageBuffer)
+        // The web process can read the texture back.
+        if (!sourceImageBuffer || sourceImageBuffer->isTainted())
             return;
         convertedSource->imageBuffer = WTF::move(sourceImageBuffer);
     }

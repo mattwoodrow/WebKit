@@ -63,6 +63,8 @@ public:
     ~RemoteResourceCacheProxy();
 
     Ref<RemoteNativeImageProxy> createNativeImage(const WebCore::IntSize&, WebCore::PlatformColorSpace&&, bool hasAlpha);
+    // For an image created above that the GPU process failed to cache, so that it isn't released there.
+    void didFailToCacheNativeImage(const RemoteNativeImageProxy&);
 
     [[nodiscard]] bool recordNativeImageUse(const WebCore::NativeImage&, const WebCore::ColorSpace&);
 

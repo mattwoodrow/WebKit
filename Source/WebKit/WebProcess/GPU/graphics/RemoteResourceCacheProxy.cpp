@@ -106,6 +106,13 @@ Ref<RemoteNativeImageProxy> RemoteResourceCacheProxy::createNativeImage(const In
     return nativeImage;
 }
 
+void RemoteResourceCacheProxy::didFailToCacheNativeImage(const RemoteNativeImageProxy& image)
+{
+    auto entry = m_nativeImages.find(&image);
+    RELEASE_ASSERT(entry != m_nativeImages.end());
+    entry->value.existsInRemote = false;
+}
+
 RemoteGradientIdentifier RemoteResourceCacheProxy::recordGradientUse(Gradient& gradient)
 {
     auto result = m_gradients.ensure(&gradient, [] {

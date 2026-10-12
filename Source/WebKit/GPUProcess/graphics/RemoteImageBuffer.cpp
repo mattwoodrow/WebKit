@@ -74,15 +74,24 @@ void RemoteImageBuffer::getEffectiveRenderingModeForTesting(CompletionHandler<vo
     completionHandler(m_imageBuffer->getEffectiveRenderingModeForTesting());
 }
 
+void RemoteImageBuffer::setBackingStoreIsSharedWithWebProcess()
+{
+    if (RefPtr context = m_context.get())
+        context->setBufferIsSharedWithWebProcess();
+}
+
 void RemoteImageBuffer::getBackendHandle(CompletionHandler<void(std::optional<ImageBufferBackendHandle>&&)>&& completionHandler)
 {
     assertIsCurrent(workQueue());
     auto* sharing = m_imageBuffer->toBackendSharing();
-    if (!sharing) {
+    if (!sharing || m_imageBuffer->isTainted()) {
         completionHandler(std::nullopt);
         return;
     }
-    completionHandler(downcast<ImageBufferBackendHandleSharing>(*sharing).createBackendHandle());
+    auto handle = downcast<ImageBufferBackendHandleSharing>(*sharing).createBackendHandle();
+    if (handle)
+        setBackingStoreIsSharedWithWebProcess();
+    completionHandler(WTF::move(handle));
 }
 
 #if PLATFORM(COCOA)
@@ -153,7 +162,9 @@ void RemoteImageBuffer::getPixelBuffer(WebCore::PixelBufferFormat destinationFor
     MESSAGE_CHECK(m_imageBuffer->renderingMode() != RenderingMode::PDFDocument && m_imageBuffer->renderingMode() != RenderingMode::DisplayList, "Backend does not hold pixels");
     MESSAGE_CHECK(m_imageBuffer->renderingPurpose() != RenderingPurpose::LayerBacking, "We should not interact with the pixelBuffer for LayerBacking");
     WebCore::IntRect srcRect(srcPoint, srcSize);
-    if (auto pixelBuffer = m_imageBuffer->getPixelBuffer(destinationFormat, srcRect)) {
+    if (m_imageBuffer->isTainted())
+        zeroSpan(memory->mutableSpan());
+    else if (auto pixelBuffer = m_imageBuffer->getPixelBuffer(destinationFormat, srcRect)) {
         MESSAGE_CHECK(pixelBuffer->bytes().size() <= memory->size(), "Shmem for return of getPixelBuffer is too small");
         memcpySpan(memory->mutableSpan(), pixelBuffer->bytes());
     } else
@@ -229,6 +240,10 @@ void RemoteImageBuffer::flushContextSync(CompletionHandler<void()>&& completionH
 void RemoteImageBuffer::dynamicContentScalingDisplayList(CompletionHandler<void(std::optional<WebCore::DynamicContentScalingDisplayList>&&)>&& completionHandler)
 {
     assertIsCurrent(workQueue());
+    if (m_imageBuffer->isTainted()) {
+        completionHandler(std::nullopt);
+        return;
+    }
     auto displayList = m_imageBuffer->dynamicContentScalingDisplayList();
     completionHandler({ WTF::move(displayList) });
 }

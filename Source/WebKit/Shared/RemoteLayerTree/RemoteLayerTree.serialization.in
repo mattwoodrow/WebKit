@@ -80,7 +80,7 @@ header: "RemoteLayerTreeTransaction.h"
     AppleVisualEffectChanged
 #endif
     ShadowPathChanged
-    DisplayOnlyImageChanged
+    ContentsImageChanged
 };
 
 header: "RemoteLayerBackingStore.h"
@@ -245,7 +245,7 @@ headers: "LayerProperties.h" "PlatformCALayerRemote.h"
     [OptionalTupleBit=WebKit::LayerChange::AppleVisualEffectChanged] WebCore::AppleVisualEffectData appleVisualEffectData;
 #endif
     [OptionalTupleBit=WebKit::LayerChange::ShadowPathChanged] WebCore::Path shadowPath;
-    [OptionalTupleBit=WebKit::LayerChange::DisplayOnlyImageChanged] Markable<WebKit::RemoteSnapshotIdentifier> displayOnlyImage;
+    [OptionalTupleBit=WebKit::LayerChange::ContentsImageChanged] Markable<WebCore::RenderingResourceIdentifier> contentsImage;
 };
 
 using WebKit::LayerHostingContextID = uint32_t;

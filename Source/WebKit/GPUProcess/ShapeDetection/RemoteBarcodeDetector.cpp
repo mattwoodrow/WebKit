@@ -62,6 +62,11 @@ void RemoteBarcodeDetector::detect(WebCore::RenderingResourceIdentifier renderin
 {
     RefPtr sourceImage = m_renderingBackend.get().remoteResourceCache().cachedNativeImage(renderingResourceIdentifier);
     MESSAGE_CHECK(sourceImage);
+    // What is detected would reveal the pixels.
+    if (sourceImage->isTainted()) {
+        completionHandler({ });
+        return;
+    }
     m_backing->detect(*sourceImage, WTF::move(completionHandler));
 }
 

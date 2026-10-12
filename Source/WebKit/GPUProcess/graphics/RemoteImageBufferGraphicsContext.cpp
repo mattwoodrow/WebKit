@@ -66,6 +66,8 @@ void RemoteImageBufferGraphicsContext::drawImageBuffer(RenderingResourceIdentifi
 {
     RefPtr sourceImage = imageBuffer(imageBufferIdentifier);
     MESSAGE_CHECK(sourceImage);
+    if (!willDrawSource(sourceImage->isTainted()))
+        return;
     bool selfCopy = false;
     if (sourceImage == m_imageBuffer.ptr() && sourceImage->renderingMode() == RenderingMode::Accelerated) {
         sourceImage = sourceImage->clone();
@@ -75,6 +77,14 @@ void RemoteImageBufferGraphicsContext::drawImageBuffer(RenderingResourceIdentifi
     context().drawImageBuffer(*sourceImage, destinationRect, srcRect, options);
     if (selfCopy)
         m_imageBuffer->flushDrawingContext();
+}
+
+bool RemoteImageBufferGraphicsContext::taintDestination()
+{
+    if (m_bufferIsSharedWithWebProcess)
+        return false;
+    m_imageBuffer->setIsTainted();
+    return true;
 }
 
 } // namespace WebKit

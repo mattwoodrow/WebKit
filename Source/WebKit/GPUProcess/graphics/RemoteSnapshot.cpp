@@ -279,7 +279,7 @@ std::optional<ShareableBitmap::Handle> RemoteSnapshot::drawToBitmap(const FloatS
 
 #if HAVE(IOSURFACE)
 
-std::optional<ImageBufferBackendHandle> RemoteSnapshot::drawToIOSurface(const FloatSize& size, float scale, const ColorSpace& colorSpace, FrameIdentifier rootFrameIdentifier, const ProcessIdentity& resourceOwner, bool useIOSurfaceWebKitBehavior)
+RefPtr<NativeImage> RemoteSnapshot::drawToNativeImage(const FloatSize& size, float scale, const ColorSpace& colorSpace, FrameIdentifier rootFrameIdentifier, const ProcessIdentity& resourceOwner, bool useIOSurfaceWebKitBehavior)
 {
     ASSERT(isComplete());
     ImageBufferCreationContext creationContext;
@@ -287,18 +287,15 @@ std::optional<ImageBufferBackendHandle> RemoteSnapshot::drawToIOSurface(const Fl
     creationContext.useIOSurfaceWebKitBehavior = useIOSurfaceWebKitBehavior;
     RefPtr buffer = ImageBuffer::create<ImageBufferShareableMappedIOSurfaceBackend>(size, scale, colorSpace, ImageBufferFormat { PixelFormat::BGRA8 }, RenderingPurpose::Snapshot, creationContext);
     if (!buffer)
-        return std::nullopt;
+        return nullptr;
 
+    // Frames from other processes are drawn into it.
+    buffer->setIsTainted();
     if (!applyFrame(rootFrameIdentifier, buffer->context()))
-        return std::nullopt;
+        return nullptr;
 
     buffer->flushDrawingContext();
-
-    auto* surface = buffer->surface();
-    if (!surface)
-        return std::nullopt;
-
-    return ImageBufferBackendHandle { surface->createSendRight() };
+    return ImageBuffer::sinkIntoNativeImage(WTF::move(buffer));
 }
 
 #endif

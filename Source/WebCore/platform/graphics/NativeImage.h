@@ -34,6 +34,7 @@
 #include <WebCore/PixelFormat.h>
 #include <WebCore/PlatformImage.h>
 #include <WebCore/RenderingResource.h>
+#include <atomic>
 #include <wtf/CheckedRef.h>
 #include <wtf/Lock.h>
 #include <wtf/TZoneMalloc.h>
@@ -100,9 +101,11 @@ public:
     WEBCORE_EXPORT virtual ColorSpace colorSpace() const;
 
     WEBCORE_EXPORT RefPtr<ShareableBitmap> toShareableBitmap() const;
-    // The pixels are held elsewhere and cannot be read in this process: platformImage() is null, and
-    // only a compositor can display the image.
-    virtual bool isDisplayOnly() const { return false; }
+    // The pixels must not reach the web process. The GPU process taints whatever a tainted image is
+    // drawn into, and refuses to read tainted pixels back. In the web process, a tainted image has
+    // no platform image, and only a compositor can display it.
+    bool isTainted() const { return m_isTainted; }
+    void setIsTainted() { m_isTainted = true; }
 
     // Tightly packed unpremultiplied pixels at the depth they were decoded at.
     struct UnpremultipliedPixels {
@@ -165,6 +168,7 @@ protected:
     mutable HashMap<IntRect, ImagePaintTimeTransformation> m_subimagePaintTimeTransformations WTF_GUARDED_BY_LOCK(m_lock);
 #endif
     RenderingResourceIdentifier m_renderingResourceIdentifier { RenderingResourceIdentifier::generate() };
+    std::atomic<bool> m_isTainted { false };
 #if USE(SKIA)
     GrDirectContext* m_grContext { nullptr };
 #endif

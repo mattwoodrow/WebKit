@@ -641,6 +641,35 @@ void RemoteRenderingBackendProxy::prepareImageBufferSetForDisplay(LayerPrepareBu
     m_bufferSetsToPrepare.append(WTF::move(bufferSetToPrepare));
 }
 
+#if HAVE(IOSURFACE)
+Ref<NativePromise<Ref<NativeImage>, void>> RemoteRenderingBackendProxy::createNativeImageFromRemoteSnapshot(RemoteSnapshotIdentifier snapshotIdentifier, FrameIdentifier rootFrameIdentifier, const IntSize& size, float scale, const ColorSpace& colorSpace)
+{
+    Ref image = m_remoteResourceCacheProxy->createNativeImage(size, colorSpace.platformColorSpace(), true);
+    image->setIsTainted();
+
+    NativePromise<Ref<NativeImage>, void>::Producer producer;
+    Ref promise = producer.promise();
+    RefPtr connection = this->connection();
+    if (!connection) [[unlikely]] {
+        m_remoteResourceCacheProxy->didFailToCacheNativeImage(image);
+        producer.reject();
+        return promise;
+    }
+
+    // Holding the image until the reply keeps its release behind the caching.
+    auto imageIdentifier = image->renderingResourceIdentifier();
+    connection->sendWithAsyncReply(Messages::RemoteRenderingBackend::CacheNativeImageFromRemoteSnapshot(snapshotIdentifier, rootFrameIdentifier, scale, colorSpace, imageIdentifier), [protectedThis = Ref { *this }, image = WTF::move(image), producer = WTF::move(producer)](bool success) mutable {
+        if (!success) {
+            protectedThis->m_remoteResourceCacheProxy->didFailToCacheNativeImage(image);
+            producer.reject();
+            return;
+        }
+        producer.resolve(Ref<NativeImage> { WTF::move(image) });
+    }, renderingBackendIdentifier());
+    return promise;
+}
+#endif
+
 void RemoteRenderingBackendProxy::forwardDrawingAreaMessage(IPC::WrappedMessage&& message, CompletionHandler<void(bool)>&& completionHandler)
 {
     RefPtr connection = this->connection();
@@ -651,14 +680,14 @@ void RemoteRenderingBackendProxy::forwardDrawingAreaMessage(IPC::WrappedMessage&
     connection->sendWithAsyncReply(Messages::RemoteRenderingBackend::ForwardDrawingAreaMessage(WTF::move(message)), WTF::move(completionHandler), renderingBackendIdentifier());
 }
 
-void RemoteRenderingBackendProxy::forwardLayerTreeCommit(IPC::WrappedMessage&& commit, Vector<ImageBufferSetIdentifier>&& bufferSets, Vector<IPC::Semaphore>&& fences, HashMap<ImageBufferSetIdentifier, std::unique_ptr<BufferSetBackendHandle>>&& webProcessHandles, CompletionHandler<void(bool)>&& completionHandler)
+void RemoteRenderingBackendProxy::forwardLayerTreeCommit(IPC::WrappedMessage&& commit, Vector<ImageBufferSetIdentifier>&& bufferSets, Vector<IPC::Semaphore>&& fences, HashMap<ImageBufferSetIdentifier, std::unique_ptr<BufferSetBackendHandle>>&& webProcessHandles, Vector<RenderingResourceIdentifier>&& contentsImages, CompletionHandler<void(bool)>&& completionHandler)
 {
     RefPtr connection = this->connection();
     if (!connection) [[unlikely]] {
         completionHandler(false);
         return;
     }
-    connection->sendWithAsyncReply(Messages::RemoteRenderingBackend::ForwardLayerTreeCommit(WTF::move(commit), WTF::move(bufferSets), WTF::move(fences), WTF::move(webProcessHandles)), [protectedThis = Ref { *this }, completionHandler = WTF::move(completionHandler)](Vector<ImageBufferSetIdentifier>&& bufferSetsWithoutFrontBuffer, bool forwarded) mutable {
+    connection->sendWithAsyncReply(Messages::RemoteRenderingBackend::ForwardLayerTreeCommit(WTF::move(commit), WTF::move(bufferSets), WTF::move(fences), WTF::move(webProcessHandles), WTF::move(contentsImages)), [protectedThis = Ref { *this }, completionHandler = WTF::move(completionHandler)](Vector<ImageBufferSetIdentifier>&& bufferSetsWithoutFrontBuffer, bool forwarded) mutable {
         for (auto identifier : bufferSetsWithoutFrontBuffer) {
             if (RefPtr bufferSet = protectedThis->m_imageBufferSets.get(identifier).get())
                 bufferSet->setRemoteFrontBufferIsMissing();

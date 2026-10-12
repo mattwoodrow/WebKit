@@ -26,7 +26,6 @@
 #include "config.h"
 #include "GraphicsLayerCARemote.h"
 
-#include "DisplayOnlyImageProxy.h"
 #include "GPUProcessDelegatedContentsFence.h"
 #include "ImageBufferBackendHandleSharing.h"
 #include "PlatformCAAnimationRemote.h"
@@ -336,12 +335,11 @@ void GraphicsLayerCARemote::setLayerContentsToImageBuffer(PlatformCALayer& layer
 
 void GraphicsLayerCARemote::setLayerContentsToNativeImage(PlatformCALayer& layer, NativeImage& image)
 {
-#if ENABLE(GPU_PROCESS) && HAVE(IOSURFACE)
-    if (RefPtr proxy = dynamicDowncast<DisplayOnlyImageProxy>(image)) {
-        downcast<PlatformCALayerRemote>(layer).setDisplayOnlyImage(proxy->identifier());
+    // Its pixels can't be read here, but the GPU process can add the image to the commit.
+    if (image.isTainted()) {
+        downcast<PlatformCALayerRemote>(layer).setContentsImage(image.renderingResourceIdentifier());
         return;
     }
-#endif
     layer.setContents(image.platformImage().get());
 }
 

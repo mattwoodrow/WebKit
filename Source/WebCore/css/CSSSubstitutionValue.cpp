@@ -30,6 +30,7 @@
 #include "config.h"
 #include "CSSSubstitutionValue.h"
 
+#include "CSSPropertyParser.h"
 #include "CSSSubstitutionParser.h"
 #include "CSSVariableData.h"
 
@@ -82,6 +83,51 @@ String CSSSubstitutionValue::customCSSText(const CSS::SerializationContext&) con
 const CSSParserContext& CSSSubstitutionValue::context() const
 {
     return m_data->context();
+}
+
+auto CSSSubstitutionValue::variableReferences() const -> const VariableReferences&
+{
+    if (m_variableReferences)
+        return *m_variableReferences;
+
+    VariableReferences references;
+    auto& tokens = m_data->tokens();
+
+    for (size_t i = 0; i < tokens.size(); ++i) {
+        auto& token = tokens[i];
+        if (token.type() != FunctionToken)
+            continue;
+
+        switch (token.functionId()) {
+        case CSSValueID::Var: {
+            size_t nameIndex = i + 1;
+            while (nameIndex < tokens.size() && (tokens[nameIndex].type() == NonNewlineWhitespaceToken || tokens[nameIndex].type() == NewlineToken))
+                ++nameIndex;
+            if (nameIndex < tokens.size() && tokens[nameIndex].type() == IdentToken && CSSSubstitutionParser::isValidCustomPropertyName(tokens[nameIndex]))
+                references.names.append(tokens[nameIndex].value().toAtomString());
+            else
+                references.dependsOnMoreThanNames = true;
+            break;
+        }
+        case CSSValueID::Env:
+        case CSSValueID::Inherit:
+        case CSSValueID::Attr:
+        case CSSValueID::RandomItem:
+        case CSSValueID::If:
+        case CSSValueID::Ident:
+        case CSSValueID::InternalAutoBase:
+            references.dependsOnMoreThanNames = true;
+            break;
+        default:
+            // A dashed function -- a custom function -- may read any custom property.
+            if (isCustomPropertyName(token.value()))
+                references.dependsOnMoreThanNames = true;
+            break;
+        }
+    }
+
+    m_variableReferences = WTF::move(references);
+    return *m_variableReferences;
 }
 
 void CSSSubstitutionValue::cacheSimpleReference()

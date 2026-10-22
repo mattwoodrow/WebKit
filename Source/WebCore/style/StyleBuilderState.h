@@ -27,6 +27,7 @@
 #pragma once
 
 #include "CSSToLengthConversionData.h"
+#include "CSSVariableData.h"
 #include "Document.h"
 #include "FontTaggedSettings.h"
 #include "PropertyCascade.h"
@@ -42,6 +43,7 @@
 
 namespace WebCore {
 
+class CSSShorthandSubstitutionValue;
 class FontCascadeDescription;
 class FontSelectionValue;
 class StyleResolver;
@@ -297,6 +299,15 @@ private:
     GuardedSubstitutionContexts m_guardedSubstitutionContexts;
     WTF::BitSet<cssPropertyIDEnumValueCount> m_inProgressProperties;
     WTF::BitSet<cssPropertyIDEnumValueCount> m_invalidAtComputedValueTimeProperties;
+
+    // The shorthand whose substitution the last longhand used. Its other longhands, applied on the
+    // same element, find the same values in its parse cache and need not substitute again.
+    struct LastShorthandSubstitution {
+        const CSSShorthandSubstitutionValue* value { nullptr };
+        // Null if the substitution failed.
+        RefPtr<CSSVariableData> data;
+    };
+    LastShorthandSubstitution m_lastShorthandSubstitution;
 
     const PropertyCascade::Property* m_currentProperty { nullptr };
     const PropertyCascade* m_currentRollbackCascade { nullptr };

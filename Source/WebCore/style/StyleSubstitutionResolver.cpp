@@ -1408,12 +1408,32 @@ RefPtr<CSSValue> SubstitutionResolver::substituteAndParseShorthand(const CSSShor
 
     auto& substitutionValue = substitution.shorthandValue();
 
-    auto data = substitute(substitutionValue);
-    if (!data)
+    auto findLonghand = [&]() -> RefPtr<CSSValue> {
+        for (auto& property : substitution.m_cachedPropertyValues) {
+            if (CSSProperty::resolveDirectionAwareProperty(property.id(), m_styleBuilder.state().style().writingMode()) == propertyID)
+                return property.value();
+        }
         return nullptr;
+    };
 
-    if (m_hasTaintedURL)
+    // Another longhand of this shorthand was just substituted on this element. If the value
+    // depends only on custom properties by name, the result is the same: reuse it, provided
+    // the shared parse cache still holds this element's data.
+    auto& lastSubstitution = m_styleBuilder.state().m_lastShorthandSubstitution;
+    bool canReuse = !substitutionValue.variableReferences().dependsOnMoreThanNames;
+    if (canReuse && lastSubstitution.value == &substitution) {
+        if (!lastSubstitution.data)
+            return nullptr;
+        if (substitutionValue.m_cache.dependencyData == lastSubstitution.data)
+            return findLonghand();
+    }
+
+    auto data = substitute(substitutionValue);
+    if (!data || m_hasTaintedURL) {
+        if (canReuse)
+            lastSubstitution = { &substitution, nullptr };
         return nullptr;
+    }
 
     if (!arePointingToEqualData(substitutionValue.m_cache.dependencyData, data)) {
         ParsedPropertyVector parsedProperties;
@@ -1427,12 +1447,10 @@ RefPtr<CSSValue> SubstitutionResolver::substituteAndParseShorthand(const CSSShor
     if (substitutionValue.m_simpleReference && substitutionValue.m_simpleReference->functionId == CSSValueID::InternalAutoBase)
         substitutionValue.m_cache.isBaseAppearance = isBaseAppearance();
 
-    for (auto& property : substitution.m_cachedPropertyValues) {
-        if (CSSProperty::resolveDirectionAwareProperty(property.id(), m_styleBuilder.state().style().writingMode()) == propertyID)
-            return property.value();
-    }
+    if (canReuse)
+        lastSubstitution = { &substitution, substitutionValue.m_cache.dependencyData };
 
-    return nullptr;
+    return findLonghand();
 }
 
 } // namespace Style

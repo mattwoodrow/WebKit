@@ -66,6 +66,16 @@ public:
     // so the cascade has to know a declaration contains one before deciding whether to re-apply it.
     bool containsInheritFunction() const { return m_containsInheritFunction; }
 
+    // The custom properties this value's var() functions name, for re-applying only what
+    // refers to a custom property that changed. 'dependsOnMoreThanNames' is set if the value
+    // can also change for another reason -- a var() whose name is itself computed, or any
+    // other substitution function -- and then it has to be re-applied whenever anything is.
+    struct VariableReferences {
+        Vector<AtomString> names;
+        bool dependsOnMoreThanNames { false };
+    };
+    const VariableReferences& variableReferences() const;
+
 private:
     friend class Style::SubstitutionResolver;
 
@@ -85,6 +95,8 @@ private:
     std::optional<SimpleReference> m_simpleReference;
 
     bool m_containsInheritFunction { false };
+
+    mutable std::optional<VariableReferences> m_variableReferences;
 
     struct Cache {
         // For var() case: cache key is the substituted data pointer.

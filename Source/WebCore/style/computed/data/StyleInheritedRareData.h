@@ -97,6 +97,10 @@ public:
 
     bool operator==(const InheritedRareData&) const;
 
+    // Everything but the inherited custom properties, for telling a change that
+    // only re-derives custom properties apart from one that changes anything else.
+    bool equalIgnoringCustomProperties(const InheritedRareData&) const;
+
 #if !LOG_DISABLED
     void dumpDifferences(TextStream&, const InheritedRareData&) const;
 #endif

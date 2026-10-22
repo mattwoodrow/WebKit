@@ -41,10 +41,13 @@ enum class Change : uint8_t {
     Inherited = 1 << 1,
     FastPathInherited = 1 << 2,
     Container = 1 << 3,
-    Renderer = 1 << 4
+    Renderer = 1 << 4,
+    // Inherited custom properties changed and no other inherited property did, so
+    // a child's style can be rebuilt by re-applying only what refers to them.
+    InheritedCustomProperties = 1 << 5,
 };
 
-constexpr OptionSet<Change> inheritedChanges() { return { Change::Inherited, Change::FastPathInherited }; }
+constexpr OptionSet<Change> inheritedChanges() { return { Change::Inherited, Change::FastPathInherited, Change::InheritedCustomProperties }; }
 
 WEBCORE_EXPORT OptionSet<Change> determineChanges(const Style::ComputedStyle&, const Style::ComputedStyle&);
 

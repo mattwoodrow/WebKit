@@ -38,6 +38,8 @@
 #include "CSSKeyframesRule.h"
 #include "CSSNestedDeclarations.h"
 #include "CSSPropertyNames.h"
+#include "CSSShorthandSubstitutionValue.h"
+#include "CSSSubstitutionValue.h"
 #include "CSSSelector.h"
 #include "CSSStyleRule.h"
 #include "CSSStyleSheet.h"
@@ -101,6 +103,7 @@
 #include <wtf/HashFunctions.h>
 #include <wtf/HashTraits.h>
 #include <wtf/MainThread.h>
+#include <wtf/SetForScope.h>
 #include <wtf/Seconds.h>
 #include <wtf/StdLibExtras.h>
 #include <wtf/TZoneMallocInlines.h>
@@ -322,7 +325,10 @@ UnadjustedStyle Resolver::unadjustedStyleForElement(Element& element, const Reso
 
     auto elementStyleRelations = commitRelationsToRenderStyle(style, element, collector.styleRelations());
 
-    applyMatchedProperties(state, collector.matchResult(), PropertyCascade::normalProperties());
+    {
+        SetForScope suppressCacheAdditions(m_suppressMatchedDeclarationsCacheAdditions, context.matchedDeclarationsCacheEntryIsUnshareable);
+        applyMatchedProperties(state, collector.matchResult(), PropertyCascade::normalProperties());
+    }
 
     return {
         .style = state.takeStyle(),
@@ -368,6 +374,91 @@ UnadjustedStyle Resolver::unadjustedStyleForCachedMatchResult(Element& element, 
     applyMatchedProperties(state, protect(*unadjustedStyle.matchResult), WTF::move(cachedResult.changedProperties));
 
     return {
+        .style = state.takeStyle(),
+        .relations = WTF::move(unadjustedStyle.relations),
+        .matchResult = unadjustedStyle.matchResult
+    };
+}
+
+std::optional<UnadjustedStyle> Resolver::unadjustedStyleForInheritedCustomPropertyChange(Element& element, const ResolutionContext& context, CachedMatchResult&& cachedResult)
+{
+    // The element's own inline style changed as well: that is FullWithMatchResultCache's job.
+    if (!cachedResult.changedProperties.isEmpty())
+        return std::nullopt;
+
+    auto& unadjustedStyle = cachedResult.unadjustedStyle;
+    Ref matchResult = *unadjustedStyle.matchResult;
+
+    // What the cached style held before this rebuild, to tell which custom properties changed.
+    auto& oldStyle = cachedResult.styleToUpdate.get();
+
+    auto state = initializeStateAndStyle(element, context, WTF::move(unadjustedStyle.style));
+    auto& style = *state.style();
+    style.inheritCustomPropertiesFrom(*state.parentStyle());
+
+    {
+        PropertyCascade::IncludedProperties customProperties;
+        customProperties.ids.append(CSSPropertyID::Custom);
+        Builder builder(style, builderContext(state), matchResult.get(), WTF::move(customProperties));
+        builder.applyNonHighPriorityProperties();
+    }
+
+    HashSet<AtomString> changedCustomProperties;
+    auto collectChanged = [&](const Style::ComputedStyle& from, const Style::ComputedStyle& against) {
+        for (auto* data : { &from.inheritedCustomProperties(), &from.nonInheritedCustomProperties() }) {
+            data->forEach([&](auto& entry) {
+                if (!from.customPropertyValueEqual(against, entry.key))
+                    changedCustomProperties.add(entry.key);
+                return IterationStatus::Continue;
+            });
+        }
+    };
+    collectChanged(style, oldStyle);
+    collectChanged(oldStyle, style);
+
+    PropertyCascade::IncludedProperties dependentProperties;
+
+    for (auto* declarations : { &matchResult->userAgentDeclarations, &matchResult->userDeclarations, &matchResult->authorDeclarations }) {
+        for (auto& matchedProperties : *declarations) {
+            for (auto property : matchedProperties.properties.get()) {
+                if (property.id() == CSSPropertyID::Custom)
+                    continue;
+
+                RefPtr value = property.value();
+                const CSSSubstitutionValue* substitution = dynamicDowncast<CSSSubstitutionValue>(value.get());
+                if (auto* shorthand = dynamicDowncast<CSSShorthandSubstitutionValue>(value.get()))
+                    substitution = &shorthand->shorthandValue();
+                if (!substitution)
+                    continue;
+
+                auto& references = substitution->variableReferences();
+                bool refersToChanged = references.dependsOnMoreThanNames
+                    || std::ranges::any_of(references.names, [&](auto& name) { return changedCustomProperties.contains(name); });
+                if (!refersToChanged)
+                    continue;
+
+                // Only what Builder applies after the font: nothing else resolves against those values.
+                // That includes the medium-priority images, which Builder applies with the low-priority
+                // properties. The rest -- font, zoom, writing mode, line-height for 'lh' -- and the
+                // logical groups, whose order is the cascade's, take a full build.
+                auto propertyID = cascadeAliasProperty(property.id());
+                if (propertyID <= lastHighPriorityProperty || propertyID > lastLowPriorityProperty || propertyID == CSSPropertyID::LineHeight)
+                    return std::nullopt;
+
+                if (!dependentProperties.ids.contains(propertyID))
+                    dependentProperties.ids.append(propertyID);
+            }
+        }
+    }
+
+    if (!dependentProperties.ids.isEmpty()) {
+        Builder builder(style, builderContext(state), matchResult.get(), WTF::move(dependentProperties));
+        builder.applyNonHighPriorityProperties();
+        builder.adjustAfterApplying();
+        setGlobalStateAfterApplyingProperties(builder.state());
+    }
+
+    return UnadjustedStyle {
         .style = state.takeStyle(),
         .relations = WTF::move(unadjustedStyle.relations),
         .matchResult = unadjustedStyle.matchResult
@@ -828,6 +919,9 @@ void Resolver::applyMatchedProperties(State& state, const MatchResult& matchResu
     builder.adjustAfterApplying();
 
     setGlobalStateAfterApplyingProperties(builder.state());
+
+    if (m_suppressMatchedDeclarationsCacheAdditions)
+        return;
 
     if (((cacheHash && !cacheResult) || (cacheResult && !cacheResult->inheritedEqual)) && MatchedDeclarationsCache::isCacheable(element, style, parentStyle))
         m_matchedDeclarationsCache.add(style, parentStyle, cacheHash, matchResult);

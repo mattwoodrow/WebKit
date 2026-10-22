@@ -71,7 +71,7 @@ public:
     bool needsInterleavedLayout() const { return m_needsInterleavedLayout; }
 
 private:
-    enum class ResolutionType : uint8_t { RebuildUsingExisting, AnimationOnly, FastPathInherit, FullWithMatchResultCache, Full };
+    enum class ResolutionType : uint8_t { RebuildUsingExisting, AnimationOnly, FastPathInherit, InheritedCustomPropertiesOnly, FullWithMatchResultCache, Full };
     ResolvedStyle styleForStyleable(const Styleable&, ResolutionType, const ResolutionContext&, const Style::ComputedStyle* existingStyle);
 
     void resolveComposedTree();
@@ -164,6 +164,7 @@ private:
     void incrementNestedInlineFormattingContextCountIfNeeded(Parent&);
 
     DescendantsToResolve computeDescendantsToResolve(const ElementUpdate&, const Style::ComputedStyle* existingStyle, Validity) const;
+    bool matchedDeclarationsCacheEntryIsUnshareable(const Element&) const;
     static std::optional<ResolutionType> determineResolutionType(const Element&, const Style::ComputedStyle*, DescendantsToResolve, OptionSet<Change> parentChange);
     void resetDescendantStyleRelations(Element&, DescendantsToResolve);
 

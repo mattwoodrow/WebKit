@@ -87,6 +87,8 @@ struct ResolutionContext {
     CheckedPtr<TreeResolutionState> treeResolutionState { };
 
     bool isSVGUseTreeRoot { false };
+    // No other element can look up an entry this element adds to the matched declarations cache.
+    bool matchedDeclarationsCacheEntryIsUnshareable { false };
 };
 
 using KeyframesRuleMap = HashMap<AtomString, Ref<StyleRuleKeyframes>>;
@@ -101,6 +103,12 @@ public:
 
     UnadjustedStyle unadjustedStyleForElement(Element&, const ResolutionContext&, RuleMatchingBehavior = RuleMatchingBehavior::MatchAllRules);
     UnadjustedStyle unadjustedStyleForCachedMatchResult(Element&, const ResolutionContext&, CachedMatchResult&&);
+
+    // The cached style rebuilt after an ancestor changed inherited custom properties and nothing
+    // else this element inherits: its own custom properties re-applied over the new inherited
+    // ones, then only the properties whose var()s name one that now has a different value.
+    // Null where that is not enough -- one of them affects how other properties resolve.
+    std::optional<UnadjustedStyle> unadjustedStyleForInheritedCustomPropertyChange(Element&, const ResolutionContext&, CachedMatchResult&&);
 
     ResolvedStyle styleForElement(Element&, const ResolutionContext&, RuleMatchingBehavior = RuleMatchingBehavior::MatchAllRules);
 
@@ -199,6 +207,7 @@ private:
     MatchedDeclarationsCache m_matchedDeclarationsCache;
 
     bool m_matchAuthorAndUserStyles { true };
+    bool m_suppressMatchedDeclarationsCacheAdditions { false };
     bool m_isSharedBetweenShadowTrees { false };
 };
 

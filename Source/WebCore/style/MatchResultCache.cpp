@@ -52,15 +52,18 @@ struct OriginalInlineProperty {
 
 struct MatchResultCache::Entry : CanMakeCheckedPtr<MatchResultCache::Entry> {
     UnadjustedStyle unadjustedStyle;
-    Ref<const MutableStyleProperties> inlineStyle;
+    // Null for an element that had no mutable inline style.
+    RefPtr<const MutableStyleProperties> inlineStyle;
     Vector<OriginalInlineProperty> originalInlineProperties;
 
-    Entry(UnadjustedStyle&& unadjustedStyle, const MutableStyleProperties& inlineStyle)
+    Entry(UnadjustedStyle&& unadjustedStyle, const MutableStyleProperties* inlineStyle)
         : unadjustedStyle(WTF::move(unadjustedStyle))
         , inlineStyle(inlineStyle)
     {
-        originalInlineProperties.reserveInitialCapacity(inlineStyle.size());
-        for (auto property : inlineStyle) {
+        if (!inlineStyle)
+            return;
+        originalInlineProperties.reserveInitialCapacity(inlineStyle->size());
+        for (auto property : *inlineStyle) {
             originalInlineProperties.append({
                 .propertyID = property.id(),
                 .wasImportant = property.isImportant(),
@@ -86,10 +89,12 @@ inline UnadjustedStyle copy(const UnadjustedStyle& other)
     };
 }
 
-bool MatchResultCache::isUsableAfterInlineStyleChange(const MatchResultCache::Entry& entry, const StyleProperties& currentInlineStyle)
+bool MatchResultCache::isUsableAfterInlineStyleChange(const MatchResultCache::Entry& entry, const StyleProperties* currentInlineStyle)
 {
-    if (entry.inlineStyle.ptr() != &currentInlineStyle)
+    if (entry.inlineStyle.get() != currentInlineStyle)
         return false;
+    if (!currentInlineStyle)
+        return true;
 
     auto& inlineStyle = entry.inlineStyle;
 
@@ -110,10 +115,12 @@ bool MatchResultCache::isUsableAfterInlineStyleChange(const MatchResultCache::En
 
 PropertyCascade::IncludedProperties MatchResultCache::computeAndUpdateChangedProperties(MatchResultCache::Entry& entry)
 {
-    auto& originalProperties = entry.originalInlineProperties;
-    Ref inlineStyle = entry.inlineStyle.get();
-
     PropertyCascade::IncludedProperties result;
+    if (!entry.inlineStyle)
+        return result;
+
+    auto& originalProperties = entry.originalInlineProperties;
+    Ref inlineStyle = *entry.inlineStyle;
 
     auto size = originalProperties.size();
     for (size_t index = 0; index < size; ++index) {
@@ -156,7 +163,7 @@ const std::optional<CachedMatchResult> MatchResultCache::resultWithCurrentInline
     auto* styledElement = dynamicDowncast<StyledElement>(element);
     RefPtr inlineStyle = styledElement ? styledElement->inlineStyle() : nullptr;
 
-    if (!inlineStyle || !isUsableAfterInlineStyleChange(entry, *inlineStyle)) {
+    if (!isUsableAfterInlineStyleChange(entry, inlineStyle.get())) {
         m_entries.remove(it);
         return { };
     }
@@ -183,15 +190,18 @@ void MatchResultCache::updateForFastPathInherit(const Element& element, const St
     entry->unadjustedStyle.style->fastPathInheritFrom(parentStyle);
 }
 
-void MatchResultCache::set(const Element& element, const UnadjustedStyle& unadjustedStyle)
+void MatchResultCache::set(const Element& element, const UnadjustedStyle& unadjustedStyle, CacheWithoutInlineStyle cacheWithoutInlineStyle)
 {
     // For now we cache match results if there is mutable inline style. This way we can avoid
     // selector matching when it gets mutated again.
     auto* styledElement = dynamicDowncast<StyledElement>(element);
     RefPtr inlineStyle = styledElement ? dynamicDowncast<MutableStyleProperties>(styledElement->inlineStyle()) : nullptr;
 
-    if (inlineStyle)
-        m_entries.set(element, makeUniqueRef<Entry>(copy(unadjustedStyle), *inlineStyle));
+    // Any other inline style can't be tracked for changes.
+    bool hasOtherInlineStyle = !inlineStyle && styledElement && styledElement->inlineStyle();
+
+    if (inlineStyle || (cacheWithoutInlineStyle == CacheWithoutInlineStyle::Yes && !hasOtherInlineStyle))
+        m_entries.set(element, makeUniqueRef<Entry>(copy(unadjustedStyle), inlineStyle.get()));
     else
         m_entries.remove(element);
 }

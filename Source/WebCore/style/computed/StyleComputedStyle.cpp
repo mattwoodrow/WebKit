@@ -183,6 +183,12 @@ void ComputedStyle::inheritIgnoringCustomPropertiesFrom(const ComputedStyle& inh
         m_inheritedRareData.access().customProperties = oldCustomProperties;
 }
 
+void ComputedStyle::inheritCustomPropertiesFrom(const ComputedStyle& inheritParent)
+{
+    if (m_inheritedRareData->customProperties.ptr() != inheritParent.m_inheritedRareData->customProperties.ptr())
+        m_inheritedRareData.access().customProperties = inheritParent.m_inheritedRareData->customProperties;
+}
+
 void ComputedStyle::inheritUnicodeBidiFrom(const ComputedStyle& inheritParent)
 {
     m_nonInheritedFlags.unicodeBidi = inheritParent.m_nonInheritedFlags.unicodeBidi;
@@ -278,6 +284,24 @@ bool ComputedStyle::nonFastPathInheritedEqual(const ComputedStyle& other) const
     if (m_inheritedData.ptr() != other.m_inheritedData.ptr() && !m_inheritedData->nonFastPathInheritedEqual(*other.m_inheritedData))
         return false;
     if (m_inheritedRareData != other.m_inheritedRareData)
+        return false;
+    if (m_svgData.ptr() != other.m_svgData.ptr() && !m_svgData->inheritedEqual(other.m_svgData))
+        return false;
+    return true;
+}
+
+bool ComputedStyle::nonFastPathInheritedEqualIgnoringCustomProperties(const ComputedStyle& other) const
+{
+    auto withoutFastPathFlags = [](auto flags) {
+        flags.visibility = { };
+        flags.hasExplicitlySetColor = { };
+        return flags;
+    };
+    if (withoutFastPathFlags(m_inheritedFlags) != withoutFastPathFlags(other.m_inheritedFlags))
+        return false;
+    if (m_inheritedData.ptr() != other.m_inheritedData.ptr() && !m_inheritedData->nonFastPathInheritedEqual(*other.m_inheritedData))
+        return false;
+    if (m_inheritedRareData.ptr() != other.m_inheritedRareData.ptr() && !m_inheritedRareData->equalIgnoringCustomProperties(*other.m_inheritedRareData))
         return false;
     if (m_svgData.ptr() != other.m_svgData.ptr() && !m_svgData->inheritedEqual(other.m_svgData))
         return false;

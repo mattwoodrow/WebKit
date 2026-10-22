@@ -58,6 +58,8 @@ public:
 
     void inheritFrom(const ComputedStyle&);
     void inheritIgnoringCustomPropertiesFrom(const ComputedStyle&);
+    // Only the inherited custom properties, for a style rebuilt after nothing else it inherits changed.
+    void inheritCustomPropertiesFrom(const ComputedStyle&);
     void LEGACY_NODELETE inheritUnicodeBidiFrom(const ComputedStyle&);
     inline void inheritColumnPropertiesFrom(const ComputedStyle&);
     void fastPathInheritFrom(const ComputedStyle&);
@@ -79,6 +81,8 @@ public:
     bool nonInheritedEqual(const ComputedStyle&) const;
     bool LEGACY_NODELETE fastPathInheritedEqual(const ComputedStyle&) const;
     bool nonFastPathInheritedEqual(const ComputedStyle&) const;
+    // The same, apart from the inherited custom properties.
+    bool nonFastPathInheritedEqualIgnoringCustomProperties(const ComputedStyle&) const;
     bool LEGACY_NODELETE descendantAffectingNonInheritedPropertiesEqual(const ComputedStyle&) const;
     bool borderAndBackgroundEqual(const ComputedStyle&) const;
     inline bool containerTypeAndNamesEqual(const ComputedStyle&) const;

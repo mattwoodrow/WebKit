@@ -202,6 +202,15 @@ ResolvedStyle TreeResolver::styleForStyleable(const Styleable& styleable, Resolu
                 return WTF::move(*customStyle);
         }
 
+        if (resolutionType == ResolutionType::InheritedCustomPropertiesOnly) {
+            if (auto cachedResult = m_document->styleScope().matchResultCache().resultWithCurrentInlineStyle(element.get())) {
+                if (auto result = scope().resolver->unadjustedStyleForInheritedCustomPropertyChange(element.get(), resolutionContext, WTF::move(*cachedResult))) {
+                    MatchResultCache::update(*cachedResult, *result->style);
+                    return WTF::move(*result);
+                }
+            }
+        }
+
         if (resolutionType == ResolutionType::FullWithMatchResultCache) {
             if (auto cachedResult = m_document->styleScope().matchResultCache().resultWithCurrentInlineStyle(element.get())) {
                 auto result = scope().resolver->unadjustedStyleForCachedMatchResult(element.get(), resolutionContext, WTF::move(*cachedResult));
@@ -209,6 +218,16 @@ ResolvedStyle TreeResolver::styleForStyleable(const Styleable& styleable, Resolu
                 return result;
             }
         }
+        if (resolutionType == ResolutionType::InheritedCustomPropertiesOnly) {
+            // Keep the match result even without inline style, so the next change of only
+            // inherited custom properties can re-apply what refers to them.
+            auto fallbackContext = resolutionContext;
+            fallbackContext.matchedDeclarationsCacheEntryIsUnshareable = matchedDeclarationsCacheEntryIsUnshareable(element.get());
+            auto result = scope().resolver->unadjustedStyleForElement(element.get(), fallbackContext);
+            m_document->styleScope().matchResultCache().set(element.get(), result, MatchResultCache::CacheWithoutInlineStyle::Yes);
+            return result;
+        }
+
         auto result = scope().resolver->unadjustedStyleForElement(element.get(), resolutionContext);
         m_document->styleScope().matchResultCache().set(element.get(), result);
         return result;
@@ -1215,6 +1234,24 @@ void TreeResolver::popParentsToDepth(unsigned depth)
 }
 
 
+// Matched declarations cache entries are keyed on the identity of the parent's inherited custom
+// properties. If the parent made its own this pass, and this element is its only element child, no
+// other element can ever look up the entry this element would add: adding it only evicts another.
+bool TreeResolver::matchedDeclarationsCacheEntryIsUnshareable(const Element& element) const
+{
+    if (m_parentStack.size() < 2)
+        return false;
+    auto& parent = this->parent();
+    if (!parent.changes.contains(Change::InheritedCustomProperties))
+        return false;
+    if (!parent.element || element.parentElement() != parent.element)
+        return false;
+    auto& grandparent = m_parentStack[m_parentStack.size() - 2];
+    if (&parent.style.inheritedCustomProperties() == &grandparent.style.inheritedCustomProperties())
+        return false;
+    return !element.previousElementSibling() && !element.nextElementSibling();
+}
+
 auto TreeResolver::determineResolutionType(const Element& element, const Style::ComputedStyle* existingStyle, DescendantsToResolve parentDescendantsToResolve, OptionSet<Change> parentChanges) -> std::optional<ResolutionType>
 {
     auto combinedValidity = [&] {
@@ -1235,6 +1272,24 @@ auto TreeResolver::determineResolutionType(const Element& element, const Style::
             return ResolutionType::FullWithMatchResultCache;
     }
 
+    // Only custom properties changed among what this element inherits: re-apply what refers
+    // to them, where the element has a cached match result to re-apply from.
+    auto canRebuildForInheritedCustomProperties = [&] {
+        // The fast-path inherited properties too would need copying; leave that to a full build.
+        if (parentChanges.containsAny({ Change::Inherited, Change::FastPathInherited }) || !parentChanges.contains(Change::InheritedCustomProperties))
+            return false;
+        if (!existingStyle)
+            return false;
+        if (parentChanges.contains(Change::NonInherited) && existingStyle->hasExplicitlyInheritedProperties())
+            return false;
+        return true;
+    };
+
+    // A running animation only needs its keyframes re-applied, which happens after the base
+    // style is built whichever way it is built.
+    if (combinedValidity == Validity::AnimationInvalid && parentDescendantsToResolve == DescendantsToResolve::Children && canRebuildForInheritedCustomProperties())
+        return ResolutionType::InheritedCustomPropertiesOnly;
+
     if (combinedValidity > Validity::Valid)
         return ResolutionType::Full;
 
@@ -1245,7 +1300,7 @@ auto TreeResolver::determineResolutionType(const Element& element, const Style::
         return existingStyle ? ResolutionType::RebuildUsingExisting : ResolutionType::Full;
     case DescendantsToResolve::Children: {
         auto canFastPathInherit = [&] {
-            if (parentChanges.contains(Change::Inherited))
+            if (parentChanges.containsAny({ Change::Inherited, Change::InheritedCustomProperties }))
                 return false;
             if (!parentChanges.contains(Change::FastPathInherited))
                 return false;
@@ -1256,7 +1311,9 @@ auto TreeResolver::determineResolutionType(const Element& element, const Style::
                 return false;
             return true;
         };
-        return canFastPathInherit() ? ResolutionType::FastPathInherit : ResolutionType::Full;
+        if (canFastPathInherit())
+            return ResolutionType::FastPathInherit;
+        return canRebuildForInheritedCustomProperties() ? ResolutionType::InheritedCustomPropertiesOnly : ResolutionType::Full;
     }
     case DescendantsToResolve::All:
         return ResolutionType::Full;

@@ -51,11 +51,14 @@ public:
     const std::optional<CachedMatchResult> resultWithCurrentInlineStyle(const Element&);
     static void update(CachedMatchResult&, const Style::ComputedStyle&);
     void updateForFastPathInherit(const Element&, const Style::ComputedStyle& parentStyle);
-    void set(const Element&, const UnadjustedStyle&);
+    // Elements without mutable inline style are cached only if asked: their match result is
+    // reused when nothing but inherited custom properties changed.
+    enum class CacheWithoutInlineStyle : bool { No, Yes };
+    void set(const Element&, const UnadjustedStyle&, CacheWithoutInlineStyle = CacheWithoutInlineStyle::No);
 
 private:
     struct Entry;
-    static bool LEGACY_NODELETE isUsableAfterInlineStyleChange(const MatchResultCache::Entry&, const StyleProperties& inlineStyle);
+    static bool LEGACY_NODELETE isUsableAfterInlineStyleChange(const MatchResultCache::Entry&, const StyleProperties* inlineStyle);
     static PropertyCascade::IncludedProperties computeAndUpdateChangedProperties(MatchResultCache::Entry&);
 
     WeakHashMap<const Element, UniqueRef<Entry>, WeakPtrImplWithEventTargetData> m_entries;
